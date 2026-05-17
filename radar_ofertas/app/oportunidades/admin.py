@@ -5,6 +5,7 @@ from .models import (
     ContenidoSugerido,
     ConsultaMercadoLibre,
     FuenteProducto,
+    MercadoLibreToken,
     Oportunidad,
     PrecioProducto,
     Producto,
@@ -38,7 +39,7 @@ class ProductoAdmin(admin.ModelAdmin):
         "disponible",
         "fecha_alta",
     )
-    list_filter = ("categoria", "fuente", "disponible", "es_chico_liviano", "es_fragil")
+    list_filter = ("categoria", "fuente", "disponible", "afiliado_activo", "es_chico_liviano", "es_fragil")
     search_fields = ("titulo", "vendedor", "marca", "codigo_externo")
 
 
@@ -80,6 +81,25 @@ class PublicacionAdmin(admin.ModelAdmin):
 
 @admin.register(ConsultaMercadoLibre)
 class ConsultaMercadoLibreAdmin(admin.ModelAdmin):
-    list_display = ("query", "categoria", "site_id", "limit", "offset", "cantidad_resultados", "exitosa", "fecha_consulta")
-    list_filter = ("exitosa", "site_id", "categoria", "fecha_consulta")
+    list_display = (
+        "query",
+        "categoria",
+        "site_id",
+        "status_code",
+        "cantidad_resultados",
+        "exitosa",
+        "requiere_token",
+        "forbidden",
+        "uso_token",
+        "fecha_consulta",
+    )
+    list_filter = ("exitosa", "forbidden", "requiere_token", "uso_token", "site_id", "categoria", "fecha_consulta")
     search_fields = ("query", "mensaje_error")
+
+
+@admin.register(MercadoLibreToken)
+class MercadoLibreTokenAdmin(admin.ModelAdmin):
+    list_display = ("nickname", "user_id_meli", "activo", "expires_at", "fecha_actualizacion")
+    list_filter = ("activo", "expires_at", "fecha_actualizacion")
+    search_fields = ("nickname", "user_id_meli")
+    readonly_fields = ("fecha_creacion", "fecha_actualizacion")

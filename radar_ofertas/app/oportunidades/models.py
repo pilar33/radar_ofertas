@@ -68,6 +68,9 @@ class Producto(models.Model):
     cantidad_vendida = models.PositiveIntegerField(default=0)
     disponible = models.BooleanField(default=True)
     raw_data = models.TextField(blank=True, null=True)
+    url_afiliado = models.URLField(blank=True, null=True)
+    afiliado_activo = models.BooleanField(default=False)
+    nota_afiliado = models.TextField(blank=True, null=True)
     fecha_alta = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -85,6 +88,10 @@ class ConsultaMercadoLibre(models.Model):
     offset = models.PositiveIntegerField(default=0)
     cantidad_resultados = models.PositiveIntegerField(default=0)
     exitosa = models.BooleanField(default=False)
+    status_code = models.PositiveIntegerField(blank=True, null=True)
+    requiere_token = models.BooleanField(default=False)
+    forbidden = models.BooleanField(default=False)
+    uso_token = models.BooleanField(default=False)
     mensaje_error = models.TextField(blank=True, null=True)
     fecha_consulta = models.DateTimeField(auto_now_add=True)
 
@@ -95,6 +102,28 @@ class ConsultaMercadoLibre(models.Model):
 
     def __str__(self):
         return f"{self.query} ({self.site_id})"
+
+
+class MercadoLibreToken(models.Model):
+    user_id_meli = models.CharField(max_length=100, blank=True, null=True)
+    nickname = models.CharField(max_length=150, blank=True, null=True)
+    access_token = models.TextField()
+    refresh_token = models.TextField(blank=True, null=True)
+    token_type = models.CharField(max_length=50, blank=True, null=True)
+    scope = models.TextField(blank=True, null=True)
+    expires_in = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "token de Mercado Libre"
+        verbose_name_plural = "tokens de Mercado Libre"
+        ordering = ["-fecha_actualizacion"]
+
+    def __str__(self):
+        return self.nickname or self.user_id_meli or "Token Mercado Libre"
 
 
 class PrecioProducto(models.Model):

@@ -50,6 +50,12 @@ class MercadoLibreBusquedaForm(forms.Form):
         label="Offset",
         widget=forms.NumberInput(attrs={"class": "form-control"}),
     )
+    usar_token_si_existe = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Usar token si esta disponible",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
 
     def clean(self):
         cleaned_data = super().clean()

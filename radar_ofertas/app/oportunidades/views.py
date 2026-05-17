@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .forms import MercadoLibreBusquedaForm, OportunidadFiltroForm
-from .models import CategoriaInteres, ConsultaMercadoLibre, Oportunidad
+from .models import CategoriaInteres, ConsultaMercadoLibre, MercadoLibreToken, Oportunidad
 from .serializers import (
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
@@ -18,7 +18,15 @@ from .serializers import (
 )
 from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
-from .services.mercado_libre_service import buscar_productos, sincronizar_busqueda_meli
+from .services.mercado_libre_service import (
+    buscar_productos,
+    generar_url_autorizacion,
+    get_meli_config,
+    intercambiar_code_por_token,
+    obtener_token_activo,
+    preparar_link_afiliado,
+    sincronizar_busqueda_meli,
+)
 
 
 def lista_oportunidades(request):
@@ -79,6 +87,7 @@ def detalle_oportunidad(request, pk):
         {
             "oportunidad": oportunidad,
             "ultima_consulta_meli": ultima_consulta_meli,
+            "link_afiliado": preparar_link_afiliado(oportunidad.producto),
         },
     )
 
@@ -86,13 +95,26 @@ def detalle_oportunidad(request, pk):
 def buscar_mercado_libre(request):
     form = MercadoLibreBusquedaForm(request.POST or None)
     resumen = None
+    config = get_meli_config()
 
     if request.method == "POST" and form.is_valid():
         query = form.cleaned_data["query"]
         categoria = form.cleaned_data.get("categoria")
         limit = form.cleaned_data["limit"]
         offset = form.cleaned_data["offset"]
-        resumen = sincronizar_busqueda_meli(query, categoria=categoria, limit=limit, offset=offset)
+        usar_token_si_existe = form.cleaned_data["usar_token_si_existe"]
+        resumen = sincronizar_busqueda_meli(
+            query,
+            categoria=categoria,
+            limit=limit,
+            offset=offset,
+            usar_token_si_existe=usar_token_si_existe,
+        )
+        if resumen.get("forbidden"):
+            messages.warning(
+                request,
+                "La consulta fue rechazada por Mercado Libre. Proba autorizar la aplicacion o configurar MELI_ACCESS_TOKEN.",
+            )
         messages.success(
             request,
             (
@@ -108,8 +130,52 @@ def buscar_mercado_libre(request):
         {
             "form": form,
             "resumen": resumen,
+            "tiene_token": bool(obtener_token_activo()),
+            "puede_autorizar": bool(config["client_id"] and config["redirect_uri"]),
         },
     )
+
+
+def oauth_diagnostico(request):
+    config = get_meli_config()
+    token = MercadoLibreToken.objects.filter(activo=True).order_by("-fecha_actualizacion", "-id").first()
+    return render(
+        request,
+        "oportunidades/diagnostico_mercado_libre.html",
+        {
+            "client_id_configurado": bool(config["client_id"]),
+            "client_secret_configurado": bool(config["client_secret"]),
+            "token_activo": bool(obtener_token_activo()),
+            "token_db": token,
+            "redirect_uri": config["redirect_uri"],
+        },
+    )
+
+
+def oauth_iniciar(request):
+    resultado = generar_url_autorizacion()
+    if not resultado["ok"]:
+        messages.error(request, resultado["error"])
+        return redirect("oportunidades:oauth_diagnostico")
+
+    return redirect(resultado["url"])
+
+
+def oauth_callback(request):
+    code = request.GET.get("code")
+    error = request.GET.get("error")
+
+    if error:
+        messages.error(request, f"Mercado Libre devolvio error OAuth: {error}")
+        return redirect("oportunidades:buscar_meli")
+
+    resultado = intercambiar_code_por_token(code)
+    if resultado.get("ok"):
+        messages.success(request, "Mercado Libre autorizado correctamente.")
+    else:
+        messages.error(request, resultado.get("error") or "No se pudo autorizar Mercado Libre.")
+
+    return redirect("oportunidades:buscar_meli")
 
 
 def _recalcular_oportunidad(oportunidad):
@@ -273,6 +339,7 @@ class MeliSincronizarAPIView(APIView):
             categoria=categoria,
             limit=data.get("limit", 20),
             offset=data.get("offset", 0),
+            usar_token_si_existe=data.get("usar_token_si_existe", True),
         )
         return Response(resumen, status=status.HTTP_200_OK)
 

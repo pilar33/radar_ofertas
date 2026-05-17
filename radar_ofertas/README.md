@@ -145,3 +145,76 @@ Aclaraciones:
 - Se evita duplicar productos por fuente y codigo externo.
 - Se evita duplicar precios cuando el precio no cambio.
 - Usar limites moderados y delay entre consultas para respetar un uso prudente de la API.
+
+## Etapa 3.1 - Configuracion Mercado Libre, OAuth y manejo de 403
+
+Si Mercado Libre devuelve `403 Forbidden`, el sistema registra el error en `ConsultaMercadoLibre`, no se cae y muestra diagnostico para decidir si hace falta token.
+
+### Crear app en Mercado Libre Developers
+
+1. Entrar al portal de desarrolladores de Mercado Libre.
+2. Crear una aplicacion.
+3. Configurar Redirect URI igual a:
+
+```text
+http://localhost:8000/mercadolibre/oauth/callback/
+```
+
+4. Copiar Client ID y Client Secret al archivo `.env`.
+
+### Variables `.env`
+
+```env
+MELI_BASE_URL=https://api.mercadolibre.com
+MELI_AUTH_BASE_URL=https://auth.mercadolibre.com.ar
+MELI_SITE_ID=MLA
+MELI_CLIENT_ID=
+MELI_CLIENT_SECRET=
+MELI_REDIRECT_URI=http://localhost:8000/mercadolibre/oauth/callback/
+MELI_ACCESS_TOKEN=
+MELI_REFRESH_TOKEN=
+MELI_SEARCH_LIMIT_DEFAULT=20
+MELI_REQUEST_TIMEOUT=15
+MELI_USER_AGENT=radar_ofertas/1.0
+MELI_AFFILIATE_TAG=
+MELI_AFFILIATE_BASE_URL=
+```
+
+`MELI_ACCESS_TOKEN` es opcional. Si existe, se usa como `Authorization: Bearer`. Si no existe, se intenta busqueda publica con headers completos.
+
+### Diagnostico
+
+```bash
+docker compose exec web python manage.py diagnosticar_meli
+```
+
+El diagnostico muestra si hay Client ID, Client Secret, token activo y Redirect URI configurados sin imprimir secretos completos.
+
+### Probar busqueda
+
+```bash
+docker compose exec web python manage.py buscar_meli --query "organizador cocina" --limit 10
+```
+
+### Autorizar desde navegador
+
+- http://localhost:8000/mercadolibre/oauth/iniciar/
+- http://localhost:8000/mercadolibre/oauth/diagnostico/
+- http://localhost:8000/mercadolibre/buscar/
+
+### Sobre el error 403
+
+Puede ocurrir si:
+
+- El endpoint requiere token desde este entorno.
+- Mercado Libre aplica restricciones temporales o por origen.
+- El token esta vencido, invalido o sin permisos suficientes.
+- Los headers no son aceptados por el endpoint.
+
+El sistema ahora guarda `status_code`, `requiere_token`, `forbidden` y `uso_token` en cada consulta.
+
+### Link afiliado
+
+El sistema deja preparado `url_afiliado`, `afiliado_activo` y `nota_afiliado` en `Producto`.
+
+Por ahora el link afiliado puede cargarse manualmente desde admin. No se asume un formato automatico si Mercado Libre no lo confirma, no se publican links automaticamente y no se modifica la URL original.

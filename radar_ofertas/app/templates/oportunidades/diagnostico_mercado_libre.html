@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnostico Mercado Libre - Radar Ofertas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Diagnostico Mercado Libre</h1>
+    <p class="text-muted mb-0">Estado de configuracion OAuth y token sin exponer secretos.</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:oauth_iniciar' %}">Autorizar Mercado Libre</a>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:buscar_meli' %}">Buscar</a>
+  </div>
+</div>
+
+<div class="bg-white border rounded p-3">
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Client ID configurado</dt><dd class="col-sm-8">{{ client_id_configurado|yesno:"Si,No" }}</dd>
+    <dt class="col-sm-4">Client Secret configurado</dt><dd class="col-sm-8">{{ client_secret_configurado|yesno:"Si,No" }}</dd>
+    <dt class="col-sm-4">Token activo</dt><dd class="col-sm-8">{{ token_activo|yesno:"Si,No" }}</dd>
+    <dt class="col-sm-4">Vencimiento token DB</dt><dd class="col-sm-8">{{ token_db.expires_at|date:"d/m/Y H:i"|default:"-" }}</dd>
+    <dt class="col-sm-4">Redirect URI</dt><dd class="col-sm-8">{{ redirect_uri }}</dd>
+  </dl>
+</div>
+{% endblock %}

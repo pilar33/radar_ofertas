@@ -56,17 +56,42 @@
           </td>
           <td>{{ oportunidad.producto.categoria.nombre }}</td>
           <td>{{ oportunidad.producto.fuente.nombre }}</td>
-          <td class="text-end">${{ oportunidad.precio_actual }}</td>
-          <td class="text-end">${{ oportunidad.precio_reventa_estimado }}</td>
-          <td class="text-end">${{ oportunidad.margen_estimado }}</td>
-          <td class="text-end">{{ oportunidad.porcentaje_margen }}%</td>
-          <td><span class="badge text-bg-secondary">{{ oportunidad.get_tipo_display }}</span></td>
+          <td class="text-end">$ {{ oportunidad.precio_actual|floatformat:2 }}</td>
+          <td class="text-end">$ {{ oportunidad.precio_reventa_estimado|floatformat:2 }}</td>
+          <td class="text-end">$ {{ oportunidad.margen_estimado|floatformat:2 }}</td>
+          <td class="text-end">{{ oportunidad.porcentaje_margen|floatformat:2 }}%</td>
+          <td>
+            {% if oportunidad.tipo == "reventa" %}
+              <span class="badge text-bg-success">{{ oportunidad.get_tipo_display }}</span>
+            {% elif oportunidad.tipo == "afiliado" %}
+              <span class="badge text-bg-info">{{ oportunidad.get_tipo_display }}</span>
+            {% else %}
+              <span class="badge text-bg-secondary">{{ oportunidad.get_tipo_display }}</span>
+            {% endif %}
+          </td>
           <td class="text-end">{{ oportunidad.puntaje }}</td>
-          <td>{{ oportunidad.get_riesgo_display }}</td>
+          <td>
+            {% if oportunidad.riesgo == "bajo" %}
+              <span class="badge text-bg-success">{{ oportunidad.get_riesgo_display }}</span>
+            {% elif oportunidad.riesgo == "medio" %}
+              <span class="badge text-bg-warning">{{ oportunidad.get_riesgo_display }}</span>
+            {% else %}
+              <span class="badge text-bg-danger">{{ oportunidad.get_riesgo_display }}</span>
+            {% endif %}
+          </td>
           <td>{{ oportunidad.get_estado_display }}</td>
           <td>
             <div class="d-flex flex-wrap gap-1">
               <a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle' oportunidad.pk %}">Ver</a>
+              <form method="post" action="{% url 'oportunidades:recalcular' oportunidad.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn btn-sm btn-outline-success" type="submit">Recalcular</button>
+              </form>
+              <form method="post" action="{% url 'oportunidades:generar_contenido' oportunidad.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-info" type="submit">Generar contenido</button>
+              </form>
               {% for estado, label in estados_accion %}
                 <form method="post" action="{% url 'oportunidades:cambiar_estado' oportunidad.pk estado %}">
                   {% csrf_token %}

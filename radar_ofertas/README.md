@@ -71,6 +71,8 @@ El comando inserta fuentes, categorias, productos simulados, historial de precio
 - `GET /api/oportunidades/`
 - `GET /api/oportunidades/<id>/`
 - `PATCH /api/oportunidades/<id>/estado/`
+- `POST /api/oportunidades/<id>/recalcular/`
+- `POST /api/oportunidades/<id>/generar-contenido/`
 
 Ejemplo para cambiar estado:
 
@@ -86,3 +88,17 @@ curl -X PATCH http://localhost:8000/api/oportunidades/1/estado/ \
 - Los servicios de Mercado Libre y OpenAI quedan como placeholders para etapas futuras.
 - La app principal es `oportunidades`.
 - SQL Server se usa desde el inicio mediante `mssql-django`, `pyodbc` y ODBC Driver 18.
+
+## Etapa 2 - Motor comercial
+
+Esta etapa mejora los servicios comerciales internos para calcular precios, margen, porcentaje de margen, riesgo, puntaje, clasificacion de oportunidad y contenido sugerido basico sin usar APIs externas.
+
+Comandos utiles:
+
+```bash
+docker compose exec web python manage.py recalcular_oportunidades
+docker compose exec web python manage.py generar_contenidos_basicos
+docker compose exec web python manage.py test oportunidades
+```
+
+Tambien se agregan acciones web y API para recalcular una oportunidad individual y generar contenido basico sin IA.

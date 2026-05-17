@@ -11,7 +11,15 @@ urlpatterns = [
     path("oportunidades/", views.lista_oportunidades, name="lista"),
     path("oportunidades/<int:pk>/", views.detalle_oportunidad, name="detalle"),
     path("oportunidades/<int:pk>/estado/<str:nuevo_estado>/", views.cambiar_estado_oportunidad, name="cambiar_estado"),
+    path("oportunidades/<int:pk>/recalcular/", views.recalcular_oportunidad, name="recalcular"),
+    path("oportunidades/<int:pk>/generar-contenido/", views.generar_contenido_oportunidad, name="generar_contenido"),
     path("api/oportunidades/", views.OportunidadListAPIView.as_view(), name="api_lista"),
     path("api/oportunidades/<int:pk>/", views.OportunidadDetailAPIView.as_view(), name="api_detalle"),
     path("api/oportunidades/<int:pk>/estado/", views.OportunidadEstadoAPIView.as_view(), name="api_estado"),
+    path("api/oportunidades/<int:pk>/recalcular/", views.OportunidadRecalcularAPIView.as_view(), name="api_recalcular"),
+    path(
+        "api/oportunidades/<int:pk>/generar-contenido/",
+        views.OportunidadGenerarContenidoAPIView.as_view(),
+        name="api_generar_contenido",
+    ),
 ]

@@ -8,7 +8,17 @@
     <a class="text-decoration-none" href="{% url 'oportunidades:lista' %}">Volver a oportunidades</a>
     <h1 class="h3 mt-2 mb-0">{{ oportunidad.producto.titulo }}</h1>
   </div>
-  <span class="badge text-bg-dark fs-6">{{ oportunidad.get_estado_display }}</span>
+  <div class="d-flex flex-wrap gap-2">
+    <form method="post" action="{% url 'oportunidades:recalcular' oportunidad.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-success" type="submit">Recalcular oportunidad</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:generar_contenido' oportunidad.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-info" type="submit">Generar contenido basico</button>
+    </form>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista' %}">Volver al listado</a>
+  </div>
 </div>
 
 <div class="row g-3">
@@ -33,14 +43,16 @@
     <div class="bg-white border rounded p-3 h-100">
       <h2 class="h5">Evaluacion</h2>
       <div class="row g-3">
-        <div class="col-6 col-lg-3"><div class="text-muted">Actual</div><div class="fs-5">${{ oportunidad.precio_actual }}</div></div>
-        <div class="col-6 col-lg-3"><div class="text-muted">Reventa</div><div class="fs-5">${{ oportunidad.precio_reventa_estimado }}</div></div>
-        <div class="col-6 col-lg-3"><div class="text-muted">Margen</div><div class="fs-5">${{ oportunidad.margen_estimado }}</div></div>
-        <div class="col-6 col-lg-3"><div class="text-muted">% Margen</div><div class="fs-5">{{ oportunidad.porcentaje_margen }}%</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">Actual</div><div class="fs-5">$ {{ oportunidad.precio_actual|floatformat:2 }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">Reventa</div><div class="fs-5">$ {{ oportunidad.precio_reventa_estimado|floatformat:2 }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">Margen</div><div class="fs-5">$ {{ oportunidad.margen_estimado|floatformat:2 }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">% Margen</div><div class="fs-5">{{ oportunidad.porcentaje_margen|floatformat:2 }}%</div></div>
       </div>
       <hr>
       <p class="mb-1"><strong>Tipo:</strong> {{ oportunidad.get_tipo_display }}</p>
       <p class="mb-1"><strong>Riesgo:</strong> {{ oportunidad.get_riesgo_display }}</p>
+      <p class="mb-1"><strong>Puntaje:</strong> {{ oportunidad.puntaje }}</p>
+      <p class="mb-1"><strong>Estado:</strong> {{ oportunidad.get_estado_display }}</p>
       <p class="mb-0"><strong>Motivo:</strong> {{ oportunidad.motivo|default:"-" }}</p>
     </div>
   </section>

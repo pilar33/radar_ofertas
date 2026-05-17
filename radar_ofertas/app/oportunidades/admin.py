@@ -27,9 +27,9 @@ class CategoriaInteresAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("titulo", "categoria", "fuente", "marca", "condicion", "es_chico_liviano", "es_fragil")
-    list_filter = ("fuente", "categoria", "condicion", "es_chico_liviano", "es_fragil")
-    search_fields = ("titulo", "marca", "codigo_externo", "vendedor")
+    list_display = ("titulo", "categoria", "fuente", "vendedor", "es_chico_liviano", "es_fragil", "fecha_alta")
+    list_filter = ("categoria", "fuente", "es_chico_liviano", "es_fragil")
+    search_fields = ("titulo", "vendedor", "marca", "codigo_externo")
 
 
 @admin.register(PrecioProducto)
@@ -44,15 +44,13 @@ class OportunidadAdmin(admin.ModelAdmin):
     list_display = (
         "producto",
         "tipo",
-        "estado",
         "riesgo",
         "puntaje",
-        "precio_actual",
-        "precio_reventa_estimado",
         "porcentaje_margen",
+        "estado",
         "fecha_creacion",
     )
-    list_filter = ("tipo", "estado", "riesgo", "producto__categoria", "producto__fuente")
+    list_filter = ("tipo", "riesgo", "estado", "producto__categoria")
     search_fields = ("producto__titulo", "motivo")
 
 

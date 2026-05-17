@@ -8,7 +8,21 @@
     <h1 class="h3 mb-1">Buscar Mercado Libre</h1>
     <p class="text-muted mb-0">Consulta la API publica de Mercado Libre Argentina y genera oportunidades.</p>
   </div>
-  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista' %}">Ver oportunidades</a>
+  <div class="d-flex flex-wrap gap-2">
+    {% if puede_autorizar %}
+      <a class="btn btn-outline-primary" href="{% url 'oportunidades:oauth_iniciar' %}">Autorizar Mercado Libre</a>
+    {% endif %}
+    <a class="btn btn-outline-dark" href="{% url 'oportunidades:oauth_diagnostico' %}">Diagnostico Mercado Libre</a>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista' %}">Ver oportunidades</a>
+  </div>
+</div>
+
+<div class="alert {% if tiene_token %}alert-success{% else %}alert-warning{% endif %}">
+  {% if tiene_token %}
+    La integracion tiene un token disponible. Las busquedas pueden usar Authorization Bearer sin mostrar el token.
+  {% else %}
+    No hay token disponible. Se intentaran busquedas publicas con headers completos; si Mercado Libre devuelve 403, autoriza la app o configura MELI_ACCESS_TOKEN.
+  {% endif %}
 </div>
 
 <form method="post" class="bg-white border rounded p-3 mb-3">
@@ -33,6 +47,12 @@
       <label class="form-label" for="{{ form.offset.id_for_label }}">Offset</label>
       {{ form.offset }}
     </div>
+    <div class="col-12 col-lg-2">
+      <div class="form-check">
+        {{ form.usar_token_si_existe }}
+        <label class="form-check-label" for="{{ form.usar_token_si_existe.id_for_label }}">Usar token</label>
+      </div>
+    </div>
     <div class="col-12 col-lg-2 d-grid">
       <button class="btn btn-primary" type="submit">Buscar</button>
     </div>
@@ -40,6 +60,12 @@
 </form>
 
 {% if resumen %}
+  {% if resumen.forbidden %}
+    <div class="alert alert-danger">
+      La consulta fue rechazada por Mercado Libre. Proba autorizar la aplicacion o configurar MELI_ACCESS_TOKEN.
+      {% if resumen.mensaje %}<div class="small mt-2">{{ resumen.mensaje }}</div>{% endif %}
+    </div>
+  {% endif %}
   <div class="bg-white border rounded p-3">
     <h2 class="h5">Resumen</h2>
     <div class="row g-3">
@@ -47,6 +73,8 @@
       <div class="col-6 col-md-3"><div class="text-muted">Creados</div><div class="fs-4">{{ resumen.creados }}</div></div>
       <div class="col-6 col-md-3"><div class="text-muted">Actualizados</div><div class="fs-4">{{ resumen.actualizados }}</div></div>
       <div class="col-6 col-md-3"><div class="text-muted">Errores</div><div class="fs-4">{{ resumen.errores }}</div></div>
+      <div class="col-6 col-md-3"><div class="text-muted">Status</div><div class="fs-5">{{ resumen.status_code|default:"-" }}</div></div>
+      <div class="col-6 col-md-3"><div class="text-muted">Uso token</div><div class="fs-5">{{ resumen.uso_token|yesno:"Si,No" }}</div></div>
     </div>
   </div>
 {% endif %}

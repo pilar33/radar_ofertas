@@ -1,14 +1,17 @@
 import json
 import os
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 import requests
 from django.db import transaction
+from django.utils import timezone
 
 from oportunidades.models import (
     CategoriaInteres,
     ConsultaMercadoLibre,
     FuenteProducto,
+    MercadoLibreToken,
     Oportunidad,
     PrecioProducto,
     Producto,
@@ -30,74 +33,196 @@ def _int(valor, default=0):
         return default
 
 
+def _env(nombre, default=""):
+    valor = os.getenv(nombre)
+    if valor is None or str(valor).strip() == "":
+        return default
+    return str(valor).strip()
+
+
 def get_meli_config():
     return {
-        "base_url": os.getenv("MELI_BASE_URL", "https://api.mercadolibre.com").rstrip("/"),
-        "site_id": os.getenv("MELI_SITE_ID", "MLA"),
+        "base_url": _env("MELI_BASE_URL", "https://api.mercadolibre.com").rstrip("/"),
+        "auth_base_url": _env("MELI_AUTH_BASE_URL", "https://auth.mercadolibre.com.ar").rstrip("/"),
+        "site_id": _env("MELI_SITE_ID", "MLA"),
+        "client_id": _env("MELI_CLIENT_ID"),
+        "client_secret": _env("MELI_CLIENT_SECRET"),
+        "redirect_uri": _env("MELI_REDIRECT_URI", "http://localhost:8000/mercadolibre/oauth/callback/"),
+        "access_token": _env("MELI_ACCESS_TOKEN"),
+        "refresh_token": _env("MELI_REFRESH_TOKEN"),
         "search_limit_default": _int(os.getenv("MELI_SEARCH_LIMIT_DEFAULT"), 20),
-        "request_timeout": _int(os.getenv("MELI_REQUEST_TIMEOUT"), 15),
-        "access_token": os.getenv("MELI_ACCESS_TOKEN", "").strip(),
+        "timeout": _int(os.getenv("MELI_REQUEST_TIMEOUT"), 15),
+        "user_agent": _env("MELI_USER_AGENT", "radar_ofertas/1.0"),
+        "affiliate_tag": _env("MELI_AFFILIATE_TAG"),
+        "affiliate_base_url": _env("MELI_AFFILIATE_BASE_URL"),
     }
 
 
-def get_headers():
+def obtener_token_activo():
+    ahora = timezone.now()
+    token_db = (
+        MercadoLibreToken.objects.filter(activo=True)
+        .filter(expires_at__gt=ahora)
+        .order_by("-fecha_actualizacion", "-id")
+        .first()
+    )
+    if token_db and token_db.access_token:
+        return token_db.access_token
+
+    config = get_meli_config()
+    return config["access_token"] or None
+
+
+def get_headers(use_auth=True):
     config = get_meli_config()
     headers = {
         "Accept": "application/json",
-        "User-Agent": "radar_ofertas/1.0",
+        "Content-Type": "application/json",
+        "User-Agent": config["user_agent"],
+        "Accept-Language": "es-AR,es;q=0.9",
+        "Connection": "keep-alive",
     }
 
-    if config["access_token"]:
-        headers["Authorization"] = f"Bearer {config['access_token']}"
+    token = obtener_token_activo() if use_auth else None
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     return headers
 
 
-def buscar_productos(query, limit=20, offset=0, site_id=None):
+def _resultado_error(status_code=None, error="", requires_token=False, forbidden=False):
+    return {
+        "ok": False,
+        "status_code": status_code,
+        "data": None,
+        "error": error,
+        "requires_token": requires_token,
+        "forbidden": forbidden,
+    }
+
+
+def request_meli(method, endpoint, params=None, data=None, use_auth=True):
+    config = get_meli_config()
+    endpoint = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+    url = f"{config['base_url']}{endpoint}"
+
+    try:
+        response = requests.request(
+            method,
+            url,
+            headers=get_headers(use_auth=use_auth),
+            params=params,
+            json=data,
+            timeout=config["timeout"],
+        )
+        status_code = response.status_code
+
+        if status_code == 403:
+            return _resultado_error(
+                status_code=403,
+                forbidden=True,
+                requires_token=True,
+                error=(
+                    "Mercado Libre devolvio 403 Forbidden. Puede requerir token Bearer, "
+                    "headers validos o revision de permisos/restricciones del endpoint."
+                ),
+            )
+        if status_code == 401:
+            return _resultado_error(
+                status_code=401,
+                requires_token=True,
+                error="Mercado Libre devolvio 401 Unauthorized. El token puede estar ausente, vencido o no autorizado.",
+            )
+        if status_code == 429:
+            return _resultado_error(
+                status_code=429,
+                error="Mercado Libre devolvio 429 Too Many Requests. Se alcanzo un limite de consultas.",
+            )
+
+        response.raise_for_status()
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            return _resultado_error(status_code=status_code, error=f"Respuesta JSON invalida de Mercado Libre: {exc}")
+
+        return {
+            "ok": True,
+            "status_code": status_code,
+            "data": payload,
+            "error": None,
+            "requires_token": False,
+            "forbidden": False,
+        }
+    except requests.exceptions.Timeout as exc:
+        return _resultado_error(error=f"Timeout conectando con Mercado Libre: {exc}")
+    except requests.exceptions.ConnectionError as exc:
+        return _resultado_error(error=f"Error de conexion con Mercado Libre: {exc}")
+    except requests.exceptions.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", None) or getattr(response, "status_code", None)
+        return _resultado_error(status_code=status_code, error=f"Error HTTP Mercado Libre: {exc}")
+    except requests.exceptions.RequestException as exc:
+        return _resultado_error(error=f"Error consultando Mercado Libre: {exc}")
+
+
+def buscar_productos(query, limit=20, offset=0, site_id=None, usar_token_si_existe=True):
     config = get_meli_config()
     site_id = site_id or config["site_id"]
     limit = _int(limit, config["search_limit_default"])
     offset = _int(offset, 0)
-    url = f"{config['base_url']}/sites/{site_id}/search"
+    use_auth = bool(usar_token_si_existe and obtener_token_activo())
+    respuesta = request_meli(
+        "GET",
+        f"/sites/{site_id}/search",
+        params={"q": query, "limit": limit, "offset": offset},
+        use_auth=use_auth,
+    )
 
-    try:
-        response = requests.get(
-            url,
-            headers=get_headers(),
-            params={"q": query, "limit": limit, "offset": offset},
-            timeout=config["request_timeout"],
-        )
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results") or []
+    if not respuesta["ok"]:
+        error = respuesta["error"]
+        if respuesta["forbidden"] and not use_auth:
+            error = f"{error} Configura MELI_ACCESS_TOKEN o autoriza la aplicacion via OAuth."
+        elif respuesta["forbidden"] and use_auth:
+            error = f"{error} Revisa permisos de la app, token, scopes o endpoint."
         return {
-            "ok": True,
-            "results": results,
-            "paging": data.get("paging") or {},
-            "error": None,
+            "ok": False,
+            "results": [],
+            "paging": {},
+            "status_code": respuesta["status_code"],
+            "error": error,
+            "requires_token": respuesta["requires_token"],
+            "forbidden": respuesta["forbidden"],
             "site_id": site_id,
+            "uso_token": use_auth,
         }
-    except requests.exceptions.HTTPError as exc:
-        return {"ok": False, "results": [], "paging": {}, "error": f"Error HTTP Mercado Libre: {exc}", "site_id": site_id}
-    except requests.exceptions.RequestException as exc:
-        return {"ok": False, "results": [], "paging": {}, "error": f"Error de conexion Mercado Libre: {exc}", "site_id": site_id}
-    except ValueError as exc:
-        return {"ok": False, "results": [], "paging": {}, "error": f"Respuesta invalida Mercado Libre: {exc}", "site_id": site_id}
+
+    data = respuesta["data"] or {}
+    return {
+        "ok": True,
+        "results": data.get("results") or [],
+        "paging": data.get("paging") or {},
+        "status_code": respuesta["status_code"],
+        "error": None,
+        "requires_token": False,
+        "forbidden": False,
+        "site_id": site_id,
+        "uso_token": use_auth,
+    }
 
 
-def obtener_detalle_producto(item_id):
+def obtener_detalle_producto(item_id, usar_token_si_existe=True):
     if not item_id:
-        return None
+        return {
+            "ok": False,
+            "status_code": None,
+            "data": None,
+            "error": "item_id requerido.",
+            "requires_token": False,
+            "forbidden": False,
+        }
 
-    config = get_meli_config()
-    url = f"{config['base_url']}/items/{item_id}"
-
-    try:
-        response = requests.get(url, headers=get_headers(), timeout=config["request_timeout"])
-        response.raise_for_status()
-        return response.json()
-    except (requests.exceptions.RequestException, ValueError):
-        return None
+    use_auth = bool(usar_token_si_existe and obtener_token_activo())
+    return request_meli("GET", f"/items/{item_id}", use_auth=use_auth)
 
 
 def _traducir_condicion(condicion):
@@ -244,11 +369,17 @@ def crear_o_actualizar_oportunidad(producto, precio_actual):
     return oportunidad
 
 
-def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0):
+def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0, usar_token_si_existe=True):
     config = get_meli_config()
     limit = _int(limit, config["search_limit_default"])
     offset = _int(offset, 0)
-    respuesta = buscar_productos(query, limit=limit, offset=offset, site_id=config["site_id"])
+    respuesta = buscar_productos(
+        query,
+        limit=limit,
+        offset=offset,
+        site_id=config["site_id"],
+        usar_token_si_existe=usar_token_si_existe,
+    )
     results = respuesta.get("results") or []
 
     ConsultaMercadoLibre.objects.create(
@@ -259,6 +390,10 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0):
         offset=offset,
         cantidad_resultados=len(results),
         exitosa=bool(respuesta.get("ok")),
+        status_code=respuesta.get("status_code"),
+        requiere_token=bool(respuesta.get("requires_token")),
+        forbidden=bool(respuesta.get("forbidden")),
+        uso_token=bool(respuesta.get("uso_token")),
         mensaje_error=respuesta.get("error"),
     )
 
@@ -268,6 +403,11 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0):
         "creados": 0,
         "actualizados": 0,
         "errores": 0,
+        "mensaje": respuesta.get("error"),
+        "status_code": respuesta.get("status_code"),
+        "requires_token": bool(respuesta.get("requires_token")),
+        "forbidden": bool(respuesta.get("forbidden")),
+        "uso_token": bool(respuesta.get("uso_token")),
     }
 
     if not respuesta.get("ok"):
@@ -292,15 +432,131 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0):
                 resumen["actualizados"] += 1
             else:
                 resumen["creados"] += 1
-        except Exception:
+        except Exception as exc:
             resumen["errores"] += 1
+            resumen["mensaje"] = f"Error procesando item de Mercado Libre: {exc}"
 
     return resumen
+
+
+def generar_url_autorizacion():
+    config = get_meli_config()
+    if not config["client_id"] or not config["redirect_uri"]:
+        return {
+            "ok": False,
+            "url": None,
+            "error": "Faltan MELI_CLIENT_ID o MELI_REDIRECT_URI para iniciar OAuth.",
+        }
+
+    params = {
+        "response_type": "code",
+        "client_id": config["client_id"],
+        "redirect_uri": config["redirect_uri"],
+    }
+    return {
+        "ok": True,
+        "url": f"{config['auth_base_url']}/authorization?{urlencode(params)}",
+        "error": None,
+    }
+
+
+def _guardar_token(data):
+    expires_in = _int(data.get("expires_in"), 0)
+    expires_at = timezone.now() + timezone.timedelta(seconds=expires_in) if expires_in else None
+    user_id = data.get("user_id")
+
+    token, _ = MercadoLibreToken.objects.update_or_create(
+        user_id_meli=str(user_id) if user_id else None,
+        defaults={
+            "access_token": data.get("access_token") or "",
+            "refresh_token": data.get("refresh_token"),
+            "token_type": data.get("token_type"),
+            "scope": data.get("scope"),
+            "expires_in": expires_in,
+            "expires_at": expires_at,
+            "activo": True,
+        },
+    )
+    return token
+
+
+def _oauth_post(payload):
+    config = get_meli_config()
+    respuesta = request_meli("POST", "/oauth/token", data=payload, use_auth=False)
+    if not respuesta["ok"]:
+        return {**respuesta, "token": None}
+
+    token = _guardar_token(respuesta["data"] or {})
+    return {**respuesta, "token": token}
+
+
+def intercambiar_code_por_token(code):
+    config = get_meli_config()
+    if not code:
+        return _resultado_error(error="Codigo OAuth requerido.")
+    if not config["client_id"] or not config["client_secret"] or not config["redirect_uri"]:
+        return _resultado_error(error="Faltan MELI_CLIENT_ID, MELI_CLIENT_SECRET o MELI_REDIRECT_URI.")
+
+    return _oauth_post(
+        {
+            "grant_type": "authorization_code",
+            "client_id": config["client_id"],
+            "client_secret": config["client_secret"],
+            "code": code,
+            "redirect_uri": config["redirect_uri"],
+        }
+    )
+
+
+def refrescar_token(refresh_token=None):
+    config = get_meli_config()
+    token_db = MercadoLibreToken.objects.filter(activo=True).order_by("-fecha_actualizacion", "-id").first()
+    refresh_token = refresh_token or (token_db.refresh_token if token_db else None) or config["refresh_token"]
+
+    if not refresh_token:
+        return _resultado_error(error="No hay refresh_token disponible.")
+    if not config["client_id"] or not config["client_secret"]:
+        return _resultado_error(error="Faltan MELI_CLIENT_ID o MELI_CLIENT_SECRET.")
+
+    return _oauth_post(
+        {
+            "grant_type": "refresh_token",
+            "client_id": config["client_id"],
+            "client_secret": config["client_secret"],
+            "refresh_token": refresh_token,
+        }
+    )
+
+
+def preparar_link_afiliado(producto):
+    config = get_meli_config()
+
+    if producto.url_afiliado:
+        return {
+            "url": producto.url_afiliado,
+            "mensaje": "Link afiliado cargado en el producto.",
+            "configurado": True,
+        }
+
+    if config["affiliate_base_url"] and config["affiliate_tag"]:
+        separador = "&" if "?" in producto.url else "?"
+        url = f"{producto.url}{separador}{urlencode({'utm_source': config['affiliate_tag']})}"
+        return {
+            "url": url,
+            "mensaje": "Link afiliado preparado con configuracion local. Validar formato antes de usar.",
+            "configurado": True,
+        }
+
+    return {
+        "url": producto.url,
+        "mensaje": "Link afiliado no configurado. Cargar manualmente url_afiliado cuando se obtenga desde la central de afiliados.",
+        "configurado": False,
+    }
 
 
 def buscar_productos_por_categoria(categoria, limit=20, offset=0):
     return sincronizar_busqueda_meli(categoria.palabra_clave, categoria=categoria, limit=limit, offset=offset)
 
 
-def obtener_link_afiliado(*args, **kwargs):
-    raise NotImplementedError("Integracion de afiliados pendiente para una etapa posterior.")
+def obtener_link_afiliado(producto):
+    return preparar_link_afiliado(producto)

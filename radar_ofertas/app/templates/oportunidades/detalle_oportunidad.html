@@ -38,6 +38,9 @@
         <dt class="col-sm-4">Chico/liviano</dt><dd class="col-sm-8">{{ oportunidad.producto.es_chico_liviano|yesno:"Si,No" }}</dd>
         <dt class="col-sm-4">Fragil</dt><dd class="col-sm-8">{{ oportunidad.producto.es_fragil|yesno:"Si,No" }}</dd>
         <dt class="col-sm-4">URL</dt><dd class="col-sm-8"><a href="{{ oportunidad.producto.url }}" target="_blank" rel="noreferrer">Abrir producto</a></dd>
+        <dt class="col-sm-4">URL afiliado</dt><dd class="col-sm-8"><a href="{{ link_afiliado.url }}" target="_blank" rel="noreferrer">Abrir link</a></dd>
+        <dt class="col-sm-4">Afiliado activo</dt><dd class="col-sm-8">{{ oportunidad.producto.afiliado_activo|yesno:"Si,No" }}</dd>
+        <dt class="col-sm-4">Nota afiliado</dt><dd class="col-sm-8">{{ oportunidad.producto.nota_afiliado|default:link_afiliado.mensaje }}</dd>
         <dt class="col-sm-4">Ultima consulta</dt><dd class="col-sm-8">{{ ultima_consulta_meli.fecha_consulta|date:"d/m/Y H:i"|default:"-" }}</dd>
       </dl>
       {% if oportunidad.producto.thumbnail_url %}

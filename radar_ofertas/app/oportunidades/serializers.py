@@ -64,6 +64,7 @@ class MeliSincronizarSerializer(serializers.Serializer):
     categoria_id = serializers.IntegerField(required=False, allow_null=True)
     limit = serializers.IntegerField(required=False, min_value=1, max_value=50, default=20)
     offset = serializers.IntegerField(required=False, min_value=0, default=0)
+    usar_token_si_existe = serializers.BooleanField(required=False, default=True)
 
     def validate(self, attrs):
         query = attrs.get("query")

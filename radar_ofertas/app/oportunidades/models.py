@@ -64,6 +64,10 @@ class Producto(models.Model):
     condicion = models.CharField(max_length=50, choices=CONDICION_CHOICES)
     es_chico_liviano = models.BooleanField(default=False)
     es_fragil = models.BooleanField(default=False)
+    thumbnail_url = models.URLField(blank=True, null=True)
+    cantidad_vendida = models.PositiveIntegerField(default=0)
+    disponible = models.BooleanField(default=True)
+    raw_data = models.TextField(blank=True, null=True)
     fecha_alta = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -71,6 +75,26 @@ class Producto(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+class ConsultaMercadoLibre(models.Model):
+    categoria = models.ForeignKey(CategoriaInteres, null=True, blank=True, on_delete=models.SET_NULL)
+    query = models.CharField(max_length=255)
+    site_id = models.CharField(max_length=10, default="MLA")
+    limit = models.PositiveIntegerField(default=20)
+    offset = models.PositiveIntegerField(default=0)
+    cantidad_resultados = models.PositiveIntegerField(default=0)
+    exitosa = models.BooleanField(default=False)
+    mensaje_error = models.TextField(blank=True, null=True)
+    fecha_consulta = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "consulta de Mercado Libre"
+        verbose_name_plural = "consultas de Mercado Libre"
+        ordering = ["-fecha_consulta"]
+
+    def __str__(self):
+        return f"{self.query} ({self.site_id})"
 
 
 class PrecioProducto(models.Model):

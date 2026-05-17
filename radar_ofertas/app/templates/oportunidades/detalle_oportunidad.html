@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle - Radar Ofertas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+  <div>
+    <a class="text-decoration-none" href="{% url 'oportunidades:lista' %}">Volver a oportunidades</a>
+    <h1 class="h3 mt-2 mb-0">{{ oportunidad.producto.titulo }}</h1>
+  </div>
+  <span class="badge text-bg-dark fs-6">{{ oportunidad.get_estado_display }}</span>
+</div>
+
+<div class="row g-3">
+  <section class="col-12 col-xl-5">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Producto</h2>
+      <dl class="row mb-0">
+        <dt class="col-sm-4">Fuente</dt><dd class="col-sm-8">{{ oportunidad.producto.fuente.nombre }}</dd>
+        <dt class="col-sm-4">Categoria</dt><dd class="col-sm-8">{{ oportunidad.producto.categoria.nombre }}</dd>
+        <dt class="col-sm-4">Marca</dt><dd class="col-sm-8">{{ oportunidad.producto.marca|default:"-" }}</dd>
+        <dt class="col-sm-4">Vendedor</dt><dd class="col-sm-8">{{ oportunidad.producto.vendedor|default:"-" }}</dd>
+        <dt class="col-sm-4">Reputacion</dt><dd class="col-sm-8">{{ oportunidad.producto.reputacion_vendedor|default:"-" }}</dd>
+        <dt class="col-sm-4">Condicion</dt><dd class="col-sm-8">{{ oportunidad.producto.get_condicion_display }}</dd>
+        <dt class="col-sm-4">Chico/liviano</dt><dd class="col-sm-8">{{ oportunidad.producto.es_chico_liviano|yesno:"Si,No" }}</dd>
+        <dt class="col-sm-4">Fragil</dt><dd class="col-sm-8">{{ oportunidad.producto.es_fragil|yesno:"Si,No" }}</dd>
+        <dt class="col-sm-4">URL</dt><dd class="col-sm-8"><a href="{{ oportunidad.producto.url }}" target="_blank" rel="noreferrer">Abrir producto</a></dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="col-12 col-xl-7">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Evaluacion</h2>
+      <div class="row g-3">
+        <div class="col-6 col-lg-3"><div class="text-muted">Actual</div><div class="fs-5">${{ oportunidad.precio_actual }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">Reventa</div><div class="fs-5">${{ oportunidad.precio_reventa_estimado }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">Margen</div><div class="fs-5">${{ oportunidad.margen_estimado }}</div></div>
+        <div class="col-6 col-lg-3"><div class="text-muted">% Margen</div><div class="fs-5">{{ oportunidad.porcentaje_margen }}%</div></div>
+      </div>
+      <hr>
+      <p class="mb-1"><strong>Tipo:</strong> {{ oportunidad.get_tipo_display }}</p>
+      <p class="mb-1"><strong>Riesgo:</strong> {{ oportunidad.get_riesgo_display }}</p>
+      <p class="mb-0"><strong>Motivo:</strong> {{ oportunidad.motivo|default:"-" }}</p>
+    </div>
+  </section>
+
+  <section class="col-12 col-lg-4">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Historial de precios</h2>
+      <ul class="list-group list-group-flush">
+        {% for precio in oportunidad.producto.precios.all %}
+          <li class="list-group-item px-0 d-flex justify-content-between">
+            <span>{{ precio.fecha_relevamiento|date:"d/m/Y H:i" }}</span>
+            <strong>{{ precio.moneda }} {{ precio.precio }}</strong>
+          </li>
+        {% empty %}
+          <li class="list-group-item px-0 text-muted">Sin precios registrados.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section class="col-12 col-lg-4">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Contenidos sugeridos</h2>
+      {% for contenido in oportunidad.contenidos.all %}
+        <article class="border-bottom pb-3 mb-3">
+          <h3 class="h6">{{ contenido.gancho }}</h3>
+          <p class="mb-1">{{ contenido.guion_corto }}</p>
+          <p class="text-muted mb-0">{{ contenido.hashtags }}</p>
+        </article>
+      {% empty %}
+        <p class="text-muted mb-0">Sin contenidos sugeridos.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="col-12 col-lg-4">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Publicaciones</h2>
+      {% for publicacion in oportunidad.publicaciones.all %}
+        <article class="border-bottom pb-3 mb-3">
+          <h3 class="h6">{{ publicacion.get_red_social_display }}</h3>
+          <p class="mb-1">{{ publicacion.fecha_publicacion|date:"d/m/Y H:i" }}</p>
+          <p class="mb-0">Vistas: {{ publicacion.vistas }} | Clics: {{ publicacion.clics }} | Ventas: {{ publicacion.ventas_reportadas }}</p>
+        </article>
+      {% empty %}
+        <p class="text-muted mb-0">Sin publicaciones registradas.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Oportunidades - Radar Ofertas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Oportunidades</h1>
+    <p class="text-muted mb-0">Productos detectados y evaluados para revision comercial.</p>
+  </div>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-3">
+  <div class="col-12 col-md-3">
+    <label class="form-label" for="{{ form.tipo.id_for_label }}">Tipo</label>
+    {{ form.tipo }}
+  </div>
+  <div class="col-12 col-md-3">
+    <label class="form-label" for="{{ form.estado.id_for_label }}">Estado</label>
+    {{ form.estado }}
+  </div>
+  <div class="col-12 col-md-4">
+    <label class="form-label" for="{{ form.categoria.id_for_label }}">Categoria</label>
+    {{ form.categoria }}
+  </div>
+  <div class="col-12 col-md-2 d-grid">
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+  </div>
+</form>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-hover table align-middle mb-0">
+    <thead class="table-dark">
+      <tr>
+        <th>Producto</th>
+        <th>Categoria</th>
+        <th>Fuente</th>
+        <th class="text-end">Precio actual</th>
+        <th class="text-end">Reventa</th>
+        <th class="text-end">Margen</th>
+        <th class="text-end">% Margen</th>
+        <th>Tipo</th>
+        <th class="text-end">Puntaje</th>
+        <th>Riesgo</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for oportunidad in oportunidades %}
+        <tr>
+          <td>
+            <a class="fw-semibold text-decoration-none" href="{% url 'oportunidades:detalle' oportunidad.pk %}">
+              {{ oportunidad.producto.titulo }}
+            </a>
+          </td>
+          <td>{{ oportunidad.producto.categoria.nombre }}</td>
+          <td>{{ oportunidad.producto.fuente.nombre }}</td>
+          <td class="text-end">${{ oportunidad.precio_actual }}</td>
+          <td class="text-end">${{ oportunidad.precio_reventa_estimado }}</td>
+          <td class="text-end">${{ oportunidad.margen_estimado }}</td>
+          <td class="text-end">{{ oportunidad.porcentaje_margen }}%</td>
+          <td><span class="badge text-bg-secondary">{{ oportunidad.get_tipo_display }}</span></td>
+          <td class="text-end">{{ oportunidad.puntaje }}</td>
+          <td>{{ oportunidad.get_riesgo_display }}</td>
+          <td>{{ oportunidad.get_estado_display }}</td>
+          <td>
+            <div class="d-flex flex-wrap gap-1">
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle' oportunidad.pk %}">Ver</a>
+              {% for estado, label in estados_accion %}
+                <form method="post" action="{% url 'oportunidades:cambiar_estado' oportunidad.pk estado %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="btn btn-sm btn-outline-dark" type="submit">{{ label }}</button>
+                </form>
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="12" class="text-center text-muted py-4">No hay oportunidades para los filtros seleccionados.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

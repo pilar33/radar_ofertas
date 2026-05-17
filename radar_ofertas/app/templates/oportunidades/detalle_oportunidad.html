@@ -27,15 +27,22 @@
       <h2 class="h5">Producto</h2>
       <dl class="row mb-0">
         <dt class="col-sm-4">Fuente</dt><dd class="col-sm-8">{{ oportunidad.producto.fuente.nombre }}</dd>
+        <dt class="col-sm-4">Codigo externo</dt><dd class="col-sm-8">{{ oportunidad.producto.codigo_externo|default:"-" }}</dd>
         <dt class="col-sm-4">Categoria</dt><dd class="col-sm-8">{{ oportunidad.producto.categoria.nombre }}</dd>
         <dt class="col-sm-4">Marca</dt><dd class="col-sm-8">{{ oportunidad.producto.marca|default:"-" }}</dd>
         <dt class="col-sm-4">Vendedor</dt><dd class="col-sm-8">{{ oportunidad.producto.vendedor|default:"-" }}</dd>
+        <dt class="col-sm-4">Cantidad vendida</dt><dd class="col-sm-8">{{ oportunidad.producto.cantidad_vendida }}</dd>
+        <dt class="col-sm-4">Disponible</dt><dd class="col-sm-8">{{ oportunidad.producto.disponible|yesno:"Si,No" }}</dd>
         <dt class="col-sm-4">Reputacion</dt><dd class="col-sm-8">{{ oportunidad.producto.reputacion_vendedor|default:"-" }}</dd>
         <dt class="col-sm-4">Condicion</dt><dd class="col-sm-8">{{ oportunidad.producto.get_condicion_display }}</dd>
         <dt class="col-sm-4">Chico/liviano</dt><dd class="col-sm-8">{{ oportunidad.producto.es_chico_liviano|yesno:"Si,No" }}</dd>
         <dt class="col-sm-4">Fragil</dt><dd class="col-sm-8">{{ oportunidad.producto.es_fragil|yesno:"Si,No" }}</dd>
         <dt class="col-sm-4">URL</dt><dd class="col-sm-8"><a href="{{ oportunidad.producto.url }}" target="_blank" rel="noreferrer">Abrir producto</a></dd>
+        <dt class="col-sm-4">Ultima consulta</dt><dd class="col-sm-8">{{ ultima_consulta_meli.fecha_consulta|date:"d/m/Y H:i"|default:"-" }}</dd>
       </dl>
+      {% if oportunidad.producto.thumbnail_url %}
+        <img src="{{ oportunidad.producto.thumbnail_url }}" alt="{{ oportunidad.producto.titulo }}" class="img-fluid rounded border mt-3">
+      {% endif %}
     </div>
   </section>
 

@@ -1,38 +1,46 @@
 from django.contrib import messages
+from django.db.models import Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import OportunidadFiltroForm
-from .models import Oportunidad
+from .forms import MercadoLibreBusquedaForm, OportunidadFiltroForm
+from .models import CategoriaInteres, ConsultaMercadoLibre, Oportunidad
 from .serializers import (
     ContenidoSugeridoSerializer,
+    ConsultaMercadoLibreSerializer,
+    MeliSincronizarSerializer,
     OportunidadDetalleSerializer,
     OportunidadEstadoSerializer,
     OportunidadSerializer,
 )
 from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
+from .services.mercado_libre_service import buscar_productos, sincronizar_busqueda_meli
 
 
 def lista_oportunidades(request):
     form = OportunidadFiltroForm(request.GET or None)
     oportunidades = (
         Oportunidad.objects.select_related("producto", "producto__categoria", "producto__fuente")
+        .annotate(fecha_ultimo_precio=Max("producto__precios__fecha_relevamiento"))
         .all()
     )
 
     if form.is_valid():
         tipo = form.cleaned_data.get("tipo")
         estado = form.cleaned_data.get("estado")
+        fuente = form.cleaned_data.get("fuente")
         categoria = form.cleaned_data.get("categoria")
 
         if tipo:
             oportunidades = oportunidades.filter(tipo=tipo)
         if estado:
             oportunidades = oportunidades.filter(estado=estado)
+        if fuente:
+            oportunidades = oportunidades.filter(producto__fuente_id=fuente)
         if categoria:
             oportunidades = oportunidades.filter(producto__categoria=categoria)
 
@@ -61,7 +69,47 @@ def detalle_oportunidad(request, pk):
         ),
         pk=pk,
     )
-    return render(request, "oportunidades/detalle_oportunidad.html", {"oportunidad": oportunidad})
+    ultima_consulta_meli = ConsultaMercadoLibre.objects.filter(
+        categoria=oportunidad.producto.categoria,
+        exitosa=True,
+    ).order_by("-fecha_consulta").first()
+    return render(
+        request,
+        "oportunidades/detalle_oportunidad.html",
+        {
+            "oportunidad": oportunidad,
+            "ultima_consulta_meli": ultima_consulta_meli,
+        },
+    )
+
+
+def buscar_mercado_libre(request):
+    form = MercadoLibreBusquedaForm(request.POST or None)
+    resumen = None
+
+    if request.method == "POST" and form.is_valid():
+        query = form.cleaned_data["query"]
+        categoria = form.cleaned_data.get("categoria")
+        limit = form.cleaned_data["limit"]
+        offset = form.cleaned_data["offset"]
+        resumen = sincronizar_busqueda_meli(query, categoria=categoria, limit=limit, offset=offset)
+        messages.success(
+            request,
+            (
+                f"Busqueda procesada: {resumen['procesados']} productos, "
+                f"{resumen['creados']} creados, {resumen['actualizados']} actualizados, "
+                f"{resumen['errores']} errores."
+            ),
+        )
+
+    return render(
+        request,
+        "oportunidades/buscar_mercado_libre.html",
+        {
+            "form": form,
+            "resumen": resumen,
+        },
+    )
 
 
 def _recalcular_oportunidad(oportunidad):
@@ -191,3 +239,44 @@ class OportunidadGenerarContenidoAPIView(APIView):
         serializer = ContenidoSugeridoSerializer(contenido)
         response_status = status.HTTP_201_CREATED if creado else status.HTTP_200_OK
         return Response(serializer.data, status=response_status)
+
+
+class MeliBuscarAPIView(APIView):
+    def get(self, request):
+        query = request.query_params.get("q") or request.query_params.get("query")
+        limit = request.query_params.get("limit", 10)
+        offset = request.query_params.get("offset", 0)
+
+        if not query:
+            return Response({"detail": "Parametro q requerido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        respuesta = buscar_productos(query, limit=limit, offset=offset)
+        response_status = status.HTTP_200_OK if respuesta.get("ok") else status.HTTP_502_BAD_GATEWAY
+        return Response(respuesta, status=response_status)
+
+
+class MeliSincronizarAPIView(APIView):
+    def post(self, request):
+        serializer = MeliSincronizarSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        categoria = None
+        query = data.get("query")
+
+        categoria_id = data.get("categoria_id")
+        if categoria_id:
+            categoria = get_object_or_404(CategoriaInteres, pk=categoria_id)
+            query = query or categoria.palabra_clave
+
+        resumen = sincronizar_busqueda_meli(
+            query,
+            categoria=categoria,
+            limit=data.get("limit", 20),
+            offset=data.get("offset", 0),
+        )
+        return Response(resumen, status=status.HTTP_200_OK)
+
+
+class MeliConsultasAPIView(generics.ListAPIView):
+    queryset = ConsultaMercadoLibre.objects.select_related("categoria").all()
+    serializer_class = ConsultaMercadoLibreSerializer

@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     CategoriaInteres,
     ContenidoSugerido,
+    ConsultaMercadoLibre,
     FuenteProducto,
     Oportunidad,
     PrecioProducto,
@@ -27,8 +28,17 @@ class CategoriaInteresAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ("titulo", "categoria", "fuente", "vendedor", "es_chico_liviano", "es_fragil", "fecha_alta")
-    list_filter = ("categoria", "fuente", "es_chico_liviano", "es_fragil")
+    list_display = (
+        "titulo",
+        "codigo_externo",
+        "fuente",
+        "categoria",
+        "vendedor",
+        "cantidad_vendida",
+        "disponible",
+        "fecha_alta",
+    )
+    list_filter = ("categoria", "fuente", "disponible", "es_chico_liviano", "es_fragil")
     search_fields = ("titulo", "vendedor", "marca", "codigo_externo")
 
 
@@ -66,3 +76,10 @@ class PublicacionAdmin(admin.ModelAdmin):
     list_display = ("oportunidad", "red_social", "fecha_publicacion", "vistas", "clics", "ventas_reportadas")
     list_filter = ("red_social", "fecha_publicacion")
     search_fields = ("oportunidad__producto__titulo", "url_publicacion", "observaciones")
+
+
+@admin.register(ConsultaMercadoLibre)
+class ConsultaMercadoLibreAdmin(admin.ModelAdmin):
+    list_display = ("query", "categoria", "site_id", "limit", "offset", "cantidad_resultados", "exitosa", "fecha_consulta")
+    list_filter = ("exitosa", "site_id", "categoria", "fecha_consulta")
+    search_fields = ("query", "mensaje_error")

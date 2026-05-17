@@ -73,6 +73,9 @@ El comando inserta fuentes, categorias, productos simulados, historial de precio
 - `PATCH /api/oportunidades/<id>/estado/`
 - `POST /api/oportunidades/<id>/recalcular/`
 - `POST /api/oportunidades/<id>/generar-contenido/`
+- `GET /api/meli/buscar/?q=organizador&limit=10`
+- `POST /api/meli/sincronizar/`
+- `GET /api/meli/consultas/`
 
 Ejemplo para cambiar estado:
 
@@ -102,3 +105,43 @@ docker compose exec web python manage.py test oportunidades
 ```
 
 Tambien se agregan acciones web y API para recalcular una oportunidad individual y generar contenido basico sin IA.
+
+## Etapa 3 - Integracion Mercado Libre API publica
+
+Esta etapa consume la API publica/oficial de Mercado Libre Argentina para buscar productos, guardarlos en SQL Server, registrar historial de precios y generar oportunidades con el motor comercial existente.
+
+Variables nuevas:
+
+```env
+MELI_BASE_URL=https://api.mercadolibre.com
+MELI_SITE_ID=MLA
+MELI_SEARCH_LIMIT_DEFAULT=20
+MELI_REQUEST_TIMEOUT=15
+MELI_ACCESS_TOKEN=
+```
+
+`MELI_ACCESS_TOKEN` es opcional. Para busquedas publicas iniciales se puede dejar vacio; si se configura, se envia como `Bearer Token`.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py buscar_meli --query "organizador cocina" --limit 10
+docker compose exec web python manage.py buscar_meli --categoria-id 1 --limit 20
+docker compose exec web python manage.py buscar_meli_categorias --limit 10 --delay 2
+```
+
+URLs:
+
+- http://localhost:8000/mercadolibre/buscar/
+- http://localhost:8000/oportunidades/
+
+Aclaraciones:
+
+- No se usa scraping.
+- No se usa OpenAI en esta etapa.
+- No se automatizan compras.
+- No se publican productos automaticamente.
+- Las consultas se registran en `ConsultaMercadoLibre`.
+- Se evita duplicar productos por fuente y codigo externo.
+- Se evita duplicar precios cuando el precio no cambio.
+- Usar limites moderados y delay entre consultas para respetar un uso prudente de la API.

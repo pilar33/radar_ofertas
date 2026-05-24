@@ -218,3 +218,70 @@ El sistema ahora guarda `status_code`, `requiere_token`, `forbidden` y `uso_toke
 El sistema deja preparado `url_afiliado`, `afiliado_activo` y `nota_afiliado` en `Producto`.
 
 Por ahora el link afiliado puede cargarse manualmente desde admin. No se asume un formato automatico si Mercado Libre no lo confirma, no se publican links automaticamente y no se modifica la URL original.
+
+## Despliegue staging en Render para OAuth Mercado Libre
+
+Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.
+
+### Variables sugeridas en Render
+
+```env
+RENDER=True
+USE_SQLITE_FOR_RENDER=True
+DEBUG=False
+SECRET_KEY=generar-una-clave-segura
+ALLOWED_HOSTS=radar-ofertas.onrender.com,.onrender.com
+CSRF_TRUSTED_ORIGINS=https://radar-ofertas.onrender.com
+SQLITE_PATH=/opt/render/project/src/db.sqlite3
+
+MELI_BASE_URL=https://api.mercadolibre.com
+MELI_AUTH_BASE_URL=https://auth.mercadolibre.com.ar
+MELI_SITE_ID=MLA
+MELI_CLIENT_ID=
+MELI_CLIENT_SECRET=
+MELI_REDIRECT_URI=https://radar-ofertas.onrender.com/mercadolibre/oauth/callback/
+MELI_USER_AGENT=radar_ofertas/1.0
+```
+
+No subir secrets al repositorio. Configurar `SECRET_KEY`, `MELI_CLIENT_ID` y `MELI_CLIENT_SECRET` solo como variables de entorno en Render.
+
+### Start command
+
+```bash
+bash render_start.sh
+```
+
+El script ejecuta:
+
+```bash
+python manage.py migrate --noinput
+python manage.py collectstatic --noinput
+gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000}
+```
+
+### Health check
+
+```text
+https://radar-ofertas.onrender.com/health/
+```
+
+Respuesta esperada:
+
+```json
+{"status": "ok", "app": "radar_ofertas"}
+```
+
+### Redirect URI para Mercado Libre Developers
+
+Configurar exactamente:
+
+```text
+https://radar-ofertas.onrender.com/mercadolibre/oauth/callback/
+```
+
+### Notas
+
+- La version Render usa SQLite solo para validar OAuth/staging.
+- El entorno local sigue funcionando con Docker + SQL Server + `mssql-django`.
+- Para produccion real se debe definir una base externa persistente.
+- No se usa OpenAI, no se usa scraping y no se automatizan compras ni publicaciones.

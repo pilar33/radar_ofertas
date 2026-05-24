@@ -4,3 +4,5 @@ mssql-django>=1.5,<1.6
 pyodbc>=5.1,<5.2
 python-dotenv>=1.0,<1.1
 requests>=2.32,<2.33
+whitenoise>=6.7,<6.8
+gunicorn>=22.0,<23.0

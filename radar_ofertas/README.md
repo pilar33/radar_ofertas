@@ -219,6 +219,38 @@ El sistema deja preparado `url_afiliado`, `afiliado_activo` y `nota_afiliado` en
 
 Por ahora el link afiliado puede cargarse manualmente desde admin. No se asume un formato automatico si Mercado Libre no lo confirma, no se publican links automaticamente y no se modifica la URL original.
 
+## Diagnostico de 403 con token
+
+Si OAuth genera token pero `/sites/MLA/search` sigue devolviendo `403 Forbidden`, usar el diagnostico de endpoints:
+
+```bash
+python manage.py diagnosticar_meli_endpoints --query "calza mujer" --item-id MLA3092462776 --limit 1
+```
+
+En Render normalmente no hay shell persistente disponible, asi que se puede usar la vista web:
+
+```text
+https://radar-ofertas.onrender.com/mercadolibre/diagnostico-endpoints/
+```
+
+La vista prueba:
+
+- `/users/me` con token, para validar OAuth.
+- `/sites/MLA/categories`, endpoint publico simple.
+- `/sites/MLA/search` sin token.
+- `/sites/MLA/search` con token.
+- `/items/{item_id}` con token.
+
+Si `/users/me` funciona pero `/sites/MLA/search` falla con `403`, el problema no es OAuth ni Redirect URI: Mercado Libre esta restringiendo el endpoint de busqueda general para esa app, token, scopes o tipo de cuenta.
+
+Si se confirma restriccion de `/sites/MLA/search`, no se debe usar scraping. Alternativas limpias:
+
+- Usar el sistema para analizar productos pegados manualmente por URL.
+- Usar links obtenidos desde el programa de afiliados o carga manual.
+- Analizar productos cargados manualmente desde admin o formularios internos.
+- Evaluar acceso partner/oficial si Mercado Libre lo requiere.
+- Mantener Mercado Libre API solo para endpoints permitidos por la app.
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

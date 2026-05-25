@@ -9,7 +9,17 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from oportunidades.models import CategoriaInteres, FuenteProducto, MercadoLibreToken, Oportunidad, PrecioProducto, Producto
+from oportunidades.models import (
+    CategoriaInteres,
+    DecisionTecnica,
+    FuenteProducto,
+    FuenteWeb,
+    MercadoLibreToken,
+    Oportunidad,
+    PoliticaExtraccionFuente,
+    PrecioProducto,
+    Producto,
+)
 from oportunidades.services.clasificacion_service import clasificar_oportunidad
 from oportunidades.services.mercado_libre_service import (
     buscar_productos,
@@ -23,6 +33,8 @@ from oportunidades.services.mercado_libre_service import (
     sincronizar_busqueda_meli,
 )
 from oportunidades.services.margen_service import calcular_margen, calcular_porcentaje_margen
+from oportunidades.services.fuentes_service import fuente_permite_automatizacion
+from oportunidades.services.normalizacion_service import normalizar_texto_producto
 
 
 def _producto(es_chico_liviano=True, es_fragil=False, vendedor="Vendedor Demo"):
@@ -331,3 +343,91 @@ class MercadoLibreServiceTests(TestCase):
 
         self.assertEqual(resultado["status_code"], 403)
         self.assertEqual(len(resultado["response_text"]), 500)
+
+
+class MultifuenteTests(TestCase):
+    def setUp(self):
+        self.categoria = CategoriaInteres.objects.create(
+            nombre="Hogar",
+            palabra_clave="hogar",
+            activa=True,
+        )
+
+    def test_crear_fuente_web(self):
+        fuente = FuenteWeb.objects.create(
+            nombre="Proveedor Demo",
+            url_base="https://example.com",
+            tipo_fuente=FuenteWeb.TIPO_EXCEL_CSV,
+        )
+
+        self.assertEqual(fuente.nombre, "Proveedor Demo")
+        self.assertTrue(fuente.activa)
+
+    def test_politica_extraccion_semaforo(self):
+        fuente = FuenteWeb.objects.create(
+            nombre="Fuente politica",
+            url_base="https://example.com/politica",
+            tipo_fuente=FuenteWeb.TIPO_API_OFICIAL,
+        )
+        politica = PoliticaExtraccionFuente.objects.create(
+            fuente=fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_VERDE,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_API_OFICIAL,
+            tiene_api=True,
+        )
+
+        self.assertEqual(politica.semaforo, PoliticaExtraccionFuente.SEMAFORO_VERDE)
+
+    def test_fuente_roja_no_permite_automatizacion(self):
+        fuente = FuenteWeb.objects.create(
+            nombre="Fuente roja",
+            url_base="https://example.com/roja",
+            tipo_fuente=FuenteWeb.TIPO_MARKETPLACE,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_ROJO,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_NO_PERMITIDO,
+        )
+
+        self.assertFalse(fuente_permite_automatizacion(fuente))
+
+    def test_fuente_verde_permite_automatizacion(self):
+        fuente = FuenteWeb.objects.create(
+            nombre="Fuente verde",
+            url_base="https://example.com/verde",
+            tipo_fuente=FuenteWeb.TIPO_EXCEL_CSV,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_VERDE,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_CSV_EXCEL,
+        )
+
+        self.assertTrue(fuente_permite_automatizacion(fuente))
+
+    def test_normalizar_texto_producto(self):
+        texto = normalizar_texto_producto("  Organizador Cocina 3-Pisos!! ")
+
+        self.assertEqual(texto, "organizador cocina 3 pisos")
+
+    def test_crear_decision_tecnica(self):
+        decision = DecisionTecnica.objects.create(
+            titulo="Decision demo",
+            categoria=DecisionTecnica.CATEGORIA_DATOS,
+            descripcion="Descripcion",
+            decision="Decidir algo",
+        )
+
+        self.assertEqual(decision.categoria, DecisionTecnica.CATEGORIA_DATOS)
+
+    def test_inicializar_multifuente_crea_mercado_libre_documentado(self):
+        call_command("inicializar_multifuente")
+
+        mercado_libre = FuenteWeb.objects.get(nombre="Mercado Libre")
+        self.assertEqual(mercado_libre.politica_extraccion.semaforo, PoliticaExtraccionFuente.SEMAFORO_ROJO)
+        self.assertTrue(
+            DecisionTecnica.objects.filter(
+                titulo="Mercado Libre no sera fuente automatica principal en esta etapa"
+            ).exists()
+        )

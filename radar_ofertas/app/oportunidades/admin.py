@@ -2,13 +2,22 @@ from django.contrib import admin
 
 from .models import (
     CategoriaInteres,
+    CategoriaFuente,
+    ComparacionPrecio,
     ContenidoSugerido,
     ConsultaMercadoLibre,
+    DecisionTecnica,
+    EvaluacionOportunidadMultifuente,
     FuenteProducto,
+    FuenteWeb,
     MercadoLibreToken,
     Oportunidad,
+    PoliticaExtraccionFuente,
     PrecioProducto,
+    PrecioFuente,
     Producto,
+    ProductoCanonico,
+    ProductoFuente,
     Publicacion,
 )
 
@@ -103,3 +112,75 @@ class MercadoLibreTokenAdmin(admin.ModelAdmin):
     list_filter = ("activo", "expires_at", "fecha_actualizacion")
     search_fields = ("nickname", "user_id_meli")
     readonly_fields = ("fecha_creacion", "fecha_actualizacion")
+
+
+@admin.register(FuenteWeb)
+class FuenteWebAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tipo_fuente", "rubro_principal", "activa", "prioridad", "pais")
+    list_filter = ("tipo_fuente", "activa", "pais")
+    search_fields = ("nombre", "rubro_principal", "descripcion")
+
+
+@admin.register(PoliticaExtraccionFuente)
+class PoliticaExtraccionFuenteAdmin(admin.ModelAdmin):
+    list_display = (
+        "fuente",
+        "semaforo",
+        "metodo_preferido",
+        "permite_scraping",
+        "tiene_api",
+        "tiene_afiliados",
+        "riesgo_tecnico",
+        "riesgo_legal",
+    )
+    list_filter = ("semaforo", "metodo_preferido", "permite_scraping", "tiene_api", "riesgo_tecnico", "riesgo_legal")
+    search_fields = ("fuente__nombre", "observaciones")
+
+
+@admin.register(CategoriaFuente)
+class CategoriaFuenteAdmin(admin.ModelAdmin):
+    list_display = ("fuente", "nombre", "categoria_normalizada", "activa", "prioridad", "fecha_creacion")
+    list_filter = ("fuente", "activa", "categoria_normalizada")
+    search_fields = ("nombre", "fuente__nombre")
+
+
+@admin.register(ProductoCanonico)
+class ProductoCanonicoAdmin(admin.ModelAdmin):
+    list_display = ("nombre_normalizado", "categoria", "marca", "es_chico_liviano", "es_fragil", "estacionalidad")
+    list_filter = ("categoria", "es_chico_liviano", "es_fragil", "estacionalidad")
+    search_fields = ("nombre_normalizado", "marca", "modelo", "atributos_clave")
+
+
+@admin.register(ProductoFuente)
+class ProductoFuenteAdmin(admin.ModelAdmin):
+    list_display = ("titulo_original", "fuente_web", "categoria_fuente", "disponible", "condicion", "fecha_actualizacion")
+    list_filter = ("fuente_web", "categoria_fuente", "disponible", "condicion")
+    search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada")
+
+
+@admin.register(PrecioFuente)
+class PrecioFuenteAdmin(admin.ModelAdmin):
+    list_display = ("producto_fuente", "precio", "precio_lista", "descuento_porcentaje", "moneda", "origen_dato", "fecha_relevamiento")
+    list_filter = ("moneda", "origen_dato", "fecha_relevamiento")
+    search_fields = ("producto_fuente__titulo_original",)
+
+
+@admin.register(ComparacionPrecio)
+class ComparacionPrecioAdmin(admin.ModelAdmin):
+    list_display = ("producto_canonico", "precio_minimo", "precio_promedio", "precio_maximo", "cantidad_fuentes", "fecha_calculo")
+    list_filter = ("fecha_calculo", "fuente_mas_barata")
+    search_fields = ("producto_canonico__nombre_normalizado",)
+
+
+@admin.register(EvaluacionOportunidadMultifuente)
+class EvaluacionOportunidadMultifuenteAdmin(admin.ModelAdmin):
+    list_display = ("producto_canonico", "tipo", "riesgo", "indice_oportunidad", "porcentaje_margen", "fecha_creacion")
+    list_filter = ("tipo", "riesgo", "fecha_creacion")
+    search_fields = ("producto_canonico__nombre_normalizado", "motivo")
+
+
+@admin.register(DecisionTecnica)
+class DecisionTecnicaAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "categoria", "fecha")
+    list_filter = ("categoria", "fecha")
+    search_fields = ("titulo", "descripcion", "decision", "motivo", "impacto")

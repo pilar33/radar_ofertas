@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from oportunidades.models import (
     CategoriaInteres,
+    ConectorFuente,
     DetalleImportacionProducto,
     ImportacionProductos,
     PrecioFuente,
@@ -263,6 +264,17 @@ def crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False):
     return precio_fuente, True
 
 
+def inferir_conector_importacion(fuente_web, origen_dato=PrecioFuente.ORIGEN_CSV_EXCEL):
+    tipos = [ConectorFuente.TIPO_CSV_MANUAL, ConectorFuente.TIPO_EXCEL_MANUAL]
+    if origen_dato == PrecioFuente.ORIGEN_URL_ASISTIDA:
+        tipos = [ConectorFuente.TIPO_CARGA_URL]
+    return ConectorFuente.objects.filter(
+        fuente_web=fuente_web,
+        tipo_conector__in=tipos,
+        estado=ConectorFuente.ESTADO_ACTIVO,
+    ).order_by("tipo_conector", "id").first()
+
+
 def _recalcular_multifuente(productos_canonicos):
     for producto_canonico in productos_canonicos:
         calcular_comparacion_producto(producto_canonico)
@@ -272,9 +284,14 @@ def _recalcular_multifuente(productos_canonicos):
 @transaction.atomic
 def procesar_importacion(importacion, opciones=None):
     opciones = opciones or {}
+    if not importacion.conector:
+        importacion.conector = inferir_conector_importacion(
+            importacion.fuente_web,
+            opciones.get("origen_dato", PrecioFuente.ORIGEN_CSV_EXCEL),
+        )
     importacion.estado = ImportacionProductos.ESTADO_PROCESANDO
     importacion.tipo_archivo = importacion.tipo_archivo or detectar_tipo_archivo(importacion.archivo)
-    importacion.save(update_fields=["estado", "tipo_archivo"])
+    importacion.save(update_fields=["estado", "tipo_archivo", "conector"])
 
     lectura = leer_archivo_productos(importacion)
     if not lectura["ok"]:

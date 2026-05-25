@@ -380,6 +380,83 @@ Localmente los archivos se guardan en `MEDIA_ROOT`. En Render staging el filesys
 - CSV/Excel es una fuente verde cuando proviene de catalogos, listas autorizadas o proveedores.
 - Los conectores automaticos futuros se haran fuente por fuente segun la politica de extraccion.
 
+## Etapa 3.4 - Storage externo y base de conectores
+
+Esta etapa prepara Render para guardar archivos importados fuera del filesystem efimero y formaliza una capa de conectores por fuente sin implementar scraping.
+
+### Storage externo para Render
+
+Variables nuevas:
+
+```env
+USE_EXTERNAL_STORAGE=False
+STORAGE_BACKEND=s3
+STORAGE_BUCKET_NAME=
+STORAGE_ACCESS_KEY_ID=
+STORAGE_SECRET_ACCESS_KEY=
+STORAGE_REGION_NAME=
+STORAGE_ENDPOINT_URL=
+STORAGE_CUSTOM_DOMAIN=
+STORAGE_DEFAULT_ACL=private
+MEDIA_URL=/media/
+```
+
+En local `USE_EXTERNAL_STORAGE=False` mantiene `MEDIA_ROOT`. En Render, para uso real, configurar `USE_EXTERNAL_STORAGE=True` y credenciales de un proveedor compatible S3 como AWS S3, Cloudflare R2, Backblaze B2 o MinIO. No subir secretos al repositorio.
+
+Vista:
+
+- http://localhost:8000/storage/diagnostico/
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py diagnosticar_storage
+docker compose exec web python manage.py probar_storage
+```
+
+Documentacion:
+
+- `docs/storage_externo_render.md`
+
+### Conectores por fuente
+
+Modelos nuevos:
+
+- `ConectorFuente`
+- `EjecucionConector`
+- `DetalleEjecucionConector`
+
+Comando inicial:
+
+```bash
+docker compose exec web python manage.py inicializar_conectores_base
+```
+
+Vistas:
+
+- http://localhost:8000/conectores/
+- http://localhost:8000/storage/diagnostico/
+
+APIs:
+
+- `GET /api/conectores/`
+- `GET /api/conectores/<id>/`
+- `POST /api/conectores/<id>/validar/`
+- `GET /api/ejecuciones-conector/`
+- `GET /api/ejecuciones-conector/<id>/`
+
+Aclaraciones:
+
+- No se implementa scraping.
+- No se ejecutan conectores automaticos todavia.
+- CSV/Excel y carga URL quedan como conectores permitidos/manuales.
+- Mercado Libre queda con API pausada por restricciones de PolicyAgent.
+- La validacion de conectores respeta el semaforo y la politica de extraccion.
+
+Documentacion:
+
+- `docs/conectores_fuentes.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

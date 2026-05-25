@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Conectores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Conectores</h1>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Nombre</th>
+        <th>Fuente</th>
+        <th>Tipo</th>
+        <th>Estado</th>
+        <th>Semaforo</th>
+        <th>Metodo</th>
+        <th>Ultima ejecucion</th>
+        <th>Validacion</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for conector, validacion in datos_conectores %}
+        <tr>
+          <td>{{ conector.nombre }}</td>
+          <td>{{ conector.fuente_web.nombre }}</td>
+          <td>{{ conector.get_tipo_conector_display }}</td>
+          <td><span class="badge text-bg-secondary">{{ conector.get_estado_display }}</span></td>
+          <td>{{ conector.fuente_web.politica_extraccion.get_semaforo_display|default:"-" }}</td>
+          <td>{{ conector.fuente_web.politica_extraccion.get_metodo_preferido_display|default:"-" }}</td>
+          <td>{{ conector.ultima_ejecucion|date:"d/m/Y H:i"|default:"-" }}</td>
+          <td><span class="badge text-bg-{% if validacion.nivel == 'ok' %}success{% elif validacion.nivel == 'bloqueado' %}danger{% else %}warning{% endif %}">{{ validacion.nivel }}</span></td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_conector' conector.pk %}">Ver</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">No hay conectores. Ejecuta inicializar_conectores_base.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

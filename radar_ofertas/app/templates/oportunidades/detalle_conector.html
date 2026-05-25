@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle conector{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ conector.nombre }}</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_conectores' %}">Volver</a>
+</div>
+
+<div class="alert alert-{% if validacion.nivel == 'ok' %}success{% elif validacion.nivel == 'bloqueado' %}danger{% else %}warning{% endif %}">
+  {{ validacion.mensaje }}
+</div>
+
+<div class="bg-white border rounded p-3 mb-3">
+  <div class="row">
+    <div class="col-md-3"><strong>Fuente</strong><br>{{ conector.fuente_web.nombre }}</div>
+    <div class="col-md-3"><strong>Tipo</strong><br>{{ conector.get_tipo_conector_display }}</div>
+    <div class="col-md-3"><strong>Estado</strong><br>{{ conector.get_estado_display }}</div>
+    <div class="col-md-3"><strong>Revision manual</strong><br>{{ conector.requiere_revision_manual|yesno:"Si,No" }}</div>
+  </div>
+  <form method="post" action="{% url 'oportunidades:validar_conector' conector.pk %}" class="mt-3">
+    {% csrf_token %}
+    <button class="btn btn-outline-primary btn-sm">Validar politica</button>
+  </form>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Politica de fuente</h2>
+      {% with politica=conector.fuente_web.politica_extraccion %}
+        <p><strong>Semaforo:</strong> {{ politica.get_semaforo_display|default:"-" }}</p>
+        <p><strong>Metodo preferido:</strong> {{ politica.get_metodo_preferido_display|default:"-" }}</p>
+        <p><strong>Permite scraping:</strong> {{ politica.permite_scraping|yesno:"Si,No" }}</p>
+        <p><strong>Observaciones:</strong> {{ politica.observaciones|default:"-" }}</p>
+      {% endwith %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Importaciones asociadas</h2>
+      <ul class="mb-0">
+        {% for importacion in importaciones %}
+          <li>#{{ importacion.pk }} - {{ importacion.get_estado_display }} - {{ importacion.fecha_creacion|date:"d/m/Y H:i" }}</li>
+        {% empty %}
+          <li class="text-muted">Sin importaciones asociadas.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="bg-white border rounded p-3 mt-3">
+  <h2 class="h5">Ejecuciones recientes</h2>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Inicio</th><th>Estado</th><th>Productos</th><th>Precios</th><th>Errores</th></tr></thead>
+    <tbody>
+      {% for ejecucion in ejecuciones %}
+        <tr><td>{{ ejecucion.inicio|date:"d/m/Y H:i" }}</td><td>{{ ejecucion.get_estado_display }}</td><td>{{ ejecucion.productos_detectados }}</td><td>{{ ejecucion.precios_creados }}</td><td>{{ ejecucion.errores }}</td></tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin ejecuciones registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

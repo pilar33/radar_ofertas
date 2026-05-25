@@ -29,6 +29,10 @@ urlpatterns = [
     path("productos/cargar-url/", views.cargar_producto_url, name="cargar_producto_url"),
     path("productos-multifuente/", views.lista_productos_multifuente, name="lista_productos_multifuente"),
     path("productos-multifuente/<int:pk>/", views.detalle_producto_multifuente, name="detalle_producto_multifuente"),
+    path("storage/diagnostico/", views.diagnostico_storage, name="diagnostico_storage"),
+    path("conectores/", views.lista_conectores, name="lista_conectores"),
+    path("conectores/<int:pk>/", views.detalle_conector, name="detalle_conector"),
+    path("conectores/<int:pk>/validar/", views.validar_conector, name="validar_conector"),
     path(
         "productos-multifuente/<int:pk>/recalcular-comparacion/",
         views.recalcular_comparacion_multifuente,
@@ -70,4 +74,13 @@ urlpatterns = [
         name="api_producto_multifuente_detalle",
     ),
     path("api/productos/cargar-url/", views.CargaProductoURLAPIView.as_view(), name="api_cargar_producto_url"),
+    path("api/conectores/", views.ConectorFuenteListAPIView.as_view(), name="api_conectores"),
+    path("api/conectores/<int:pk>/", views.ConectorFuenteDetailAPIView.as_view(), name="api_conector_detalle"),
+    path("api/conectores/<int:pk>/validar/", views.ConectorFuenteValidarAPIView.as_view(), name="api_conector_validar"),
+    path("api/ejecuciones-conector/", views.EjecucionConectorListAPIView.as_view(), name="api_ejecuciones_conector"),
+    path(
+        "api/ejecuciones-conector/<int:pk>/",
+        views.EjecucionConectorDetailAPIView.as_view(),
+        name="api_ejecucion_conector_detalle",
+    ),
 ]

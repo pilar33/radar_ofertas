@@ -4,10 +4,13 @@ from .models import (
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
+    ConectorFuente,
     ContenidoSugerido,
     ConsultaMercadoLibre,
     DecisionTecnica,
     DetalleImportacionProducto,
+    DetalleEjecucionConector,
+    EjecucionConector,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
@@ -193,6 +196,7 @@ class ImportacionProductosAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "fuente_web",
+        "conector",
         "tipo_archivo",
         "estado",
         "total_filas",
@@ -202,13 +206,52 @@ class ImportacionProductosAdmin(admin.ModelAdmin):
         "errores",
         "fecha_creacion",
     )
-    list_filter = ("estado", "tipo_archivo", "fuente_web")
-    search_fields = ("fuente_web__nombre", "observaciones")
+    list_filter = ("estado", "tipo_archivo", "fuente_web", "conector")
+    search_fields = ("fuente_web__nombre", "conector__nombre", "observaciones")
     readonly_fields = ("fecha_creacion", "fecha_procesamiento")
 
 
 @admin.register(DetalleImportacionProducto)
 class DetalleImportacionProductoAdmin(admin.ModelAdmin):
     list_display = ("importacion", "numero_fila", "estado", "producto_fuente", "precio_fuente")
+    list_filter = ("estado",)
+    search_fields = ("mensaje", "datos_originales")
+
+
+@admin.register(ConectorFuente)
+class ConectorFuenteAdmin(admin.ModelAdmin):
+    list_display = (
+        "nombre",
+        "fuente_web",
+        "tipo_conector",
+        "estado",
+        "requiere_revision_manual",
+        "respeta_politica_fuente",
+        "ultima_ejecucion",
+    )
+    list_filter = ("tipo_conector", "estado", "fuente_web")
+    search_fields = ("nombre", "fuente_web__nombre", "descripcion")
+
+
+@admin.register(EjecucionConector)
+class EjecucionConectorAdmin(admin.ModelAdmin):
+    list_display = (
+        "conector",
+        "estado",
+        "inicio",
+        "fin",
+        "productos_detectados",
+        "productos_creados",
+        "productos_actualizados",
+        "precios_creados",
+        "errores",
+    )
+    list_filter = ("estado", "conector__tipo_conector", "conector__fuente_web")
+    search_fields = ("conector__nombre", "mensaje", "log_resumido")
+
+
+@admin.register(DetalleEjecucionConector)
+class DetalleEjecucionConectorAdmin(admin.ModelAdmin):
+    list_display = ("ejecucion", "estado", "producto_fuente", "fecha_creacion")
     list_filter = ("estado",)
     search_fields = ("mensaje", "datos_originales")

@@ -8,13 +8,15 @@ import requests
 import pandas as pd
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from oportunidades.models import (
     CategoriaInteres,
+    ConectorFuente,
     DecisionTecnica,
     DetalleImportacionProducto,
+    EjecucionConector,
     FuenteProducto,
     FuenteWeb,
     ImportacionProductos,
@@ -49,6 +51,8 @@ from oportunidades.services.importacion_service import (
     parsear_decimal,
     procesar_importacion,
 )
+from oportunidades.services.conectores_service import validar_conector_segun_politica
+from oportunidades.services.storage_service import diagnosticar_storage_config
 
 
 def _producto(es_chico_liviano=True, es_fragil=False, vendedor="Vendedor Demo"):
@@ -571,3 +575,155 @@ class ImportacionMultifuenteTests(TestCase):
         self.assertEqual(importacion.productos_creados, 1)
         self.assertEqual(importacion.errores, 1)
         self.assertEqual(DetalleImportacionProducto.objects.filter(importacion=importacion).count(), 2)
+
+
+class StorageConfigTests(SimpleTestCase):
+    @override_settings(USE_EXTERNAL_STORAGE=False, RENDER=False, MEDIA_URL="/media/")
+    def test_use_external_storage_false_usa_media_local(self):
+        diagnostico = diagnosticar_storage_config()
+
+        self.assertFalse(diagnostico["use_external_storage"])
+        self.assertEqual(diagnostico["media_url"], "/media/")
+
+    @override_settings(
+        USE_EXTERNAL_STORAGE=True,
+        RENDER=False,
+        MEDIA_URL="/media/",
+        AWS_STORAGE_BUCKET_NAME="bucket-demo",
+        AWS_ACCESS_KEY_ID="access-secret",
+        AWS_SECRET_ACCESS_KEY="super-secret",
+        AWS_S3_ENDPOINT_URL="https://storage.example.com",
+        STORAGE_BACKEND="s3",
+    )
+    def test_storage_diagnostico_no_expone_secretos(self):
+        diagnostico = diagnosticar_storage_config()
+        texto = str(diagnostico)
+
+        self.assertTrue(diagnostico["access_key_configurada"])
+        self.assertNotIn("access-secret", texto)
+        self.assertNotIn("super-secret", texto)
+
+    @override_settings(USE_EXTERNAL_STORAGE=False, RENDER=True, MEDIA_URL="/media/")
+    def test_diagnostico_storage_render_sin_externo_advierte(self):
+        diagnostico = diagnosticar_storage_config()
+
+        self.assertTrue(diagnostico["advertencias"])
+        self.assertIn("filesystem efimero", diagnostico["advertencias"][0])
+
+
+class ConectoresTests(TestCase):
+    def setUp(self):
+        self.fuente_verde = FuenteWeb.objects.create(
+            nombre="API Verde",
+            url_base="https://example.com/api",
+            tipo_fuente=FuenteWeb.TIPO_API_OFICIAL,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente_verde,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_VERDE,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_API_OFICIAL,
+            tiene_api=True,
+        )
+        self.fuente_roja = FuenteWeb.objects.create(
+            nombre="Roja",
+            url_base="https://example.com/roja",
+            tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente_roja,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_ROJO,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_NO_PERMITIDO,
+        )
+        self.fuente_amarilla = FuenteWeb.objects.create(
+            nombre="Amarilla",
+            url_base="https://example.com/amarilla",
+            tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente_amarilla,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_AMARILLO,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_PENDIENTE_REVISION,
+            permite_scraping=True,
+        )
+
+    def test_crear_conector_fuente(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="API oficial",
+            tipo_conector=ConectorFuente.TIPO_API_OFICIAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+        )
+
+        self.assertEqual(conector.fuente_web, self.fuente_verde)
+
+    def test_fuente_roja_bloquea_scraping(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_roja,
+            nombre="Scraping",
+            tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+        )
+        validacion = validar_conector_segun_politica(conector)
+
+        self.assertFalse(validacion["valido"])
+        self.assertEqual(validacion["nivel"], "bloqueado")
+
+    def test_fuente_verde_api_ok(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="API",
+            tipo_conector=ConectorFuente.TIPO_API_OFICIAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+        )
+        validacion = validar_conector_segun_politica(conector)
+
+        self.assertTrue(validacion["valido"])
+        self.assertEqual(validacion["nivel"], "ok")
+
+    def test_fuente_amarilla_scraping_requiere_revision(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_amarilla,
+            nombre="Scraping revisable",
+            tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO,
+            estado=ConectorFuente.ESTADO_BORRADOR,
+        )
+        validacion = validar_conector_segun_politica(conector)
+
+        self.assertTrue(validacion["valido"])
+        self.assertEqual(validacion["nivel"], "advertencia")
+
+    def test_inicializar_conectores_base_no_duplica(self):
+        call_command("inicializar_multifuente")
+        call_command("inicializar_conectores_base")
+        primera_cantidad = ConectorFuente.objects.count()
+        call_command("inicializar_conectores_base")
+
+        self.assertEqual(ConectorFuente.objects.count(), primera_cantidad)
+
+    def test_importacion_puede_vincular_conector(self):
+        categoria = CategoriaInteres.objects.create(nombre="Demo", palabra_clave="demo")
+        fuente = FuenteWeb.objects.create(
+            nombre="CSV Fuente",
+            url_base="https://example.com/csv",
+            tipo_fuente=FuenteWeb.TIPO_EXCEL_CSV,
+        )
+        ConectorFuente.objects.create(
+            fuente_web=fuente,
+            nombre="Importacion CSV/Excel manual",
+            tipo_conector=ConectorFuente.TIPO_CSV_MANUAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+        )
+        archivo = SimpleUploadedFile(
+            "productos.csv",
+            b"codigo_externo,titulo,precio,categoria\nSKU1,Producto demo,1200,Demo\n",
+            content_type="text/csv",
+        )
+        importacion = ImportacionProductos.objects.create(
+            fuente_web=fuente,
+            archivo=archivo,
+            tipo_archivo=ImportacionProductos.TIPO_CSV,
+        )
+        procesar_importacion(importacion, {"categoria_default": categoria})
+
+        importacion.refresh_from_db()
+        self.assertIsNotNone(importacion.conector)

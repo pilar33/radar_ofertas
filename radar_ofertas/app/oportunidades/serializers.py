@@ -4,10 +4,13 @@ from .models import (
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
+    ConectorFuente,
     ConsultaMercadoLibre,
     ContenidoSugerido,
     DecisionTecnica,
     DetalleImportacionProducto,
+    DetalleEjecucionConector,
+    EjecucionConector,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
@@ -222,6 +225,34 @@ class EvaluacionOportunidadMultifuenteSerializer(serializers.ModelSerializer):
 class DecisionTecnicaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DecisionTecnica
+        fields = "__all__"
+
+
+class ConectorFuenteSerializer(serializers.ModelSerializer):
+    fuente_web = FuenteWebSerializer(read_only=True)
+    validacion = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConectorFuente
+        fields = "__all__"
+
+    def get_validacion(self, obj):
+        from oportunidades.services.conectores_service import validar_conector_segun_politica
+
+        return validar_conector_segun_politica(obj)
+
+
+class EjecucionConectorSerializer(serializers.ModelSerializer):
+    conector = ConectorFuenteSerializer(read_only=True)
+
+    class Meta:
+        model = EjecucionConector
+        fields = "__all__"
+
+
+class DetalleEjecucionConectorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DetalleEjecucionConector
         fields = "__all__"
 
 

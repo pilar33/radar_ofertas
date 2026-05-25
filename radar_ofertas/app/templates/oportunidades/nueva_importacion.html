@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva importacion{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Nueva importacion CSV/Excel</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_importaciones' %}">Volver</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="bg-white border rounded p-3">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">{{ form.fuente_web.label }}</label>
+      {{ form.fuente_web }}
+      {{ form.fuente_web.errors }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">{{ form.archivo.label }}</label>
+      {{ form.archivo }}
+      {{ form.archivo.errors }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">{{ form.categoria_default.label }}</label>
+      {{ form.categoria_default }}
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">{{ form.origen_dato.label }}</label>
+      {{ form.origen_dato }}
+    </div>
+    <div class="col-md-9 d-flex align-items-end gap-4">
+      <div class="form-check">{{ form.crear_producto_canonico }} <label class="form-check-label">{{ form.crear_producto_canonico.label }}</label></div>
+      <div class="form-check">{{ form.actualizar_productos_existentes }} <label class="form-check-label">{{ form.actualizar_productos_existentes.label }}</label></div>
+      <div class="form-check">{{ form.crear_precio_si_no_cambio }} <label class="form-check-label">{{ form.crear_precio_si_no_cambio.label }}</label></div>
+    </div>
+  </div>
+  <div class="mt-3 d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Subir y procesar</button>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:plantilla_importacion_csv' %}">Plantilla CSV</a>
+  </div>
+</form>
+{% endblock %}

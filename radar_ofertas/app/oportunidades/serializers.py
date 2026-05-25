@@ -7,9 +7,11 @@ from .models import (
     ConsultaMercadoLibre,
     ContenidoSugerido,
     DecisionTecnica,
+    DetalleImportacionProducto,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
+    ImportacionProductos,
     Oportunidad,
     PoliticaExtraccionFuente,
     PrecioProducto,
@@ -137,6 +139,58 @@ class ProductoCanonicoSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ProductoMultifuenteSerializer(serializers.ModelSerializer):
+    categoria = CategoriaInteresSerializer(read_only=True)
+    cantidad_fuentes = serializers.SerializerMethodField()
+    precio_minimo = serializers.SerializerMethodField()
+    precio_promedio = serializers.SerializerMethodField()
+    indice_oportunidad = serializers.SerializerMethodField()
+    tipo_sugerido = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductoCanonico
+        fields = [
+            "id",
+            "nombre_normalizado",
+            "categoria",
+            "marca",
+            "modelo",
+            "es_chico_liviano",
+            "es_fragil",
+            "cantidad_fuentes",
+            "precio_minimo",
+            "precio_promedio",
+            "indice_oportunidad",
+            "tipo_sugerido",
+        ]
+
+    def _ultima_comparacion(self, obj):
+        return obj.comparaciones.order_by("-fecha_calculo", "-id").first()
+
+    def _ultima_evaluacion(self, obj):
+        return obj.evaluaciones_multifuente.order_by("-fecha_creacion", "-id").first()
+
+    def get_cantidad_fuentes(self, obj):
+        comparacion = self._ultima_comparacion(obj)
+        return comparacion.cantidad_fuentes if comparacion else 0
+
+    def get_precio_minimo(self, obj):
+        comparacion = self._ultima_comparacion(obj)
+        return comparacion.precio_minimo if comparacion else None
+
+    def get_precio_promedio(self, obj):
+        comparacion = self._ultima_comparacion(obj)
+        return comparacion.precio_promedio if comparacion else None
+
+    def get_indice_oportunidad(self, obj):
+        evaluacion = self._ultima_evaluacion(obj)
+        return evaluacion.indice_oportunidad if evaluacion else None
+
+    def get_tipo_sugerido(self, obj):
+        evaluacion = self._ultima_evaluacion(obj)
+        return evaluacion.tipo if evaluacion else None
+
+
 class ProductoFuenteSerializer(serializers.ModelSerializer):
     fuente_web = FuenteWebSerializer(read_only=True)
     categoria_fuente = CategoriaFuenteSerializer(read_only=True)
@@ -169,3 +223,41 @@ class DecisionTecnicaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DecisionTecnica
         fields = "__all__"
+
+
+class DetalleImportacionProductoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DetalleImportacionProducto
+        fields = "__all__"
+
+
+class ImportacionProductosSerializer(serializers.ModelSerializer):
+    fuente_web = FuenteWebSerializer(read_only=True)
+    detalles = DetalleImportacionProductoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ImportacionProductos
+        fields = "__all__"
+
+
+class ImportacionProductosCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImportacionProductos
+        fields = ["id", "fuente_web", "archivo", "observaciones"]
+
+
+class CargaProductoURLSerializer(serializers.Serializer):
+    fuente_web = serializers.PrimaryKeyRelatedField(queryset=FuenteWeb.objects.filter(activa=True))
+    url_producto = serializers.URLField()
+    titulo = serializers.CharField(max_length=255)
+    precio = serializers.CharField()
+    categoria = serializers.PrimaryKeyRelatedField(queryset=CategoriaInteres.objects.filter(activa=True))
+    marca = serializers.CharField(required=False, allow_blank=True)
+    descripcion = serializers.CharField(required=False, allow_blank=True)
+    imagen_url = serializers.URLField(required=False, allow_blank=True)
+    precio_lista = serializers.CharField(required=False, allow_blank=True)
+    costo_envio = serializers.CharField(required=False, allow_blank=True)
+    moneda = serializers.CharField(required=False, default="ARS")
+    es_chico_liviano = serializers.BooleanField(required=False, default=False)
+    es_fragil = serializers.BooleanField(required=False, default=False)
+    observaciones = serializers.CharField(required=False, allow_blank=True)

@@ -1,0 +1,2 @@
+codigo_externo,titulo,precio,precio_lista,descuento_porcentaje,costo_envio,moneda,url_producto,categoria,marca,descripcion,imagen_url,vendedor,condicion,disponible,stock
+SKU-001,Organizador de cocina extensible,"1200,50",1500,20,0,ARS,https://ejemplo.com/producto/sku-001,Organizacion,Marca Demo,Organizador plastico para cocina,https://ejemplo.com/imagen.jpg,Proveedor Demo,nuevo,si,Disponible

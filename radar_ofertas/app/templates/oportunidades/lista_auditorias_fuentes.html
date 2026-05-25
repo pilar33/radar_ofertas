@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Auditorias de fuentes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Auditorias de fuentes</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-primary" href="{% url 'oportunidades:preparar_decohome' %}">Preparar Deco Home</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:auditar_decohome' %}">Auditar Deco Home</a>
+  </div>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Fecha</th>
+        <th>Fuente</th>
+        <th>Semaforo</th>
+        <th>Metodo</th>
+        <th>Home</th>
+        <th>Robots</th>
+        <th>Sitemap</th>
+        <th>Permite</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for auditoria in auditorias %}
+        <tr>
+          <td>{{ auditoria.fecha_auditoria|date:"d/m/Y H:i" }}</td>
+          <td>{{ auditoria.fuente_web.nombre }}</td>
+          <td>{{ auditoria.get_semaforo_sugerido_display }}</td>
+          <td>{{ auditoria.get_metodo_recomendado_display }}</td>
+          <td>{{ auditoria.status_home|default:"-" }}</td>
+          <td>{{ auditoria.status_robots|default:"-" }}</td>
+          <td>{{ auditoria.status_sitemap|default:"-" }}</td>
+          <td>{{ auditoria.get_permite_extraccion_segun_revision_display }}</td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_auditoria_fuente' auditoria.pk %}">Ver</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">Todavia no hay auditorias.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

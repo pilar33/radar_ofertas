@@ -454,6 +454,123 @@ class DecisionTecnica(models.Model):
         return self.titulo
 
 
+class AuditoriaFuenteWeb(models.Model):
+    PERMITE_SI = "si"
+    PERMITE_NO = "no"
+    PERMITE_DUDOSO = "dudoso"
+    PERMITE_PENDIENTE = "pendiente"
+    PERMITE_CHOICES = [
+        (PERMITE_SI, "Si"),
+        (PERMITE_NO, "No"),
+        (PERMITE_DUDOSO, "Dudoso"),
+        (PERMITE_PENDIENTE, "Pendiente"),
+    ]
+
+    METODO_API_OFICIAL = "api_oficial"
+    METODO_CSV_EXCEL = "csv_excel"
+    METODO_CATALOGO_PDF = "catalogo_pdf"
+    METODO_SITEMAP = "sitemap"
+    METODO_DATOS_ESTRUCTURADOS = "datos_estructurados"
+    METODO_CARGA_URL = "carga_url"
+    METODO_SCRAPING_CONTROLADO = "scraping_controlado"
+    METODO_NO_AUTOMATIZAR = "no_automatizar"
+    METODO_PENDIENTE_REVISION = "pendiente_revision"
+    METODO_CHOICES = [
+        (METODO_API_OFICIAL, "API oficial"),
+        (METODO_CSV_EXCEL, "CSV/Excel"),
+        (METODO_CATALOGO_PDF, "Catalogo PDF"),
+        (METODO_SITEMAP, "Sitemap"),
+        (METODO_DATOS_ESTRUCTURADOS, "Datos estructurados"),
+        (METODO_CARGA_URL, "Carga URL"),
+        (METODO_SCRAPING_CONTROLADO, "Scraping controlado"),
+        (METODO_NO_AUTOMATIZAR, "No automatizar"),
+        (METODO_PENDIENTE_REVISION, "Pendiente revision"),
+    ]
+
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.CASCADE, related_name="auditorias")
+    url_robots_txt = models.URLField(blank=True, null=True)
+    robots_txt_encontrado = models.BooleanField(default=False)
+    robots_txt_contenido_resumen = models.TextField(blank=True, null=True)
+    sitemap_detectado = models.BooleanField(default=False)
+    sitemap_url = models.URLField(blank=True, null=True)
+    requiere_login_detectado = models.BooleanField(default=False)
+    captcha_detectado = models.BooleanField(default=False)
+    bloqueos_detectados = models.BooleanField(default=False)
+    status_home = models.PositiveIntegerField(blank=True, null=True)
+    status_robots = models.PositiveIntegerField(blank=True, null=True)
+    status_sitemap = models.PositiveIntegerField(blank=True, null=True)
+    permite_extraccion_segun_revision = models.CharField(
+        max_length=20,
+        choices=PERMITE_CHOICES,
+        default=PERMITE_PENDIENTE,
+    )
+    metodo_recomendado = models.CharField(
+        max_length=40,
+        choices=METODO_CHOICES,
+        default=METODO_PENDIENTE_REVISION,
+    )
+    semaforo_sugerido = models.CharField(
+        max_length=20,
+        choices=PoliticaExtraccionFuente.SEMAFORO_CHOICES,
+        default=PoliticaExtraccionFuente.SEMAFORO_DESCONOCIDO,
+    )
+    resumen_tecnico = models.TextField(blank=True, null=True)
+    riesgos_detectados = models.TextField(blank=True, null=True)
+    recomendacion = models.TextField(blank=True, null=True)
+    revisado_manualmente = models.BooleanField(default=False)
+    fecha_auditoria = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "auditoria de fuente web"
+        verbose_name_plural = "auditorias de fuentes web"
+        ordering = ["-fecha_auditoria"]
+
+    def __str__(self):
+        return f"{self.fuente_web} - {self.fecha_auditoria:%Y-%m-%d}"
+
+
+class RecursoFuenteDetectado(models.Model):
+    TIPO_ROBOTS = "robots_txt"
+    TIPO_SITEMAP = "sitemap"
+    TIPO_CATEGORIA = "categoria"
+    TIPO_PRODUCTO = "producto"
+    TIPO_CSV = "csv"
+    TIPO_EXCEL = "excel"
+    TIPO_PDF = "pdf"
+    TIPO_FEED = "feed"
+    TIPO_PAGINA_INFO = "pagina_info"
+    TIPO_OTRO = "otro"
+    TIPO_CHOICES = [
+        (TIPO_ROBOTS, "Robots.txt"),
+        (TIPO_SITEMAP, "Sitemap"),
+        (TIPO_CATEGORIA, "Categoria"),
+        (TIPO_PRODUCTO, "Producto"),
+        (TIPO_CSV, "CSV"),
+        (TIPO_EXCEL, "Excel"),
+        (TIPO_PDF, "PDF"),
+        (TIPO_FEED, "Feed"),
+        (TIPO_PAGINA_INFO, "Pagina info"),
+        (TIPO_OTRO, "Otro"),
+    ]
+
+    auditoria = models.ForeignKey(AuditoriaFuenteWeb, on_delete=models.CASCADE, related_name="recursos")
+    tipo_recurso = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    url = models.URLField()
+    status_code = models.PositiveIntegerField(blank=True, null=True)
+    content_type = models.CharField(max_length=150, blank=True, null=True)
+    permitido = models.BooleanField(default=False)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_detectado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "recurso de fuente detectado"
+        verbose_name_plural = "recursos de fuentes detectados"
+        ordering = ["-fecha_detectado"]
+
+    def __str__(self):
+        return f"{self.tipo_recurso} - {self.url}"
+
+
 class ConectorFuente(models.Model):
     TIPO_CSV_MANUAL = "csv_manual"
     TIPO_EXCEL_MANUAL = "excel_manual"

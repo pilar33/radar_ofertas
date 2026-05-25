@@ -25,16 +25,24 @@ def validar_conector_segun_politica(conector):
         }
 
     if conector.tipo_conector == ConectorFuente.TIPO_SCRAPING_PERMITIDO:
+        if politica.semaforo == PoliticaExtraccionFuente.SEMAFORO_DESCONOCIDO:
+            return {"valido": False, "mensaje": "Semaforo desconocido: scraping bloqueado.", "nivel": "bloqueado"}
         if politica.semaforo == PoliticaExtraccionFuente.SEMAFORO_ROJO:
             return {"valido": False, "mensaje": "Fuente roja: scraping bloqueado.", "nivel": "bloqueado"}
         if politica.requiere_login or politica.tiene_captcha:
             return {"valido": False, "mensaje": "Login o captcha detectado: scraping bloqueado.", "nivel": "bloqueado"}
         if not politica.permite_scraping:
             return {"valido": False, "mensaje": "La politica no permite scraping.", "nivel": "bloqueado"}
-        if not politica.robots_txt_revisado or not politica.terminos_revisados:
+        if not politica.robots_txt_revisado:
+            return {"valido": False, "mensaje": "Robots.txt no revisado: scraping bloqueado.", "nivel": "bloqueado"}
+        if not politica.terminos_revisados:
+            return {"valido": False, "mensaje": "Terminos no revisados: scraping bloqueado.", "nivel": "bloqueado"}
+        if not conector.respeta_politica_fuente:
+            return {"valido": False, "mensaje": "El conector no declara respetar la politica de fuente.", "nivel": "bloqueado"}
+        if conector.requiere_revision_manual:
             return {
                 "valido": True,
-                "mensaje": "Scraping requiere revision manual de robots.txt y terminos antes de ejecutar.",
+                "mensaje": "Scraping tecnicamente habilitable, pero requiere aprobacion manual antes de ejecutar.",
                 "nivel": "advertencia",
             }
         return {"valido": True, "mensaje": "Scraping permitido por politica revisada.", "nivel": "ok"}

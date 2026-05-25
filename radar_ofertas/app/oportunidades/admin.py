@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    AuditoriaFuenteWeb,
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
@@ -24,6 +25,7 @@ from .models import (
     ProductoCanonico,
     ProductoFuente,
     Publicacion,
+    RecursoFuenteDetectado,
 )
 
 
@@ -189,6 +191,29 @@ class DecisionTecnicaAdmin(admin.ModelAdmin):
     list_display = ("titulo", "categoria", "fecha")
     list_filter = ("categoria", "fecha")
     search_fields = ("titulo", "descripcion", "decision", "motivo", "impacto")
+
+
+@admin.register(AuditoriaFuenteWeb)
+class AuditoriaFuenteWebAdmin(admin.ModelAdmin):
+    list_display = (
+        "fuente_web",
+        "semaforo_sugerido",
+        "metodo_recomendado",
+        "status_home",
+        "status_robots",
+        "status_sitemap",
+        "permite_extraccion_segun_revision",
+        "fecha_auditoria",
+    )
+    list_filter = ("semaforo_sugerido", "metodo_recomendado", "permite_extraccion_segun_revision", "fuente_web")
+    search_fields = ("fuente_web__nombre", "resumen_tecnico", "riesgos_detectados", "recomendacion")
+
+
+@admin.register(RecursoFuenteDetectado)
+class RecursoFuenteDetectadoAdmin(admin.ModelAdmin):
+    list_display = ("auditoria", "tipo_recurso", "url", "status_code", "content_type", "permitido", "fecha_detectado")
+    list_filter = ("tipo_recurso", "permitido", "status_code")
+    search_fields = ("url", "observaciones", "auditoria__fuente_web__nombre")
 
 
 @admin.register(ImportacionProductos)

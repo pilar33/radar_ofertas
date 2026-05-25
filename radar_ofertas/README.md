@@ -503,6 +503,37 @@ Documentacion:
 
 - `docs/conector_catalogo_csv_excel.md`
 
+## Etapa 3.6 - Auditoria de fuente real: Deco Home
+
+Esta etapa registra Deco Home como fuente candidata, audita home/robots/sitemap y deja un conector web en borrador. No hace scraping productivo ni extrae productos.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py preparar_decohome
+docker compose exec web python manage.py auditar_decohome
+docker compose exec web python manage.py auditar_fuente --fuente-id ID
+```
+
+URLs:
+
+- http://localhost:8000/fuentes/
+- http://localhost:8000/auditorias-fuentes/
+- http://localhost:8000/fuentes/decohome/preparar/
+- http://localhost:8000/fuentes/decohome/auditar/
+- http://localhost:8000/scraping/politica/
+
+Aclaraciones:
+
+- No se implementa scraping productivo.
+- No se recorren categorias ni productos.
+- No se evaden bloqueos ni captchas.
+- La etapa prepara el camino para un extractor controlado solo si la auditoria lo permite.
+
+Documentacion:
+
+- `docs/auditoria_fuentes_web.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

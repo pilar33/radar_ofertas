@@ -43,3 +43,15 @@ Esta politica define que fuentes pueden automatizarse y bajo que condiciones. El
 - Priorizar fuentes confiables y permitidas.
 - Revisar manualmente fuentes amarillas antes de automatizar.
 - Documentar decisiones tecnicas cuando una fuente se marca roja.
+
+## Proceso antes de scraping
+
+1. Registrar la fuente.
+2. Auditar home, robots.txt y sitemap.
+3. Revisar terminos manualmente.
+4. Clasificar semaforo.
+5. Registrar decision tecnica.
+6. Elegir alternativa limpia si esta disponible: API, CSV/Excel, catalogo PDF, carga URL, afiliados o acuerdo.
+7. Solo si corresponde, implementar conector controlado con baja frecuencia y validaciones estrictas.
+
+Hasta completar estos pasos, no se debe hacer scraping productivo.

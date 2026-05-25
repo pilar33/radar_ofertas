@@ -12,6 +12,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from oportunidades.models import (
+    AuditoriaFuenteWeb,
     CategoriaInteres,
     ConectorFuente,
     DecisionTecnica,
@@ -28,6 +29,7 @@ from oportunidades.models import (
     Producto,
     ProductoCanonico,
     ProductoFuente,
+    RecursoFuenteDetectado,
 )
 from oportunidades.services.clasificacion_service import clasificar_oportunidad
 from oportunidades.services.mercado_libre_service import (
@@ -52,10 +54,12 @@ from oportunidades.services.importacion_service import (
     procesar_importacion,
 )
 from oportunidades.services.conectores_service import validar_conector_segun_politica
+from oportunidades.services.auditoria_fuentes_service import auditar_fuente_basica
 from oportunidades.services.conector_catalogo_service import (
     ejecutar_conector_catalogo,
     validar_conector_catalogo,
 )
+from oportunidades.services.conector_web_base import ConectorWebBase
 from oportunidades.services.storage_service import diagnosticar_storage_config
 
 
@@ -693,8 +697,8 @@ class ConectoresTests(TestCase):
         )
         validacion = validar_conector_segun_politica(conector)
 
-        self.assertTrue(validacion["valido"])
-        self.assertEqual(validacion["nivel"], "advertencia")
+        self.assertFalse(validacion["valido"])
+        self.assertEqual(validacion["nivel"], "bloqueado")
 
     def test_inicializar_conectores_base_no_duplica(self):
         call_command("inicializar_multifuente")
@@ -903,3 +907,124 @@ class ConectorCatalogoTests(TestCase):
         ejecutar_conector_catalogo(conector)
 
         requests_get.assert_not_called()
+
+
+class AuditoriaFuentesTests(TestCase):
+    def _response(self, status=200, text="ok", content_type="text/plain"):
+        response = Mock()
+        response.status_code = status
+        response.headers = {"Content-Type": content_type}
+        response.encoding = "utf-8"
+        response.iter_content.return_value = [text.encode("utf-8")]
+        return response
+
+    def test_preparar_decohome_crea_fuente_politica_conector(self):
+        call_command("preparar_decohome")
+
+        fuente = FuenteWeb.objects.get(nombre="Deco Home")
+        self.assertEqual(fuente.politica_extraccion.semaforo, PoliticaExtraccionFuente.SEMAFORO_DESCONOCIDO)
+        self.assertTrue(fuente.conectores.filter(tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO).exists())
+
+    def test_preparar_decohome_no_duplica(self):
+        call_command("preparar_decohome")
+        call_command("preparar_decohome")
+
+        self.assertEqual(FuenteWeb.objects.filter(nombre="Deco Home").count(), 1)
+
+    @patch("oportunidades.services.auditoria_fuentes_service.requests.get")
+    def test_auditar_fuente_basica_con_mock_home_robots_sitemap(self, requests_get):
+        requests_get.side_effect = [
+            self._response(text="<html>home</html>", content_type="text/html"),
+            self._response(text="User-agent: *\nAllow: /"),
+            self._response(text="<urlset></urlset>", content_type="application/xml"),
+        ]
+        fuente = FuenteWeb.objects.create(nombre="Auditada", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+
+        auditoria = auditar_fuente_basica(fuente)
+
+        self.assertEqual(auditoria.status_home, 200)
+        self.assertEqual(auditoria.recursos.count(), 3)
+
+    @patch("oportunidades.services.auditoria_fuentes_service.requests.get")
+    def test_auditoria_detecta_robots(self, requests_get):
+        requests_get.side_effect = [self._response(), self._response(text="User-agent: *"), self._response(status=404, text="")]
+        fuente = FuenteWeb.objects.create(nombre="Robots", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+
+        auditoria = auditar_fuente_basica(fuente)
+
+        self.assertTrue(auditoria.robots_txt_encontrado)
+
+    @patch("oportunidades.services.auditoria_fuentes_service.requests.get")
+    def test_auditoria_detecta_sitemap(self, requests_get):
+        requests_get.side_effect = [self._response(), self._response(status=404, text=""), self._response(text="<urlset></urlset>")]
+        fuente = FuenteWeb.objects.create(nombre="Sitemap", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+
+        auditoria = auditar_fuente_basica(fuente)
+
+        self.assertTrue(auditoria.sitemap_detectado)
+
+    @patch("oportunidades.services.auditoria_fuentes_service.requests.get")
+    def test_auditoria_detecta_captcha(self, requests_get):
+        requests_get.side_effect = [self._response(text="recaptcha"), self._response(), self._response(status=404, text="")]
+        fuente = FuenteWeb.objects.create(nombre="Captcha", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+
+        auditoria = auditar_fuente_basica(fuente)
+
+        self.assertTrue(auditoria.captcha_detectado)
+        self.assertEqual(auditoria.semaforo_sugerido, PoliticaExtraccionFuente.SEMAFORO_ROJO)
+
+    @patch("oportunidades.services.auditoria_fuentes_service.requests.get")
+    def test_auditoria_sugiere_rojo_si_403_persistente(self, requests_get):
+        requests_get.side_effect = [self._response(status=403, text="forbidden")] * 3
+        fuente = FuenteWeb.objects.create(nombre="Forbidden", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+
+        auditoria = auditar_fuente_basica(fuente)
+
+        self.assertEqual(auditoria.semaforo_sugerido, PoliticaExtraccionFuente.SEMAFORO_ROJO)
+
+    def test_scraping_permitido_bloqueado_si_semaforo_desconocido(self):
+        fuente = FuenteWeb.objects.create(nombre="Desconocida", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+        PoliticaExtraccionFuente.objects.create(fuente=fuente, semaforo=PoliticaExtraccionFuente.SEMAFORO_DESCONOCIDO)
+        conector = ConectorFuente.objects.create(fuente_web=fuente, nombre="Scraping", tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO)
+
+        self.assertEqual(validar_conector_segun_politica(conector)["nivel"], "bloqueado")
+
+    def test_scraping_permitido_bloqueado_si_robots_no_revisado(self):
+        fuente = FuenteWeb.objects.create(nombre="Sin robots", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+        PoliticaExtraccionFuente.objects.create(
+            fuente=fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_AMARILLO,
+            permite_scraping=True,
+            terminos_revisados=True,
+        )
+        conector = ConectorFuente.objects.create(fuente_web=fuente, nombre="Scraping", tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO)
+
+        self.assertEqual(validar_conector_segun_politica(conector)["nivel"], "bloqueado")
+
+    def test_scraping_permitido_permitido_solo_con_condiciones(self):
+        fuente = FuenteWeb.objects.create(nombre="Permitida", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+        PoliticaExtraccionFuente.objects.create(
+            fuente=fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_AMARILLO,
+            permite_scraping=True,
+            robots_txt_revisado=True,
+            terminos_revisados=True,
+        )
+        conector = ConectorFuente.objects.create(
+            fuente_web=fuente,
+            nombre="Scraping",
+            tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO,
+            requiere_revision_manual=False,
+            respeta_politica_fuente=True,
+        )
+
+        self.assertEqual(validar_conector_segun_politica(conector)["nivel"], "ok")
+
+    def test_conector_web_base_no_extrae_productos_en_etapa_3_6(self):
+        fuente = FuenteWeb.objects.create(nombre="Base", url_base="https://example.com", tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE)
+        conector = ConectorFuente.objects.create(fuente_web=fuente, nombre="Web base", tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO)
+
+        resultado = ConectorWebBase(conector).extraer_productos_preview()
+
+        self.assertFalse(resultado.ok)
+        self.assertIn("No implementado", resultado.mensaje)

@@ -8,7 +8,13 @@
     <a class="text-decoration-none" href="{% url 'oportunidades:lista_fuentes' %}">Volver a fuentes</a>
     <h1 class="h3 mt-2 mb-0">{{ fuente.nombre }}</h1>
   </div>
-  <a class="btn btn-outline-secondary" href="{{ fuente.url_base }}" target="_blank" rel="noreferrer">Abrir fuente</a>
+  <div class="d-flex gap-2">
+    <form method="post" action="{% url 'oportunidades:auditar_fuente' fuente.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-primary">Auditar fuente</button>
+    </form>
+    <a class="btn btn-outline-secondary" href="{{ fuente.url_base }}" target="_blank" rel="noreferrer">Abrir fuente</a>
+  </div>
 </div>
 
 <div class="row g-3">

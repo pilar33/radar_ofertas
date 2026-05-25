@@ -15,6 +15,7 @@ from .forms import (
     OportunidadFiltroForm,
 )
 from .models import (
+    AuditoriaFuenteWeb,
     CategoriaInteres,
     ConsultaMercadoLibre,
     DecisionTecnica,
@@ -30,6 +31,7 @@ from .models import (
 )
 from .serializers import (
     CargaProductoURLSerializer,
+    AuditoriaFuenteWebSerializer,
     ConectorFuenteSerializer,
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
@@ -45,6 +47,12 @@ from .serializers import (
     ProductoCanonicoSerializer,
     ProductoFuenteSerializer,
     ProductoMultifuenteSerializer,
+)
+from oportunidades.management.commands.preparar_decohome import preparar_decohome
+from .services.auditoria_fuentes_service import (
+    actualizar_politica_desde_auditoria,
+    auditar_fuente_basica,
+    interpretar_auditoria,
 )
 from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
@@ -262,6 +270,58 @@ def detalle_fuente(request, pk):
             "decisiones": decisiones,
         },
     )
+
+
+def lista_auditorias_fuentes(request):
+    auditorias = AuditoriaFuenteWeb.objects.select_related("fuente_web").all()
+    return render(request, "oportunidades/lista_auditorias_fuentes.html", {"auditorias": auditorias})
+
+
+def detalle_auditoria_fuente(request, pk):
+    auditoria = get_object_or_404(AuditoriaFuenteWeb.objects.select_related("fuente_web").prefetch_related("recursos"), pk=pk)
+    sugerencias = actualizar_politica_desde_auditoria(auditoria, aplicar=False)
+    return render(
+        request,
+        "oportunidades/detalle_auditoria_fuente.html",
+        {
+            "auditoria": auditoria,
+            "interpretacion": interpretar_auditoria(auditoria),
+            "sugerencias": sugerencias,
+        },
+    )
+
+
+@require_POST
+def aplicar_politica_auditoria(request, pk):
+    auditoria = get_object_or_404(AuditoriaFuenteWeb, pk=pk)
+    actualizar_politica_desde_auditoria(auditoria, aplicar=True)
+    messages.success(request, "Politica sugerida aplicada a la fuente.")
+    return redirect("oportunidades:detalle_auditoria_fuente", pk=auditoria.pk)
+
+
+@require_POST
+def auditar_fuente_view(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    auditoria = auditar_fuente_basica(fuente)
+    messages.success(request, "Auditoria de fuente finalizada.")
+    return redirect("oportunidades:detalle_auditoria_fuente", pk=auditoria.pk)
+
+
+def preparar_decohome_view(request):
+    fuente, _ = preparar_decohome()
+    messages.success(request, "Deco Home preparada como fuente candidata.")
+    return redirect("oportunidades:detalle_fuente", pk=fuente.pk)
+
+
+def auditar_decohome_view(request):
+    fuente, _ = preparar_decohome()
+    auditoria = auditar_fuente_basica(fuente)
+    messages.success(request, "Auditoria inicial de Deco Home finalizada.")
+    return redirect("oportunidades:detalle_auditoria_fuente", pk=auditoria.pk)
+
+
+def politica_scraping(request):
+    return render(request, "oportunidades/politica_scraping.html")
 
 
 def lista_decisiones_tecnicas(request):
@@ -753,6 +813,36 @@ class EjecucionConectorListAPIView(generics.ListAPIView):
 class EjecucionConectorDetailAPIView(generics.RetrieveAPIView):
     queryset = EjecucionConector.objects.select_related("conector", "conector__fuente_web").prefetch_related("detalles")
     serializer_class = EjecucionConectorSerializer
+
+
+class AuditoriaFuenteWebListAPIView(generics.ListAPIView):
+    queryset = AuditoriaFuenteWeb.objects.select_related("fuente_web").prefetch_related("recursos").all()
+    serializer_class = AuditoriaFuenteWebSerializer
+
+
+class AuditoriaFuenteWebDetailAPIView(generics.RetrieveAPIView):
+    queryset = AuditoriaFuenteWeb.objects.select_related("fuente_web").prefetch_related("recursos").all()
+    serializer_class = AuditoriaFuenteWebSerializer
+
+
+class FuenteAuditarAPIView(APIView):
+    def post(self, request, pk):
+        fuente = get_object_or_404(FuenteWeb, pk=pk)
+        auditoria = auditar_fuente_basica(fuente)
+        return Response(AuditoriaFuenteWebSerializer(auditoria).data, status=status.HTTP_201_CREATED)
+
+
+class DecoHomePrepararAPIView(APIView):
+    def post(self, request):
+        fuente, _ = preparar_decohome()
+        return Response(FuenteWebSerializer(fuente).data, status=status.HTTP_200_OK)
+
+
+class DecoHomeAuditarAPIView(APIView):
+    def post(self, request):
+        fuente, _ = preparar_decohome()
+        auditoria = auditar_fuente_basica(fuente)
+        return Response(AuditoriaFuenteWebSerializer(auditoria).data, status=status.HTTP_201_CREATED)
 
 
 class ImportacionProductosListCreateAPIView(generics.ListCreateAPIView):

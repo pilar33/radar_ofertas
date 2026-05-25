@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
+    AuditoriaFuenteWeb,
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
@@ -23,6 +24,7 @@ from .models import (
     ProductoCanonico,
     ProductoFuente,
     Publicacion,
+    RecursoFuenteDetectado,
 )
 
 
@@ -253,6 +255,21 @@ class EjecucionConectorSerializer(serializers.ModelSerializer):
 class DetalleEjecucionConectorSerializer(serializers.ModelSerializer):
     class Meta:
         model = DetalleEjecucionConector
+        fields = "__all__"
+
+
+class RecursoFuenteDetectadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecursoFuenteDetectado
+        fields = "__all__"
+
+
+class AuditoriaFuenteWebSerializer(serializers.ModelSerializer):
+    fuente_web = FuenteWebSerializer(read_only=True)
+    recursos = RecursoFuenteDetectadoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = AuditoriaFuenteWeb
         fields = "__all__"
 
 

@@ -12,7 +12,10 @@
       <a class="navbar-brand fw-semibold" href="{% url 'oportunidades:lista' %}">radar_ofertas</a>
       <div class="navbar-nav">
         <a class="nav-link" href="{% url 'oportunidades:lista' %}">Oportunidades</a>
+        <a class="nav-link" href="{% url 'oportunidades:lista_productos_multifuente' %}">Productos multifuente</a>
         <a class="nav-link" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a>
+        <a class="nav-link" href="{% url 'oportunidades:lista_importaciones' %}">Importar productos</a>
+        <a class="nav-link" href="{% url 'oportunidades:cargar_producto_url' %}">Cargar URL</a>
         <a class="nav-link" href="{% url 'oportunidades:lista_decisiones_tecnicas' %}">Decisiones tecnicas</a>
         <a class="nav-link" href="{% url 'oportunidades:buscar_meli' %}">Buscar Mercado Libre</a>
         <a class="nav-link" href="{% url 'oportunidades:oauth_diagnostico' %}">Diagnostico Mercado Libre</a>

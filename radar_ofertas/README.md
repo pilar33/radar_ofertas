@@ -313,6 +313,73 @@ En Render:
 
 No se implementa scraping en esta etapa. Primero se documentan fuentes, politicas y riesgos. Los conectores se haran fuente por fuente y solo cuando el metodo sea permitido.
 
+## Etapa 3.3 - Primer conector permitido: CSV/Excel y carga asistida por URL
+
+Esta etapa permite alimentar la base propia sin depender de Mercado Libre ni hacer scraping. El primer conector real trabaja con archivos CSV/Excel autorizados y con carga asistida por URL, donde la URL se guarda como dato manual y no se descarga.
+
+### Objetivo
+
+- Subir listas de precios mayoristas, catalogos exportados o productos relevados manualmente.
+- Mapear columnas flexibles a productos multifuente.
+- Crear o actualizar `ProductoFuente`.
+- Crear o vincular `ProductoCanonico`.
+- Registrar historial en `PrecioFuente`.
+- Recalcular comparaciones y evaluaciones multifuente.
+- Registrar errores por fila sin cortar toda la importacion.
+
+### Nuevos modelos
+
+- `ImportacionProductos`
+- `DetalleImportacionProducto`
+
+### Comandos
+
+```bash
+docker compose exec web python manage.py makemigrations
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py inicializar_multifuente
+docker compose exec web python manage.py test oportunidades
+```
+
+### URLs
+
+- http://localhost:8000/importaciones/
+- http://localhost:8000/importaciones/nueva/
+- http://localhost:8000/productos/cargar-url/
+- http://localhost:8000/productos-multifuente/
+
+En Render:
+
+- https://radar-ofertas.onrender.com/importaciones/
+- https://radar-ofertas.onrender.com/productos/cargar-url/
+- https://radar-ofertas.onrender.com/productos-multifuente/
+
+### Plantilla CSV
+
+La plantilla esta en:
+
+```text
+docs/templates_importacion/productos_template.csv
+```
+
+Documentacion del formato:
+
+```text
+docs/importacion_csv_excel.md
+```
+
+### Archivos subidos
+
+Localmente los archivos se guardan en `MEDIA_ROOT`. En Render staging el filesystem puede ser efimero, por lo que las importaciones sirven para validar flujo y OAuth, pero produccion real necesitara storage externo.
+
+### Alcance y seguridad
+
+- No se implementa scraping.
+- La carga por URL no hace requests externos.
+- No se ejecuta codigo desde archivos.
+- CSV/Excel es una fuente verde cuando proviene de catalogos, listas autorizadas o proveedores.
+- Los conectores automaticos futuros se haran fuente por fuente segun la politica de extraccion.
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

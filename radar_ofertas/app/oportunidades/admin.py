@@ -7,9 +7,11 @@ from .models import (
     ContenidoSugerido,
     ConsultaMercadoLibre,
     DecisionTecnica,
+    DetalleImportacionProducto,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
+    ImportacionProductos,
     MercadoLibreToken,
     Oportunidad,
     PoliticaExtraccionFuente,
@@ -184,3 +186,29 @@ class DecisionTecnicaAdmin(admin.ModelAdmin):
     list_display = ("titulo", "categoria", "fecha")
     list_filter = ("categoria", "fecha")
     search_fields = ("titulo", "descripcion", "decision", "motivo", "impacto")
+
+
+@admin.register(ImportacionProductos)
+class ImportacionProductosAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "fuente_web",
+        "tipo_archivo",
+        "estado",
+        "total_filas",
+        "productos_creados",
+        "productos_actualizados",
+        "precios_creados",
+        "errores",
+        "fecha_creacion",
+    )
+    list_filter = ("estado", "tipo_archivo", "fuente_web")
+    search_fields = ("fuente_web__nombre", "observaciones")
+    readonly_fields = ("fecha_creacion", "fecha_procesamiento")
+
+
+@admin.register(DetalleImportacionProducto)
+class DetalleImportacionProductoAdmin(admin.ModelAdmin):
+    list_display = ("importacion", "numero_fila", "estado", "producto_fuente", "precio_fuente")
+    list_filter = ("estado",)
+    search_fields = ("mensaje", "datos_originales")

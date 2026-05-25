@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Productos multifuente{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Productos multifuente</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:cargar_producto_url' %}">Cargar URL</a>
+    <a class="btn btn-primary" href="{% url 'oportunidades:nueva_importacion' %}">Importar CSV/Excel</a>
+  </div>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Nombre</th>
+        <th>Categoria</th>
+        <th>Marca</th>
+        <th>Fuentes</th>
+        <th>Precio min.</th>
+        <th>Promedio</th>
+        <th>Indice</th>
+        <th>Tipo</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for producto in productos %}
+        {% with comparacion=producto.comparaciones.first evaluacion=producto.evaluaciones_multifuente.first %}
+          <tr>
+            <td>{{ producto.nombre_normalizado }}</td>
+            <td>{{ producto.categoria.nombre }}</td>
+            <td>{{ producto.marca|default:"-" }}</td>
+            <td>{{ comparacion.cantidad_fuentes|default:producto.cantidad_apariciones }}</td>
+            <td>{% if comparacion %}${{ comparacion.precio_minimo }}{% else %}-{% endif %}</td>
+            <td>{% if comparacion %}${{ comparacion.precio_promedio }}{% else %}-{% endif %}</td>
+            <td>{{ evaluacion.indice_oportunidad|default:"-" }}</td>
+            <td>{{ evaluacion.get_tipo_display|default:"-" }}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_producto_multifuente' producto.pk %}">Ver</a></td>
+          </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">Todavia no hay productos multifuente.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

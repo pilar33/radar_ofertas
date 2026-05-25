@@ -489,12 +489,28 @@ class ConectorFuente(models.Model):
         (ESTADO_DESHABILITADO, "Deshabilitado"),
     ]
 
+    FORMATO_CSV = "csv"
+    FORMATO_XLSX = "xlsx"
+    FORMATO_XLS = "xls"
+    FORMATO_DESCONOCIDO = "desconocido"
+    FORMATO_CHOICES = [
+        (FORMATO_CSV, "CSV"),
+        (FORMATO_XLSX, "Excel XLSX"),
+        (FORMATO_XLS, "Excel XLS"),
+        (FORMATO_DESCONOCIDO, "Desconocido"),
+    ]
+
     fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.CASCADE, related_name="conectores")
     nombre = models.CharField(max_length=150)
     tipo_conector = models.CharField(max_length=30, choices=TIPO_CHOICES)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_BORRADOR)
+    url_recurso = models.URLField(blank=True, null=True)
+    formato_recurso = models.CharField(max_length=20, choices=FORMATO_CHOICES, default=FORMATO_DESCONOCIDO)
+    requiere_descarga = models.BooleanField(default=False)
+    fuente_autorizo_uso = models.BooleanField(default=False)
     descripcion = models.TextField(blank=True, null=True)
     frecuencia_sugerida = models.CharField(max_length=100, blank=True, null=True)
+    notas_uso_datos = models.TextField(blank=True, null=True)
     requiere_revision_manual = models.BooleanField(default=True)
     respeta_politica_fuente = models.BooleanField(default=True)
     ultima_ejecucion = models.DateTimeField(blank=True, null=True)

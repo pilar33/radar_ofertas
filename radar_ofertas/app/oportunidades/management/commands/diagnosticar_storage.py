@@ -13,8 +13,12 @@ class Command(BaseCommand):
         self.stdout.write(f"STORAGE_BACKEND: {diagnostico['storage_backend']}")
         self.stdout.write(f"Bucket configurado: {'Si' if diagnostico['bucket_configurado'] else 'No'}")
         self.stdout.write(f"Endpoint configurado: {'Si' if diagnostico['endpoint_configurado'] else 'No'}")
+        self.stdout.write(f"Region configurada: {'Si' if diagnostico['region_configurada'] else 'No'}")
         self.stdout.write(f"Access key configurada: {'Si' if diagnostico['access_key_configurada'] else 'No'}")
         self.stdout.write(f"Secret configurada: {'Si' if diagnostico['secret_configurada'] else 'No'}")
+        self.stdout.write(f"Custom domain configurado: {'Si' if diagnostico['custom_domain_configurado'] else 'No'}")
+        self.stdout.write(f"Default ACL: {diagnostico['default_acl']}")
+        self.stdout.write(f"Media storage activo: {diagnostico['media_storage_activo']}")
         self.stdout.write(f"MEDIA_URL: {diagnostico['media_url']}")
         for advertencia in diagnostico["advertencias"]:
             self.stdout.write(self.style.WARNING(advertencia))

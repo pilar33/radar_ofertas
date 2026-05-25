@@ -457,6 +457,52 @@ Documentacion:
 
 - `docs/conectores_fuentes.md`
 
+## Etapa 3.5 - Storage real S3-compatible y primer conector operativo
+
+Esta etapa mejora el diagnostico de storage para proveedores S3-compatible y activa el primer conector operativo permitido: catalogos CSV/Excel. No se implementa scraping.
+
+### Storage real S3-compatible
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py diagnosticar_storage
+docker compose exec web python manage.py probar_storage
+docker compose exec web python manage.py probar_storage --keep
+```
+
+En Render:
+
+1. Configurar variables `USE_EXTERNAL_STORAGE=True` y credenciales S3-compatible.
+2. Hacer Manual Deploy.
+3. Probar `/storage/diagnostico/`.
+
+### Primer conector catalogo
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py crear_conector_catalogo_demo
+docker compose exec web python manage.py ejecutar_conector --conector-id ID
+```
+
+URLs:
+
+- http://localhost:8000/conectores/
+- http://localhost:8000/conectores/nuevo-catalogo/
+- http://localhost:8000/conectores/<id>/
+
+En Render:
+
+- https://radar-ofertas.onrender.com/conectores/
+- https://radar-ofertas.onrender.com/conectores/nuevo-catalogo/
+
+El conector solo procesa archivos CSV/Excel cargados o URLs directas autorizadas a CSV/XLSX/XLS. No descarga HTML, no navega tiendas y no usa tecnicas evasivas.
+
+Documentacion:
+
+- `docs/conector_catalogo_csv_excel.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

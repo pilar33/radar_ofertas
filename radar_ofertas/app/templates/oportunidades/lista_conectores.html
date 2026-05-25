@@ -5,7 +5,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">Conectores</h1>
-  <a class="btn btn-outline-primary" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a>
+  <div class="d-flex gap-2">
+    <a class="btn btn-primary" href="{% url 'oportunidades:nuevo_conector_catalogo' %}">Nuevo conector catalogo</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a>
+  </div>
 </div>
 
 <div class="table-responsive bg-white border rounded">

@@ -7,7 +7,13 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import CargaProductoURLForm, ImportacionProductosForm, MercadoLibreBusquedaForm, OportunidadFiltroForm
+from .forms import (
+    CargaProductoURLForm,
+    ConectorCatalogoForm,
+    ImportacionProductosForm,
+    MercadoLibreBusquedaForm,
+    OportunidadFiltroForm,
+)
 from .models import (
     CategoriaInteres,
     ConsultaMercadoLibre,
@@ -51,6 +57,7 @@ from .services.importacion_service import (
 )
 from .models import ConectorFuente, EjecucionConector
 from .services.conectores_service import validar_conector_segun_politica
+from .services.conector_catalogo_service import ejecutar_conector_catalogo, validar_conector_catalogo
 from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
     buscar_productos,
@@ -379,6 +386,34 @@ def lista_conectores(request):
     return render(request, "oportunidades/lista_conectores.html", {"datos_conectores": datos})
 
 
+def nuevo_conector_catalogo(request):
+    form = ConectorCatalogoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        tipo = form.cleaned_data["tipo_conector"]
+        conector = ConectorFuente.objects.create(
+            fuente_web=form.cleaned_data["fuente_web"],
+            nombre=form.cleaned_data["nombre"],
+            tipo_conector=tipo,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            url_recurso=form.cleaned_data.get("url_recurso") or None,
+            formato_recurso=form.cleaned_data.get("formato_recurso") or ConectorFuente.FORMATO_DESCONOCIDO,
+            requiere_descarga=tipo in {ConectorFuente.TIPO_CSV_REMOTO, ConectorFuente.TIPO_EXCEL_REMOTO},
+            fuente_autorizo_uso=form.cleaned_data.get("fuente_autorizo_uso", False),
+            frecuencia_sugerida=form.cleaned_data.get("frecuencia_sugerida") or None,
+            descripcion=form.cleaned_data.get("descripcion") or None,
+            notas_uso_datos=form.cleaned_data.get("notas_uso_datos") or None,
+        )
+        validacion = validar_conector_catalogo(conector)
+        if validacion["nivel"] == "bloqueado":
+            conector.estado = ConectorFuente.ESTADO_BORRADOR
+            conector.save(update_fields=["estado"])
+            messages.error(request, validacion["mensaje"])
+        else:
+            messages.success(request, "Conector catalogo creado correctamente.")
+        return redirect("oportunidades:detalle_conector", pk=conector.pk)
+    return render(request, "oportunidades/nuevo_conector_catalogo.html", {"form": form})
+
+
 def detalle_conector(request, pk):
     conector = get_object_or_404(
         ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion").prefetch_related(
@@ -392,7 +427,14 @@ def detalle_conector(request, pk):
         "oportunidades/detalle_conector.html",
         {
             "conector": conector,
-            "validacion": validar_conector_segun_politica(conector),
+            "validacion": validar_conector_catalogo(conector)
+            if conector.tipo_conector in {
+                ConectorFuente.TIPO_CSV_MANUAL,
+                ConectorFuente.TIPO_EXCEL_MANUAL,
+                ConectorFuente.TIPO_CSV_REMOTO,
+                ConectorFuente.TIPO_EXCEL_REMOTO,
+            }
+            else validar_conector_segun_politica(conector),
             "ejecuciones": conector.ejecuciones.all()[:20],
             "importaciones": conector.importaciones.all()[:20],
         },
@@ -407,6 +449,27 @@ def validar_conector(request, pk):
     if validacion["nivel"] == "bloqueado":
         level = messages.error
     level(request, validacion["mensaje"])
+    return redirect("oportunidades:detalle_conector", pk=conector.pk)
+
+
+@require_POST
+def ejecutar_conector(request, pk):
+    conector = get_object_or_404(ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion"), pk=pk)
+    if conector.tipo_conector not in {
+        ConectorFuente.TIPO_CSV_MANUAL,
+        ConectorFuente.TIPO_EXCEL_MANUAL,
+        ConectorFuente.TIPO_CSV_REMOTO,
+        ConectorFuente.TIPO_EXCEL_REMOTO,
+    }:
+        messages.error(request, "Este tipo de conector todavia no tiene ejecucion operativa.")
+        return redirect("oportunidades:detalle_conector", pk=conector.pk)
+    ejecucion = ejecutar_conector_catalogo(conector)
+    if ejecucion.estado == EjecucionConector.ESTADO_ERROR:
+        messages.error(request, ejecucion.mensaje or "El conector finalizo con error.")
+    elif ejecucion.estado == EjecucionConector.ESTADO_FINALIZADA_CON_ERRORES:
+        messages.warning(request, ejecucion.mensaje or "El conector finalizo con errores.")
+    else:
+        messages.success(request, ejecucion.mensaje or "Conector ejecutado correctamente.")
     return redirect("oportunidades:detalle_conector", pk=conector.pk)
 
 
@@ -639,6 +702,47 @@ class ConectorFuenteValidarAPIView(APIView):
             pk=pk,
         )
         return Response(validar_conector_segun_politica(conector), status=status.HTTP_200_OK)
+
+
+class ConectorFuenteEjecutarAPIView(APIView):
+    def post(self, request, pk):
+        conector = get_object_or_404(
+            ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion"),
+            pk=pk,
+        )
+        ejecucion = ejecutar_conector_catalogo(conector)
+        return Response(EjecucionConectorSerializer(ejecucion).data, status=status.HTTP_200_OK)
+
+
+class ConectorCatalogoCreateAPIView(APIView):
+    def post(self, request):
+        fuente = get_object_or_404(FuenteWeb, pk=request.data.get("fuente_web"))
+        tipo = request.data.get("tipo_conector")
+        if tipo not in {
+            ConectorFuente.TIPO_CSV_MANUAL,
+            ConectorFuente.TIPO_EXCEL_MANUAL,
+            ConectorFuente.TIPO_CSV_REMOTO,
+            ConectorFuente.TIPO_EXCEL_REMOTO,
+        }:
+            return Response({"detail": "tipo_conector no valido para catalogo."}, status=status.HTTP_400_BAD_REQUEST)
+        conector = ConectorFuente.objects.create(
+            fuente_web=fuente,
+            nombre=request.data.get("nombre") or "Conector catalogo",
+            tipo_conector=tipo,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            url_recurso=request.data.get("url_recurso") or None,
+            formato_recurso=request.data.get("formato_recurso") or ConectorFuente.FORMATO_DESCONOCIDO,
+            requiere_descarga=tipo in {ConectorFuente.TIPO_CSV_REMOTO, ConectorFuente.TIPO_EXCEL_REMOTO},
+            fuente_autorizo_uso=bool(request.data.get("fuente_autorizo_uso", False)),
+            descripcion=request.data.get("descripcion") or None,
+            notas_uso_datos=request.data.get("notas_uso_datos") or None,
+        )
+        validacion = validar_conector_catalogo(conector)
+        if validacion["nivel"] == "bloqueado":
+            conector.estado = ConectorFuente.ESTADO_BORRADOR
+            conector.save(update_fields=["estado"])
+            return Response({"validacion": validacion}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ConectorFuenteSerializer(conector).data, status=status.HTTP_201_CREATED)
 
 
 class EjecucionConectorListAPIView(generics.ListAPIView):

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo conector catalogo{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Nuevo conector catalogo</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_conectores' %}">Volver</a>
+</div>
+
+<form method="post" class="bg-white border rounded p-3">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Fuente</label>{{ form.fuente_web }}</div>
+    <div class="col-md-4"><label class="form-label">Nombre</label>{{ form.nombre }}</div>
+    <div class="col-md-4"><label class="form-label">Tipo</label>{{ form.tipo_conector }}</div>
+    <div class="col-md-8"><label class="form-label">URL recurso</label>{{ form.url_recurso }}</div>
+    <div class="col-md-4"><label class="form-label">Formato</label>{{ form.formato_recurso }}</div>
+    <div class="col-md-4"><div class="form-check mt-4">{{ form.fuente_autorizo_uso }} <label class="form-check-label">{{ form.fuente_autorizo_uso.label }}</label></div></div>
+    <div class="col-md-8"><label class="form-label">Frecuencia sugerida</label>{{ form.frecuencia_sugerida }}</div>
+    <div class="col-md-6"><label class="form-label">Descripcion</label>{{ form.descripcion }}</div>
+    <div class="col-md-6"><label class="form-label">Notas uso datos</label>{{ form.notas_uso_datos }}</div>
+  </div>
+  <button type="submit" class="btn btn-primary mt-3">Crear conector</button>
+</form>
+{% endblock %}

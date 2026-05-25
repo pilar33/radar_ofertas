@@ -52,6 +52,10 @@ from oportunidades.services.importacion_service import (
     procesar_importacion,
 )
 from oportunidades.services.conectores_service import validar_conector_segun_politica
+from oportunidades.services.conector_catalogo_service import (
+    ejecutar_conector_catalogo,
+    validar_conector_catalogo,
+)
 from oportunidades.services.storage_service import diagnosticar_storage_config
 
 
@@ -727,3 +731,175 @@ class ConectoresTests(TestCase):
 
         importacion.refresh_from_db()
         self.assertIsNotNone(importacion.conector)
+
+
+class StorageRealTests(SimpleTestCase):
+    def test_probar_storage_crea_y_elimina_archivo(self):
+        from oportunidades.services.storage_service import probar_storage
+
+        resultado = probar_storage()
+
+        self.assertTrue(resultado["ok"])
+
+    @override_settings(
+        USE_EXTERNAL_STORAGE=True,
+        RENDER=True,
+        MEDIA_URL="/media/",
+        AWS_STORAGE_BUCKET_NAME="",
+        AWS_ACCESS_KEY_ID="",
+        AWS_SECRET_ACCESS_KEY="",
+        AWS_S3_ENDPOINT_URL="",
+        AWS_S3_REGION_NAME="",
+        STORAGE_BACKEND="s3",
+    )
+    def test_diagnostico_storage_external_config_incompleta(self):
+        diagnostico = diagnosticar_storage_config()
+
+        self.assertTrue(diagnostico["advertencias"])
+        self.assertIn("STORAGE_BUCKET_NAME", diagnostico["advertencias"][0])
+
+
+class ConectorCatalogoTests(TestCase):
+    def setUp(self):
+        self.categoria = CategoriaInteres.objects.create(nombre="Demo catalogo", palabra_clave="demo")
+        self.fuente_verde = FuenteWeb.objects.create(
+            nombre="Catalogo Verde",
+            url_base="https://example.com/",
+            tipo_fuente=FuenteWeb.TIPO_EXCEL_CSV,
+            activa=True,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente_verde,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_VERDE,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_CSV_EXCEL,
+        )
+        self.fuente_roja = FuenteWeb.objects.create(
+            nombre="Catalogo Rojo",
+            url_base="https://example.com/rojo",
+            tipo_fuente=FuenteWeb.TIPO_TIENDA_ONLINE,
+            activa=True,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente_roja,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_ROJO,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_NO_PERMITIDO,
+        )
+
+    def test_validar_conector_catalogo_csv_manual_ok(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="CSV manual",
+            tipo_conector=ConectorFuente.TIPO_CSV_MANUAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            fuente_autorizo_uso=True,
+        )
+
+        self.assertEqual(validar_conector_catalogo(conector)["nivel"], "ok")
+
+    def test_validar_conector_catalogo_bloquea_scraping(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="Scraping",
+            tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO,
+        )
+
+        self.assertEqual(validar_conector_catalogo(conector)["nivel"], "bloqueado")
+
+    def test_validar_conector_catalogo_remoto_sin_url_error(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="CSV remoto",
+            tipo_conector=ConectorFuente.TIPO_CSV_REMOTO,
+            requiere_descarga=True,
+        )
+
+        self.assertFalse(validar_conector_catalogo(conector)["valido"])
+
+    def test_validar_conector_catalogo_fuente_roja_sin_autorizacion_bloqueado(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_roja,
+            nombre="CSV remoto rojo",
+            tipo_conector=ConectorFuente.TIPO_CSV_REMOTO,
+            requiere_descarga=True,
+            url_recurso="https://example.com/catalogo.csv",
+            formato_recurso=ConectorFuente.FORMATO_CSV,
+        )
+
+        self.assertEqual(validar_conector_catalogo(conector)["nivel"], "bloqueado")
+
+    def test_crear_conector_catalogo_demo_no_duplica(self):
+        call_command("crear_conector_catalogo_demo")
+        primera_cantidad = ConectorFuente.objects.filter(nombre="Conector CSV Demo").count()
+        call_command("crear_conector_catalogo_demo")
+
+        self.assertEqual(ConectorFuente.objects.filter(nombre="Conector CSV Demo").count(), primera_cantidad)
+
+    def test_ejecutar_conector_manual_sin_importacion_pendiente_mensaje_claro(self):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="CSV manual",
+            tipo_conector=ConectorFuente.TIPO_CSV_MANUAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            fuente_autorizo_uso=True,
+        )
+        ejecucion = ejecutar_conector_catalogo(conector)
+
+        self.assertEqual(ejecucion.errores, 0)
+        self.assertIn("sin importaciones pendientes", ejecucion.mensaje)
+
+    @patch("oportunidades.services.conector_catalogo_service.requests.get")
+    def test_ejecutar_conector_remoto_no_acepta_html(self, requests_get):
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/html"}
+        response.iter_content.return_value = [b"<html></html>"]
+        requests_get.return_value = response
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="HTML remoto",
+            tipo_conector=ConectorFuente.TIPO_CSV_REMOTO,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            requiere_descarga=True,
+            fuente_autorizo_uso=True,
+            url_recurso="https://example.com/catalogo.csv",
+            formato_recurso=ConectorFuente.FORMATO_CSV,
+        )
+        ejecucion = ejecutar_conector_catalogo(conector)
+
+        self.assertEqual(ejecucion.errores, 1)
+        self.assertIn("HTML", ejecucion.mensaje)
+
+    @patch("oportunidades.services.conector_catalogo_service.requests.get")
+    def test_ejecutar_conector_remoto_crea_importacion_con_mock(self, requests_get):
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/csv"}
+        response.iter_content.return_value = [b"codigo_externo,titulo,precio,categoria\nSKU1,Producto demo,1200,Demo catalogo\n"]
+        requests_get.return_value = response
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="CSV remoto",
+            tipo_conector=ConectorFuente.TIPO_CSV_REMOTO,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            requiere_descarga=True,
+            fuente_autorizo_uso=True,
+            url_recurso="https://example.com/catalogo.csv",
+            formato_recurso=ConectorFuente.FORMATO_CSV,
+        )
+        ejecucion = ejecutar_conector_catalogo(conector)
+
+        self.assertEqual(ejecucion.errores, 0)
+        self.assertEqual(ImportacionProductos.objects.filter(conector=conector).count(), 1)
+
+    @patch("oportunidades.services.conector_catalogo_service.requests.get")
+    def test_conector_no_hace_scraping(self, requests_get):
+        conector = ConectorFuente.objects.create(
+            fuente_web=self.fuente_verde,
+            nombre="Manual",
+            tipo_conector=ConectorFuente.TIPO_CSV_MANUAL,
+            estado=ConectorFuente.ESTADO_ACTIVO,
+            fuente_autorizo_uso=True,
+        )
+        ejecutar_conector_catalogo(conector)
+
+        requests_get.assert_not_called()

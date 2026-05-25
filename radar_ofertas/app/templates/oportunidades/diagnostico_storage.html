@@ -19,8 +19,12 @@
       <tr><th>STORAGE_BACKEND</th><td>{{ diagnostico.storage_backend }}</td></tr>
       <tr><th>Bucket configurado</th><td>{{ diagnostico.bucket_configurado|yesno:"Si,No" }}</td></tr>
       <tr><th>Endpoint configurado</th><td>{{ diagnostico.endpoint_configurado|yesno:"Si,No" }}</td></tr>
+      <tr><th>Region configurada</th><td>{{ diagnostico.region_configurada|yesno:"Si,No" }}</td></tr>
       <tr><th>Access key configurada</th><td>{{ diagnostico.access_key_configurada|yesno:"Si,No" }}</td></tr>
       <tr><th>Secret configurada</th><td>{{ diagnostico.secret_configurada|yesno:"Si,No" }}</td></tr>
+      <tr><th>Custom domain configurado</th><td>{{ diagnostico.custom_domain_configurado|yesno:"Si,No" }}</td></tr>
+      <tr><th>Default ACL</th><td>{{ diagnostico.default_acl }}</td></tr>
+      <tr><th>Media storage activo</th><td>{{ diagnostico.media_storage_activo }}</td></tr>
       <tr><th>MEDIA_URL</th><td>{{ diagnostico.media_url }}</td></tr>
     </tbody>
   </table>

@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import CategoriaInteres, FuenteWeb, Oportunidad, PoliticaExtraccionFuente, PrecioFuente
+from .models import CategoriaInteres, ConectorFuente, FuenteWeb, Oportunidad, PoliticaExtraccionFuente, PrecioFuente
 
 
 class OportunidadFiltroForm(forms.Form):
@@ -173,3 +173,51 @@ class CargaProductoURLForm(forms.Form):
         if not fuente.activa:
             raise forms.ValidationError("La fuente seleccionada no esta activa.")
         return fuente
+
+
+class ConectorCatalogoForm(forms.Form):
+    fuente_web = forms.ModelChoiceField(
+        queryset=FuenteWeb.objects.filter(activa=True),
+        label="Fuente",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    nombre = forms.CharField(max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
+    tipo_conector = forms.ChoiceField(
+        choices=[
+            (ConectorFuente.TIPO_CSV_MANUAL, "CSV manual"),
+            (ConectorFuente.TIPO_EXCEL_MANUAL, "Excel manual"),
+            (ConectorFuente.TIPO_CSV_REMOTO, "CSV remoto"),
+            (ConectorFuente.TIPO_EXCEL_REMOTO, "Excel remoto"),
+        ],
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    url_recurso = forms.URLField(required=False, widget=forms.URLInput(attrs={"class": "form-control"}))
+    formato_recurso = forms.ChoiceField(
+        choices=ConectorFuente.FORMATO_CHOICES,
+        initial=ConectorFuente.FORMATO_DESCONOCIDO,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    fuente_autorizo_uso = forms.BooleanField(
+        required=False,
+        label="La fuente autorizo el uso del catalogo",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    frecuencia_sugerida = forms.CharField(required=False, max_length=100, widget=forms.TextInput(attrs={"class": "form-control"}))
+    descripcion = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}))
+    notas_uso_datos = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        fuente = cleaned_data.get("fuente_web")
+        tipo = cleaned_data.get("tipo_conector")
+        url = cleaned_data.get("url_recurso")
+        autorizado = cleaned_data.get("fuente_autorizo_uso")
+        remoto = tipo in {ConectorFuente.TIPO_CSV_REMOTO, ConectorFuente.TIPO_EXCEL_REMOTO}
+
+        if remoto and not url:
+            raise forms.ValidationError("Los conectores remotos requieren URL directa al archivo CSV/Excel.")
+        if remoto and fuente:
+            politica = getattr(fuente, "politica_extraccion", None)
+            if not autorizado and not (politica and politica.semaforo == PoliticaExtraccionFuente.SEMAFORO_VERDE):
+                raise forms.ValidationError("Para conectores remotos se requiere autorizacion de uso o fuente verde.")
+        return cleaned_data

@@ -19,10 +19,22 @@
     <div class="col-md-3"><strong>Estado</strong><br>{{ conector.get_estado_display }}</div>
     <div class="col-md-3"><strong>Revision manual</strong><br>{{ conector.requiere_revision_manual|yesno:"Si,No" }}</div>
   </div>
-  <form method="post" action="{% url 'oportunidades:validar_conector' conector.pk %}" class="mt-3">
-    {% csrf_token %}
-    <button class="btn btn-outline-primary btn-sm">Validar politica</button>
-  </form>
+  <div class="row mt-3">
+    <div class="col-md-3"><strong>URL recurso</strong><br>{{ conector.url_recurso|default:"-" }}</div>
+    <div class="col-md-3"><strong>Formato</strong><br>{{ conector.get_formato_recurso_display }}</div>
+    <div class="col-md-3"><strong>Requiere descarga</strong><br>{{ conector.requiere_descarga|yesno:"Si,No" }}</div>
+    <div class="col-md-3"><strong>Uso autorizado</strong><br>{{ conector.fuente_autorizo_uso|yesno:"Si,No" }}</div>
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <form method="post" action="{% url 'oportunidades:validar_conector' conector.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-outline-primary btn-sm">Validar politica</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:ejecutar_conector' conector.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-success btn-sm">Ejecutar conector</button>
+    </form>
+  </div>
 </div>
 
 <div class="row g-3">

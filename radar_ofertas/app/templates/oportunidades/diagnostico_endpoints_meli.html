@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnostico Endpoints Mercado Libre - Radar Ofertas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Diagnostico de endpoints Mercado Libre</h1>
+    <p class="text-muted mb-0">Prueba endpoints oficiales con y sin token sin exponer credenciales.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:buscar_meli' %}">Volver a buscar</a>
+</div>
+
+<form method="get" class="bg-white border rounded p-3 mb-3">
+  <div class="row g-3 align-items-end">
+    <div class="col-12 col-md-5">
+      <label class="form-label" for="query">Query</label>
+      <input class="form-control" id="query" name="query" value="{{ diagnostico.query }}">
+    </div>
+    <div class="col-12 col-md-4">
+      <label class="form-label" for="item_id">Item ID</label>
+      <input class="form-control" id="item_id" name="item_id" value="{{ diagnostico.item_id }}">
+    </div>
+    <div class="col-6 col-md-1">
+      <label class="form-label" for="limit">Limit</label>
+      <input class="form-control" id="limit" name="limit" type="number" min="1" max="50" value="{{ diagnostico.limit }}">
+    </div>
+    <div class="col-6 col-md-2 d-grid">
+      <button class="btn btn-primary" type="submit">Diagnosticar</button>
+    </div>
+  </div>
+</form>
+
+<div class="alert alert-info">
+  <strong>Interpretacion:</strong> {{ diagnostico.interpretacion }}
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-dark">
+      <tr>
+        <th>Endpoint</th>
+        <th>Usa token</th>
+        <th>Status</th>
+        <th>OK</th>
+        <th>Error</th>
+        <th>Respuesta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for resultado in diagnostico.resultados %}
+        <tr>
+          <td>{{ resultado.nombre }}</td>
+          <td>{{ resultado.usa_token|yesno:"Si,No" }}</td>
+          <td>{{ resultado.status_code|default:"-" }}</td>
+          <td>{{ resultado.ok|yesno:"Si,No" }}</td>
+          <td class="small">{{ resultado.error|default:"-" }}</td>
+          <td class="small"><code>{{ resultado.response_text|default:"-" }}</code></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -13,8 +13,10 @@ from oportunidades.models import CategoriaInteres, FuenteProducto, MercadoLibreT
 from oportunidades.services.clasificacion_service import clasificar_oportunidad
 from oportunidades.services.mercado_libre_service import (
     buscar_productos,
+    diagnosticar_endpoints_meli,
     get_headers,
     guardar_producto_desde_meli,
+    interpretar_diagnostico_meli,
     normalizar_resultado_meli,
     preparar_link_afiliado,
     request_meli,
@@ -268,3 +270,64 @@ class MercadoLibreServiceTests(TestCase):
         self.assertIn("MELI_ACCESS_TOKEN configurado: si", texto)
         self.assertNotIn("secret-demo", texto)
         self.assertNotIn("token-demo", texto)
+
+    def test_users_me_ok_search_403_interpretacion(self):
+        resultados = [
+            {"nombre": "users/me", "ok": True, "status_code": 200},
+            {"nombre": "search con token", "ok": False, "status_code": 403},
+        ]
+
+        interpretacion = interpretar_diagnostico_meli(resultados)
+
+        self.assertIn("OAuth y token funcionan", interpretacion)
+        self.assertIn("endpoint de busqueda general", interpretacion)
+
+    def test_users_me_401_interpretacion(self):
+        resultados = [
+            {"nombre": "users/me", "ok": False, "status_code": 401},
+            {"nombre": "search con token", "ok": False, "status_code": 403},
+        ]
+
+        interpretacion = interpretar_diagnostico_meli(resultados)
+
+        self.assertIn("token es invalido o vencido", interpretacion)
+
+    def test_categories_ok_search_403(self):
+        resultados = [
+            {"nombre": "users/me", "ok": False, "status_code": None},
+            {"nombre": "sites categories", "ok": True, "status_code": 200},
+            {"nombre": "search con token", "ok": False, "status_code": 403},
+        ]
+
+        interpretacion = interpretar_diagnostico_meli(resultados)
+
+        self.assertIn("conectividad con Mercado Libre funciona", interpretacion)
+        self.assertIn("busqueda de productos esta restringida", interpretacion)
+
+    @patch.dict(os.environ, {"MELI_ACCESS_TOKEN": "token-super-secreto"}, clear=False)
+    @patch("oportunidades.services.mercado_libre_service.request_meli")
+    def test_no_expone_token_en_respuesta(self, mock_request_meli):
+        mock_request_meli.side_effect = [
+            {"ok": True, "status_code": 200, "data": {"id": 1}, "error": None, "response_text": ""},
+            {"ok": True, "status_code": 200, "data": [], "error": None, "response_text": ""},
+            {"ok": False, "status_code": 403, "error": "Forbidden", "response_text": "forbidden"},
+            {"ok": False, "status_code": 403, "error": "Forbidden", "response_text": "forbidden"},
+            {"ok": True, "status_code": 200, "data": {"id": "MLA"}, "error": None, "response_text": ""},
+        ]
+
+        diagnostico = diagnosticar_endpoints_meli()
+        texto = str(diagnostico)
+
+        self.assertNotIn("token-super-secreto", texto)
+
+    @patch("oportunidades.services.mercado_libre_service.requests.request")
+    def test_response_error_limitado_500_caracteres(self, mock_request):
+        response = Mock()
+        response.status_code = 403
+        response.text = "x" * 700
+        mock_request.return_value = response
+
+        resultado = request_meli("GET", "/sites/MLA/search", use_auth=False)
+
+        self.assertEqual(resultado["status_code"], 403)
+        self.assertEqual(len(resultado["response_text"]), 500)

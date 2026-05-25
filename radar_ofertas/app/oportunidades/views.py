@@ -20,6 +20,7 @@ from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
 from .services.mercado_libre_service import (
     buscar_productos,
+    diagnosticar_endpoints_meli,
     generar_url_autorizacion,
     get_meli_config,
     intercambiar_code_por_token,
@@ -148,6 +149,26 @@ def oauth_diagnostico(request):
             "token_activo": bool(obtener_token_activo()),
             "token_db": token,
             "redirect_uri": config["redirect_uri"],
+        },
+    )
+
+
+def diagnostico_endpoints_meli(request):
+    query = request.GET.get("query") or "calza mujer"
+    item_id = request.GET.get("item_id") or "MLA3092462776"
+    limit = request.GET.get("limit") or 1
+
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 1
+
+    diagnostico = diagnosticar_endpoints_meli(query=query, item_id=item_id, limit=limit)
+    return render(
+        request,
+        "oportunidades/diagnostico_endpoints_meli.html",
+        {
+            "diagnostico": diagnostico,
         },
     )
 

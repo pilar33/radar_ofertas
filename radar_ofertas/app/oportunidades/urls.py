@@ -17,6 +17,7 @@ urlpatterns = [
     path("mercadolibre/oauth/iniciar/", views.oauth_iniciar, name="oauth_iniciar"),
     path("mercadolibre/oauth/callback/", views.oauth_callback, name="oauth_callback"),
     path("mercadolibre/oauth/diagnostico/", views.oauth_diagnostico, name="oauth_diagnostico"),
+    path("mercadolibre/diagnostico-endpoints/", views.diagnostico_endpoints_meli, name="diagnostico_endpoints_meli"),
     path("api/oportunidades/", views.OportunidadListAPIView.as_view(), name="api_lista"),
     path("api/oportunidades/<int:pk>/", views.OportunidadDetailAPIView.as_view(), name="api_detalle"),
     path("api/oportunidades/<int:pk>/estado/", views.OportunidadEstadoAPIView.as_view(), name="api_estado"),

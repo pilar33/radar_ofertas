@@ -90,12 +90,28 @@ def get_headers(use_auth=True):
     return headers
 
 
-def _resultado_error(status_code=None, error="", requires_token=False, forbidden=False):
+def _limitar_texto(texto, limite=500):
+    if texto is None:
+        return ""
+    if isinstance(texto, bytes):
+        texto = texto.decode("utf-8", errors="replace")
+    if not isinstance(texto, str):
+        texto = "" if texto.__class__.__module__.startswith("unittest.mock") else str(texto)
+    return texto[:limite]
+
+
+def _response_text(response):
+    return _limitar_texto(getattr(response, "text", "") or "")
+
+
+def _resultado_error(status_code=None, error="", requires_token=False, forbidden=False, response_text=""):
     return {
         "ok": False,
         "status_code": status_code,
         "data": None,
         "error": error,
+        "error_message": error,
+        "response_text": _limitar_texto(response_text),
         "requires_token": requires_token,
         "forbidden": forbidden,
     }
@@ -122,6 +138,7 @@ def request_meli(method, endpoint, params=None, data=None, use_auth=True):
                 status_code=403,
                 forbidden=True,
                 requires_token=True,
+                response_text=_response_text(response),
                 error=(
                     "Mercado Libre devolvio 403 Forbidden. Puede requerir token Bearer, "
                     "headers validos o revision de permisos/restricciones del endpoint."
@@ -131,11 +148,13 @@ def request_meli(method, endpoint, params=None, data=None, use_auth=True):
             return _resultado_error(
                 status_code=401,
                 requires_token=True,
+                response_text=_response_text(response),
                 error="Mercado Libre devolvio 401 Unauthorized. El token puede estar ausente, vencido o no autorizado.",
             )
         if status_code == 429:
             return _resultado_error(
                 status_code=429,
+                response_text=_response_text(response),
                 error="Mercado Libre devolvio 429 Too Many Requests. Se alcanzo un limite de consultas.",
             )
 
@@ -144,7 +163,11 @@ def request_meli(method, endpoint, params=None, data=None, use_auth=True):
         try:
             payload = response.json()
         except ValueError as exc:
-            return _resultado_error(status_code=status_code, error=f"Respuesta JSON invalida de Mercado Libre: {exc}")
+            return _resultado_error(
+                status_code=status_code,
+                response_text=_response_text(response),
+                error=f"Respuesta JSON invalida de Mercado Libre: {exc}",
+            )
 
         return {
             "ok": True,
@@ -160,7 +183,8 @@ def request_meli(method, endpoint, params=None, data=None, use_auth=True):
         return _resultado_error(error=f"Error de conexion con Mercado Libre: {exc}")
     except requests.exceptions.HTTPError as exc:
         status_code = getattr(exc.response, "status_code", None) or getattr(response, "status_code", None)
-        return _resultado_error(status_code=status_code, error=f"Error HTTP Mercado Libre: {exc}")
+        response_text = _response_text(getattr(exc, "response", None) or locals().get("response"))
+        return _resultado_error(status_code=status_code, response_text=response_text, error=f"Error HTTP Mercado Libre: {exc}")
     except requests.exceptions.RequestException as exc:
         return _resultado_error(error=f"Error consultando Mercado Libre: {exc}")
 
@@ -190,6 +214,8 @@ def buscar_productos(query, limit=20, offset=0, site_id=None, usar_token_si_exis
             "paging": {},
             "status_code": respuesta["status_code"],
             "error": error,
+            "error_message": error,
+            "response_text": respuesta.get("response_text", ""),
             "requires_token": respuesta["requires_token"],
             "forbidden": respuesta["forbidden"],
             "site_id": site_id,
@@ -217,12 +243,96 @@ def obtener_detalle_producto(item_id, usar_token_si_existe=True):
             "status_code": None,
             "data": None,
             "error": "item_id requerido.",
+            "error_message": "item_id requerido.",
+            "response_text": "",
             "requires_token": False,
             "forbidden": False,
         }
 
     use_auth = bool(usar_token_si_existe and obtener_token_activo())
     return request_meli("GET", f"/items/{item_id}", use_auth=use_auth)
+
+
+def _diagnostico_resultado(nombre, usa_token, resultado):
+    return {
+        "nombre": nombre,
+        "usa_token": usa_token,
+        "status_code": resultado.get("status_code"),
+        "ok": bool(resultado.get("ok")),
+        "error": resultado.get("error") or resultado.get("error_message"),
+        "response_text": _limitar_texto(resultado.get("response_text")),
+        "requires_token": bool(resultado.get("requires_token")),
+        "forbidden": bool(resultado.get("forbidden")),
+    }
+
+
+def diagnosticar_endpoints_meli(query="calza mujer", item_id="MLA3092462776", limit=1):
+    config = get_meli_config()
+    site_id = config["site_id"]
+    token_disponible = bool(obtener_token_activo())
+    resultados = []
+
+    users_me = request_meli("GET", "/users/me", use_auth=token_disponible)
+    resultados.append(_diagnostico_resultado("users/me", token_disponible, users_me))
+
+    categorias = request_meli("GET", f"/sites/{site_id}/categories", use_auth=False)
+    resultados.append(_diagnostico_resultado("sites categories", False, categorias))
+
+    search_sin_token = request_meli(
+        "GET",
+        f"/sites/{site_id}/search",
+        params={"q": query, "limit": limit, "offset": 0},
+        use_auth=False,
+    )
+    resultados.append(_diagnostico_resultado("search sin token", False, search_sin_token))
+
+    search_con_token = request_meli(
+        "GET",
+        f"/sites/{site_id}/search",
+        params={"q": query, "limit": limit, "offset": 0},
+        use_auth=token_disponible,
+    )
+    resultados.append(_diagnostico_resultado("search con token", token_disponible, search_con_token))
+
+    detalle = request_meli("GET", f"/items/{item_id}", use_auth=token_disponible)
+    resultados.append(_diagnostico_resultado("item detail con token", token_disponible, detalle))
+
+    return {
+        "query": query,
+        "item_id": item_id,
+        "limit": limit,
+        "token_disponible": token_disponible,
+        "resultados": resultados,
+        "interpretacion": interpretar_diagnostico_meli(resultados),
+    }
+
+
+def _por_nombre(resultados, nombre):
+    for resultado in resultados:
+        if resultado["nombre"] == nombre:
+            return resultado
+    return {}
+
+
+def interpretar_diagnostico_meli(resultados):
+    users_me = _por_nombre(resultados, "users/me")
+    categorias = _por_nombre(resultados, "sites categories")
+    search_con_token = _por_nombre(resultados, "search con token")
+    search_sin_token = _por_nombre(resultados, "search sin token")
+    search = search_con_token or search_sin_token
+
+    if users_me.get("ok") and search.get("status_code") == 403:
+        return "OAuth y token funcionan. El problema esta en el endpoint de busqueda general, que Mercado Libre esta restringiendo para esta app/token."
+    if users_me.get("status_code") == 401:
+        return "El token es invalido o vencido. Reautorizar Mercado Libre."
+    if users_me.get("status_code") == 403:
+        return "El token existe pero no tiene permisos suficientes o la app no esta habilitada para consultar este recurso."
+    if categorias.get("ok") and search.get("status_code") == 403:
+        return "La conectividad con Mercado Libre funciona, pero la busqueda de productos esta restringida."
+    if not any(resultado.get("ok") for resultado in resultados):
+        return "Puede haber bloqueo de red, headers, token invalido o restriccion general."
+
+    return "Diagnostico mixto. Revisar status_code y respuesta de cada endpoint."
 
 
 def _traducir_condicion(condicion):
@@ -382,6 +492,10 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0, usar_to
     )
     results = respuesta.get("results") or []
 
+    mensaje_error = respuesta.get("error")
+    if mensaje_error and respuesta.get("response_text"):
+        mensaje_error = f"{mensaje_error} Respuesta: {respuesta['response_text']}"
+
     ConsultaMercadoLibre.objects.create(
         categoria=categoria,
         query=query,
@@ -394,7 +508,7 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0, usar_to
         requiere_token=bool(respuesta.get("requires_token")),
         forbidden=bool(respuesta.get("forbidden")),
         uso_token=bool(respuesta.get("uso_token")),
-        mensaje_error=respuesta.get("error"),
+        mensaje_error=mensaje_error,
     )
 
     resumen = {
@@ -404,6 +518,7 @@ def sincronizar_busqueda_meli(query, categoria=None, limit=20, offset=0, usar_to
         "actualizados": 0,
         "errores": 0,
         "mensaje": respuesta.get("error"),
+        "response_text": respuesta.get("response_text", ""),
         "status_code": respuesta.get("status_code"),
         "requires_token": bool(respuesta.get("requires_token")),
         "forbidden": bool(respuesta.get("forbidden")),

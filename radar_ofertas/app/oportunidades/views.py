@@ -1,36 +1,52 @@
 from django.contrib import messages
-from django.db.models import Max
+from django.db.models import Count, Max, Prefetch
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import MercadoLibreBusquedaForm, OportunidadFiltroForm
+from .forms import CargaProductoURLForm, ImportacionProductosForm, MercadoLibreBusquedaForm, OportunidadFiltroForm
 from .models import (
     CategoriaInteres,
     ConsultaMercadoLibre,
     DecisionTecnica,
+    DetalleImportacionProducto,
+    EvaluacionOportunidadMultifuente,
     FuenteWeb,
+    ImportacionProductos,
     MercadoLibreToken,
     Oportunidad,
+    PrecioFuente,
     ProductoCanonico,
     ProductoFuente,
 )
 from .serializers import (
+    CargaProductoURLSerializer,
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
     DecisionTecnicaSerializer,
     FuenteWebSerializer,
+    ImportacionProductosCreateSerializer,
+    ImportacionProductosSerializer,
     MeliSincronizarSerializer,
     OportunidadDetalleSerializer,
     OportunidadEstadoSerializer,
     OportunidadSerializer,
     ProductoCanonicoSerializer,
     ProductoFuenteSerializer,
+    ProductoMultifuenteSerializer,
 )
 from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
+from .services.comparacion_service import calcular_comparacion_producto
+from .services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from .services.importacion_service import (
+    crear_producto_desde_carga_url,
+    detectar_tipo_archivo,
+    procesar_importacion,
+)
 from .services.mercado_libre_service import (
     buscar_productos,
     diagnosticar_endpoints_meli,
@@ -241,6 +257,128 @@ def lista_decisiones_tecnicas(request):
     return render(request, "oportunidades/lista_decisiones_tecnicas.html", {"decisiones": decisiones})
 
 
+def lista_importaciones(request):
+    importaciones = ImportacionProductos.objects.select_related("fuente_web").all()
+    return render(request, "oportunidades/lista_importaciones.html", {"importaciones": importaciones})
+
+
+def nueva_importacion(request):
+    form = ImportacionProductosForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        importacion = ImportacionProductos.objects.create(
+            fuente_web=form.cleaned_data["fuente_web"],
+            archivo=form.cleaned_data["archivo"],
+            tipo_archivo=detectar_tipo_archivo(form.cleaned_data["archivo"]),
+            observaciones=form.cleaned_data.get("observaciones"),
+        )
+        warning = form.get_warning()
+        if warning:
+            messages.warning(request, warning)
+        procesar_importacion(
+            importacion,
+            {
+                "categoria_default": form.cleaned_data.get("categoria_default"),
+                "origen_dato": form.cleaned_data.get("origen_dato"),
+                "crear_producto_canonico": form.cleaned_data.get("crear_producto_canonico"),
+                "actualizar_productos_existentes": form.cleaned_data.get("actualizar_productos_existentes"),
+                "crear_precio_si_no_cambio": form.cleaned_data.get("crear_precio_si_no_cambio"),
+            },
+        )
+        messages.success(request, "Importacion procesada.")
+        return redirect("oportunidades:detalle_importacion", pk=importacion.pk)
+
+    return render(request, "oportunidades/nueva_importacion.html", {"form": form})
+
+
+def descargar_plantilla_importacion(request):
+    contenido = (
+        "codigo_externo,titulo,precio,precio_lista,descuento_porcentaje,costo_envio,moneda,"
+        "url_producto,categoria,marca,descripcion,imagen_url,vendedor,condicion,disponible,stock\n"
+        "SKU-001,Organizador de cocina extensible,\"1200,50\",1500,20,0,ARS,"
+        "https://ejemplo.com/producto/sku-001,Organizacion,Marca Demo,"
+        "Organizador plastico para cocina,https://ejemplo.com/imagen.jpg,"
+        "Proveedor Demo,nuevo,si,Disponible\n"
+    )
+    response = HttpResponse(contenido, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="productos_template.csv"'
+    return response
+
+
+def detalle_importacion(request, pk):
+    importacion = get_object_or_404(ImportacionProductos.objects.select_related("fuente_web"), pk=pk)
+    detalles = importacion.detalles.select_related("producto_fuente", "precio_fuente").all()
+    return render(
+        request,
+        "oportunidades/detalle_importacion.html",
+        {
+            "importacion": importacion,
+            "detalles": detalles,
+        },
+    )
+
+
+@require_POST
+def procesar_importacion_view(request, pk):
+    importacion = get_object_or_404(ImportacionProductos, pk=pk)
+    if importacion.estado == ImportacionProductos.ESTADO_PROCESANDO:
+        messages.warning(request, "La importacion ya esta en proceso.")
+    else:
+        procesar_importacion(importacion)
+        messages.success(request, "Importacion procesada correctamente.")
+    return redirect("oportunidades:detalle_importacion", pk=importacion.pk)
+
+
+def cargar_producto_url(request):
+    form = CargaProductoURLForm(request.POST or None)
+    resultado = None
+    if request.method == "POST" and form.is_valid():
+        resultado = crear_producto_desde_carga_url(form.cleaned_data)
+        if resultado["ok"]:
+            messages.success(request, "Producto cargado por URL sin descargar la pagina.")
+            return redirect("oportunidades:detalle_producto_multifuente", pk=resultado["producto_canonico"].pk)
+        messages.error(request, "No se pudo cargar el producto: " + " ".join(resultado["errores"]))
+    return render(request, "oportunidades/cargar_producto_url.html", {"form": form, "resultado": resultado})
+
+
+def lista_productos_multifuente(request):
+    productos = (
+        ProductoCanonico.objects.select_related("categoria")
+        .prefetch_related("comparaciones", "evaluaciones_multifuente", "apariciones")
+        .annotate(cantidad_apariciones=Count("apariciones", distinct=True))
+        .all()
+    )
+    return render(request, "oportunidades/lista_productos_multifuente.html", {"productos": productos})
+
+
+def detalle_producto_multifuente(request, pk):
+    producto = get_object_or_404(
+        ProductoCanonico.objects.select_related("categoria").prefetch_related(
+            Prefetch("apariciones", queryset=ProductoFuente.objects.select_related("fuente_web", "categoria_fuente")),
+            "apariciones__precios_fuente",
+            "comparaciones",
+            "evaluaciones_multifuente",
+        ),
+        pk=pk,
+    )
+    return render(request, "oportunidades/detalle_producto_multifuente.html", {"producto": producto})
+
+
+@require_POST
+def recalcular_comparacion_multifuente(request, pk):
+    producto = get_object_or_404(ProductoCanonico, pk=pk)
+    calcular_comparacion_producto(producto)
+    messages.success(request, "Comparacion recalculada.")
+    return redirect("oportunidades:detalle_producto_multifuente", pk=producto.pk)
+
+
+@require_POST
+def recalcular_evaluacion_multifuente(request, pk):
+    producto = get_object_or_404(ProductoCanonico, pk=pk)
+    evaluar_producto_multifuente(producto)
+    messages.success(request, "Evaluacion recalculada.")
+    return redirect("oportunidades:detalle_producto_multifuente", pk=producto.pk)
+
+
 def _recalcular_oportunidad(oportunidad):
     evaluacion = clasificar_oportunidad(
         oportunidad.producto,
@@ -435,3 +573,65 @@ class ProductoCanonicoListAPIView(generics.ListAPIView):
 class ProductoFuenteListAPIView(generics.ListAPIView):
     queryset = ProductoFuente.objects.select_related("fuente_web", "categoria_fuente", "producto_canonico").all()
     serializer_class = ProductoFuenteSerializer
+
+
+class ImportacionProductosListCreateAPIView(generics.ListCreateAPIView):
+    queryset = ImportacionProductos.objects.select_related("fuente_web").prefetch_related("detalles").all()
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ImportacionProductosCreateSerializer
+        return ImportacionProductosSerializer
+
+    def perform_create(self, serializer):
+        archivo = serializer.validated_data["archivo"]
+        serializer.save(tipo_archivo=detectar_tipo_archivo(archivo))
+
+
+class ImportacionProductosDetailAPIView(generics.RetrieveAPIView):
+    queryset = ImportacionProductos.objects.select_related("fuente_web").prefetch_related("detalles").all()
+    serializer_class = ImportacionProductosSerializer
+
+
+class ImportacionProductosProcesarAPIView(APIView):
+    def post(self, request, pk):
+        importacion = get_object_or_404(ImportacionProductos, pk=pk)
+        procesar_importacion(importacion)
+        serializer = ImportacionProductosSerializer(importacion)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProductoMultifuenteListAPIView(generics.ListAPIView):
+    queryset = ProductoCanonico.objects.select_related("categoria").prefetch_related(
+        "comparaciones",
+        "evaluaciones_multifuente",
+    )
+    serializer_class = ProductoMultifuenteSerializer
+
+
+class ProductoMultifuenteDetailAPIView(generics.RetrieveAPIView):
+    queryset = ProductoCanonico.objects.select_related("categoria").prefetch_related(
+        "apariciones",
+        "apariciones__precios_fuente",
+        "comparaciones",
+        "evaluaciones_multifuente",
+    )
+    serializer_class = ProductoCanonicoSerializer
+
+
+class CargaProductoURLAPIView(APIView):
+    def post(self, request):
+        serializer = CargaProductoURLSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        resultado = crear_producto_desde_carga_url(serializer.validated_data)
+        if not resultado["ok"]:
+            return Response({"errores": resultado["errores"]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "producto_canonico_id": resultado["producto_canonico"].pk,
+                "producto_fuente_id": resultado["producto_fuente"].pk,
+                "precio_fuente_id": resultado["precio_fuente"].pk if resultado["precio_fuente"] else None,
+                "evaluacion_id": resultado["evaluacion"].pk if resultado["evaluacion"] else None,
+            },
+            status=status.HTTP_201_CREATED,
+        )

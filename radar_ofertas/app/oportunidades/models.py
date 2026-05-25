@@ -454,6 +454,83 @@ class DecisionTecnica(models.Model):
         return self.titulo
 
 
+class ImportacionProductos(models.Model):
+    TIPO_CSV = "csv"
+    TIPO_XLSX = "xlsx"
+    TIPO_XLS = "xls"
+    TIPO_DESCONOCIDO = "desconocido"
+    TIPO_ARCHIVO_CHOICES = [
+        (TIPO_CSV, "CSV"),
+        (TIPO_XLSX, "Excel XLSX"),
+        (TIPO_XLS, "Excel XLS"),
+        (TIPO_DESCONOCIDO, "Desconocido"),
+    ]
+
+    ESTADO_PENDIENTE = "pendiente"
+    ESTADO_PROCESANDO = "procesando"
+    ESTADO_PROCESADA = "procesada"
+    ESTADO_PROCESADA_CON_ERRORES = "procesada_con_errores"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, "Pendiente"),
+        (ESTADO_PROCESANDO, "Procesando"),
+        (ESTADO_PROCESADA, "Procesada"),
+        (ESTADO_PROCESADA_CON_ERRORES, "Procesada con errores"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, related_name="importaciones")
+    archivo = models.FileField(upload_to="importaciones/productos/")
+    tipo_archivo = models.CharField(max_length=20, choices=TIPO_ARCHIVO_CHOICES, default=TIPO_DESCONOCIDO)
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_PENDIENTE)
+    total_filas = models.PositiveIntegerField(default=0)
+    filas_procesadas = models.PositiveIntegerField(default=0)
+    productos_creados = models.PositiveIntegerField(default=0)
+    productos_actualizados = models.PositiveIntegerField(default=0)
+    precios_creados = models.PositiveIntegerField(default=0)
+    errores = models.PositiveIntegerField(default=0)
+    mensaje_error = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_procesamiento = models.DateTimeField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "importacion de productos"
+        verbose_name_plural = "importaciones de productos"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"Importacion #{self.pk} - {self.fuente_web}"
+
+
+class DetalleImportacionProducto(models.Model):
+    ESTADO_PROCESADA = "procesada"
+    ESTADO_OMITIDA = "omitida"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_PROCESADA, "Procesada"),
+        (ESTADO_OMITIDA, "Omitida"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    importacion = models.ForeignKey(ImportacionProductos, on_delete=models.CASCADE, related_name="detalles")
+    numero_fila = models.PositiveIntegerField()
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES)
+    mensaje = models.TextField(blank=True, null=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    precio_fuente = models.ForeignKey(PrecioFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    datos_originales = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "detalle de importacion de producto"
+        verbose_name_plural = "detalles de importacion de productos"
+        ordering = ["importacion", "numero_fila"]
+
+    def __str__(self):
+        return f"Fila {self.numero_fila} - {self.estado}"
+
+
 class PrecioProducto(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="precios")
     precio = models.DecimalField(max_digits=12, decimal_places=2)

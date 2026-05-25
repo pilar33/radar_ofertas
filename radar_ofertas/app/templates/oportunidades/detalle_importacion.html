@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle importacion{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Importacion #{{ importacion.pk }}</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_importaciones' %}">Volver</a>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="bg-white border rounded p-3"><strong>Fuente</strong><br>{{ importacion.fuente_web.nombre }}</div></div>
+  <div class="col-md-4"><div class="bg-white border rounded p-3"><strong>Estado</strong><br>{{ importacion.get_estado_display }}</div></div>
+  <div class="col-md-4"><div class="bg-white border rounded p-3"><strong>Archivo</strong><br>{{ importacion.archivo.name }}</div></div>
+</div>
+
+<div class="bg-white border rounded p-3 mb-3">
+  <div class="row text-center">
+    <div class="col">Filas<br><strong>{{ importacion.total_filas }}</strong></div>
+    <div class="col">Procesadas<br><strong>{{ importacion.filas_procesadas }}</strong></div>
+    <div class="col">Creados<br><strong>{{ importacion.productos_creados }}</strong></div>
+    <div class="col">Actualizados<br><strong>{{ importacion.productos_actualizados }}</strong></div>
+    <div class="col">Precios<br><strong>{{ importacion.precios_creados }}</strong></div>
+    <div class="col">Errores<br><strong>{{ importacion.errores }}</strong></div>
+  </div>
+  {% if importacion.mensaje_error %}<div class="alert alert-danger mt-3 mb-0">{{ importacion.mensaje_error }}</div>{% endif %}
+  <form method="post" action="{% url 'oportunidades:procesar_importacion' importacion.pk %}" class="mt-3">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-primary btn-sm">Procesar nuevamente</button>
+  </form>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Fila</th>
+        <th>Estado</th>
+        <th>Mensaje</th>
+        <th>Producto</th>
+        <th>Precio</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for detalle in detalles %}
+        <tr>
+          <td>{{ detalle.numero_fila }}</td>
+          <td><span class="badge text-bg-secondary">{{ detalle.get_estado_display }}</span></td>
+          <td>{{ detalle.mensaje }}</td>
+          <td>{% if detalle.producto_fuente %}{{ detalle.producto_fuente.titulo_original }}{% endif %}</td>
+          <td>{% if detalle.precio_fuente %}${{ detalle.precio_fuente.precio }}{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No hay detalles registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

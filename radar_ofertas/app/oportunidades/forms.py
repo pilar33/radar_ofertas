@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import CategoriaInteres, Oportunidad
+from .models import CategoriaInteres, FuenteWeb, Oportunidad, PoliticaExtraccionFuente, PrecioFuente
 
 
 class OportunidadFiltroForm(forms.Form):
@@ -69,3 +69,107 @@ class MercadoLibreBusquedaForm(forms.Form):
             cleaned_data["query"] = categoria.palabra_clave
 
         return cleaned_data
+
+
+class ImportacionProductosForm(forms.Form):
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    EXTENSIONES_PERMITIDAS = (".csv", ".xlsx", ".xls")
+
+    fuente_web = forms.ModelChoiceField(
+        queryset=FuenteWeb.objects.filter(activa=True),
+        label="Fuente",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    archivo = forms.FileField(label="Archivo CSV/Excel", widget=forms.FileInput(attrs={"class": "form-control"}))
+    categoria_default = forms.ModelChoiceField(
+        required=False,
+        queryset=CategoriaInteres.objects.filter(activa=True),
+        empty_label="Sin categoria default",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    origen_dato = forms.ChoiceField(
+        choices=[
+            (PrecioFuente.ORIGEN_CSV_EXCEL, "CSV/Excel"),
+            (PrecioFuente.ORIGEN_MANUAL, "Manual"),
+            (PrecioFuente.ORIGEN_OTRO, "Otro"),
+        ],
+        initial=PrecioFuente.ORIGEN_CSV_EXCEL,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    crear_producto_canonico = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Crear o vincular producto canonico",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    actualizar_productos_existentes = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Actualizar productos existentes",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    crear_precio_si_no_cambio = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Crear precio aunque no haya cambio",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data["archivo"]
+        nombre = archivo.name.lower()
+        if not nombre.endswith(self.EXTENSIONES_PERMITIDAS):
+            raise forms.ValidationError("Solo se permiten archivos .csv, .xlsx o .xls.")
+        if archivo.size > self.MAX_FILE_SIZE:
+            raise forms.ValidationError("El archivo no puede superar los 10 MB.")
+        return archivo
+
+    def clean_fuente_web(self):
+        fuente = self.cleaned_data["fuente_web"]
+        if not fuente.activa:
+            raise forms.ValidationError("La fuente seleccionada no esta activa.")
+        return fuente
+
+    def get_warning(self):
+        fuente = self.cleaned_data.get("fuente_web") if hasattr(self, "cleaned_data") else None
+        politica = getattr(fuente, "politica_extraccion", None)
+        if politica and politica.semaforo == PoliticaExtraccionFuente.SEMAFORO_ROJO:
+            return "La fuente esta marcada en rojo. La importacion solo carga un archivo provisto, no hace scraping."
+        return None
+
+
+class CargaProductoURLForm(forms.Form):
+    fuente_web = forms.ModelChoiceField(
+        queryset=FuenteWeb.objects.filter(activa=True),
+        label="Fuente",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    url_producto = forms.URLField(label="URL del producto", widget=forms.URLInput(attrs={"class": "form-control"}))
+    titulo = forms.CharField(max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    precio = forms.CharField(widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "$ 1.200,50"}))
+    categoria = forms.ModelChoiceField(
+        queryset=CategoriaInteres.objects.filter(activa=True),
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    marca = forms.CharField(required=False, max_length=100, widget=forms.TextInput(attrs={"class": "form-control"}))
+    descripcion = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}))
+    imagen_url = forms.URLField(required=False, widget=forms.URLInput(attrs={"class": "form-control"}))
+    precio_lista = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-control"}))
+    costo_envio = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-control"}))
+    moneda = forms.CharField(
+        initial="ARS",
+        max_length=10,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    es_chico_liviano = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    es_fragil = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
+    observaciones = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}))
+
+    def clean_fuente_web(self):
+        fuente = self.cleaned_data["fuente_web"]
+        if not fuente.activa:
+            raise forms.ValidationError("La fuente seleccionada no esta activa.")
+        return fuente

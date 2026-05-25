@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import requests
+import pandas as pd
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
@@ -12,13 +14,18 @@ from django.utils import timezone
 from oportunidades.models import (
     CategoriaInteres,
     DecisionTecnica,
+    DetalleImportacionProducto,
     FuenteProducto,
     FuenteWeb,
+    ImportacionProductos,
     MercadoLibreToken,
     Oportunidad,
     PoliticaExtraccionFuente,
+    PrecioFuente,
     PrecioProducto,
     Producto,
+    ProductoCanonico,
+    ProductoFuente,
 )
 from oportunidades.services.clasificacion_service import clasificar_oportunidad
 from oportunidades.services.mercado_libre_service import (
@@ -35,6 +42,13 @@ from oportunidades.services.mercado_libre_service import (
 from oportunidades.services.margen_service import calcular_margen, calcular_porcentaje_margen
 from oportunidades.services.fuentes_service import fuente_permite_automatizacion
 from oportunidades.services.normalizacion_service import normalizar_texto_producto
+from oportunidades.services.importacion_service import (
+    crear_producto_desde_carga_url,
+    detectar_tipo_archivo,
+    normalizar_columnas_importacion,
+    parsear_decimal,
+    procesar_importacion,
+)
 
 
 def _producto(es_chico_liviano=True, es_fragil=False, vendedor="Vendedor Demo"):
@@ -431,3 +445,129 @@ class MultifuenteTests(TestCase):
                 titulo="Mercado Libre no sera fuente automatica principal en esta etapa"
             ).exists()
         )
+
+
+class ImportacionMultifuenteTests(TestCase):
+    def setUp(self):
+        self.categoria = CategoriaInteres.objects.create(
+            nombre="Organizacion",
+            palabra_clave="organizador",
+            activa=True,
+        )
+        self.fuente = FuenteWeb.objects.create(
+            nombre="Mayorista Demo",
+            url_base="https://example.com",
+            tipo_fuente=FuenteWeb.TIPO_EXCEL_CSV,
+            activa=True,
+        )
+        PoliticaExtraccionFuente.objects.create(
+            fuente=self.fuente,
+            semaforo=PoliticaExtraccionFuente.SEMAFORO_VERDE,
+            metodo_preferido=PoliticaExtraccionFuente.METODO_CSV_EXCEL,
+        )
+
+    def _crear_importacion(self, contenido, nombre="productos.csv"):
+        archivo = SimpleUploadedFile(nombre, contenido.encode("utf-8"), content_type="text/csv")
+        return ImportacionProductos.objects.create(
+            fuente_web=self.fuente,
+            archivo=archivo,
+            tipo_archivo=detectar_tipo_archivo(archivo),
+        )
+
+    def test_detectar_tipo_archivo_csv(self):
+        archivo = SimpleNamespace(name="lista.csv")
+
+        self.assertEqual(detectar_tipo_archivo(archivo), ImportacionProductos.TIPO_CSV)
+
+    def test_parsear_decimal_formato_argentino(self):
+        self.assertEqual(parsear_decimal("$ 1.200,50"), Decimal("1200.50"))
+        self.assertEqual(parsear_decimal("1200.50"), Decimal("1200.50"))
+
+    def test_normalizar_columnas_importacion(self):
+        df = pd.DataFrame([{"Nombre Producto": "Organizador", "Importe": "1200", "SKU": "A1"}])
+        normalizado = normalizar_columnas_importacion(df)
+
+        self.assertIn("titulo", normalizado.columns)
+        self.assertIn("precio", normalizado.columns)
+        self.assertIn("codigo_externo", normalizado.columns)
+
+    def test_importacion_crea_producto_fuente(self):
+        importacion = self._crear_importacion("codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1200,Organizacion\n")
+        procesar_importacion(importacion, {"categoria_default": self.categoria})
+
+        importacion.refresh_from_db()
+        self.assertEqual(importacion.productos_creados, 1)
+        self.assertTrue(ProductoFuente.objects.filter(codigo_externo="SKU1").exists())
+        self.assertTrue(ProductoCanonico.objects.filter(nombre_normalizado="organizador").exists())
+
+    def test_importacion_no_duplica_producto_fuente_por_codigo(self):
+        contenido = "codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1200,Organizacion\n"
+        procesar_importacion(self._crear_importacion(contenido), {"categoria_default": self.categoria})
+        procesar_importacion(self._crear_importacion(contenido, "productos_2.csv"), {"categoria_default": self.categoria})
+
+        self.assertEqual(ProductoFuente.objects.filter(codigo_externo="SKU1").count(), 1)
+
+    def test_importacion_crea_precio_si_cambia(self):
+        procesar_importacion(
+            self._crear_importacion("codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1200,Organizacion\n"),
+            {"categoria_default": self.categoria},
+        )
+        procesar_importacion(
+            self._crear_importacion("codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1300,Organizacion\n", "b.csv"),
+            {"categoria_default": self.categoria},
+        )
+
+        producto = ProductoFuente.objects.get(codigo_externo="SKU1")
+        self.assertEqual(producto.precios_fuente.count(), 2)
+
+    def test_importacion_no_crea_precio_duplicado_si_no_cambio(self):
+        contenido = "codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1200,Organizacion\n"
+        procesar_importacion(self._crear_importacion(contenido), {"categoria_default": self.categoria})
+        procesar_importacion(self._crear_importacion(contenido, "b.csv"), {"categoria_default": self.categoria})
+
+        producto = ProductoFuente.objects.get(codigo_externo="SKU1")
+        self.assertEqual(producto.precios_fuente.count(), 1)
+
+    @patch("requests.get")
+    def test_carga_url_no_hace_request_externo(self, requests_get):
+        resultado = crear_producto_desde_carga_url(
+            {
+                "fuente_web": self.fuente,
+                "url_producto": "https://example.com/producto",
+                "titulo": "Organizador URL",
+                "precio": "1200",
+                "categoria": self.categoria,
+                "moneda": "ARS",
+            }
+        )
+
+        self.assertTrue(resultado["ok"])
+        requests_get.assert_not_called()
+
+    def test_carga_url_crea_producto_precio_evaluacion(self):
+        resultado = crear_producto_desde_carga_url(
+            {
+                "fuente_web": self.fuente,
+                "url_producto": "https://example.com/producto",
+                "titulo": "Organizador URL",
+                "precio": "1200",
+                "categoria": self.categoria,
+                "moneda": "ARS",
+                "es_chico_liviano": True,
+                "es_fragil": False,
+            }
+        )
+
+        self.assertTrue(resultado["ok"])
+        self.assertIsNotNone(resultado["precio_fuente"])
+        self.assertIsNotNone(resultado["evaluacion"])
+
+    def test_importacion_con_fila_invalida_registra_error_y_continua(self):
+        contenido = "codigo_externo,titulo,precio,categoria\nSKU1,Organizador,1200,Organizacion\nSKU2,,abc,Organizacion\n"
+        importacion = self._crear_importacion(contenido)
+        procesar_importacion(importacion, {"categoria_default": self.categoria})
+
+        importacion.refresh_from_db()
+        self.assertEqual(importacion.productos_creados, 1)
+        self.assertEqual(importacion.errores, 1)
+        self.assertEqual(DetalleImportacionProducto.objects.filter(importacion=importacion).count(), 2)

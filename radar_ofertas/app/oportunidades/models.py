@@ -454,6 +454,125 @@ class DecisionTecnica(models.Model):
         return self.titulo
 
 
+class ConectorFuente(models.Model):
+    TIPO_CSV_MANUAL = "csv_manual"
+    TIPO_EXCEL_MANUAL = "excel_manual"
+    TIPO_CSV_REMOTO = "csv_remoto"
+    TIPO_EXCEL_REMOTO = "excel_remoto"
+    TIPO_API_OFICIAL = "api_oficial"
+    TIPO_CATALOGO_PDF = "catalogo_pdf"
+    TIPO_CARGA_URL = "carga_url"
+    TIPO_SCRAPING_PERMITIDO = "scraping_permitido"
+    TIPO_OTRO = "otro"
+    TIPO_CHOICES = [
+        (TIPO_CSV_MANUAL, "CSV manual"),
+        (TIPO_EXCEL_MANUAL, "Excel manual"),
+        (TIPO_CSV_REMOTO, "CSV remoto"),
+        (TIPO_EXCEL_REMOTO, "Excel remoto"),
+        (TIPO_API_OFICIAL, "API oficial"),
+        (TIPO_CATALOGO_PDF, "Catalogo PDF"),
+        (TIPO_CARGA_URL, "Carga URL"),
+        (TIPO_SCRAPING_PERMITIDO, "Scraping permitido"),
+        (TIPO_OTRO, "Otro"),
+    ]
+
+    ESTADO_BORRADOR = "borrador"
+    ESTADO_ACTIVO = "activo"
+    ESTADO_PAUSADO = "pausado"
+    ESTADO_ERROR = "error"
+    ESTADO_DESHABILITADO = "deshabilitado"
+    ESTADO_CHOICES = [
+        (ESTADO_BORRADOR, "Borrador"),
+        (ESTADO_ACTIVO, "Activo"),
+        (ESTADO_PAUSADO, "Pausado"),
+        (ESTADO_ERROR, "Error"),
+        (ESTADO_DESHABILITADO, "Deshabilitado"),
+    ]
+
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.CASCADE, related_name="conectores")
+    nombre = models.CharField(max_length=150)
+    tipo_conector = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_BORRADOR)
+    descripcion = models.TextField(blank=True, null=True)
+    frecuencia_sugerida = models.CharField(max_length=100, blank=True, null=True)
+    requiere_revision_manual = models.BooleanField(default=True)
+    respeta_politica_fuente = models.BooleanField(default=True)
+    ultima_ejecucion = models.DateTimeField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "conector de fuente"
+        verbose_name_plural = "conectores de fuente"
+        ordering = ["fuente_web", "nombre"]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.fuente_web}"
+
+
+class EjecucionConector(models.Model):
+    ESTADO_PENDIENTE = "pendiente"
+    ESTADO_EJECUTANDO = "ejecutando"
+    ESTADO_FINALIZADA = "finalizada"
+    ESTADO_FINALIZADA_CON_ERRORES = "finalizada_con_errores"
+    ESTADO_ERROR = "error"
+    ESTADO_CANCELADA = "cancelada"
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, "Pendiente"),
+        (ESTADO_EJECUTANDO, "Ejecutando"),
+        (ESTADO_FINALIZADA, "Finalizada"),
+        (ESTADO_FINALIZADA_CON_ERRORES, "Finalizada con errores"),
+        (ESTADO_ERROR, "Error"),
+        (ESTADO_CANCELADA, "Cancelada"),
+    ]
+
+    conector = models.ForeignKey(ConectorFuente, on_delete=models.CASCADE, related_name="ejecuciones")
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_PENDIENTE)
+    inicio = models.DateTimeField(auto_now_add=True)
+    fin = models.DateTimeField(blank=True, null=True)
+    productos_detectados = models.PositiveIntegerField(default=0)
+    productos_creados = models.PositiveIntegerField(default=0)
+    productos_actualizados = models.PositiveIntegerField(default=0)
+    precios_creados = models.PositiveIntegerField(default=0)
+    errores = models.PositiveIntegerField(default=0)
+    mensaje = models.TextField(blank=True, null=True)
+    log_resumido = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "ejecucion de conector"
+        verbose_name_plural = "ejecuciones de conectores"
+        ordering = ["-inicio"]
+
+    def __str__(self):
+        return f"{self.conector} - {self.estado}"
+
+
+class DetalleEjecucionConector(models.Model):
+    ESTADO_PROCESADO = "procesado"
+    ESTADO_OMITIDO = "omitido"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_PROCESADO, "Procesado"),
+        (ESTADO_OMITIDO, "Omitido"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    ejecucion = models.ForeignKey(EjecucionConector, on_delete=models.CASCADE, related_name="detalles")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES)
+    mensaje = models.TextField(blank=True, null=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    datos_originales = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "detalle de ejecucion de conector"
+        verbose_name_plural = "detalles de ejecuciones de conectores"
+        ordering = ["ejecucion", "fecha_creacion"]
+
+    def __str__(self):
+        return f"{self.ejecucion} - {self.estado}"
+
+
 class ImportacionProductos(models.Model):
     TIPO_CSV = "csv"
     TIPO_XLSX = "xlsx"
@@ -480,6 +599,13 @@ class ImportacionProductos(models.Model):
     ]
 
     fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, related_name="importaciones")
+    conector = models.ForeignKey(
+        ConectorFuente,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="importaciones",
+    )
     archivo = models.FileField(upload_to="importaciones/productos/")
     tipo_archivo = models.CharField(max_length=20, choices=TIPO_ARCHIVO_CHOICES, default=TIPO_DESCONOCIDO)
     estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_PENDIENTE)

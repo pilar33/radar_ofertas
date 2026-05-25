@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnostico storage{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Diagnostico de storage</h1>
+
+{% for advertencia in diagnostico.advertencias %}
+  <div class="alert alert-warning">{{ advertencia }}</div>
+{% empty %}
+  <div class="alert alert-success">Configuracion de storage sin advertencias.</div>
+{% endfor %}
+
+<div class="bg-white border rounded">
+  <table class="table mb-0">
+    <tbody>
+      <tr><th>Render</th><td>{{ diagnostico.render|yesno:"Si,No" }}</td></tr>
+      <tr><th>USE_EXTERNAL_STORAGE</th><td>{{ diagnostico.use_external_storage|yesno:"Si,No" }}</td></tr>
+      <tr><th>STORAGE_BACKEND</th><td>{{ diagnostico.storage_backend }}</td></tr>
+      <tr><th>Bucket configurado</th><td>{{ diagnostico.bucket_configurado|yesno:"Si,No" }}</td></tr>
+      <tr><th>Endpoint configurado</th><td>{{ diagnostico.endpoint_configurado|yesno:"Si,No" }}</td></tr>
+      <tr><th>Access key configurada</th><td>{{ diagnostico.access_key_configurada|yesno:"Si,No" }}</td></tr>
+      <tr><th>Secret configurada</th><td>{{ diagnostico.secret_configurada|yesno:"Si,No" }}</td></tr>
+      <tr><th>MEDIA_URL</th><td>{{ diagnostico.media_url }}</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

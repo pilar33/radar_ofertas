@@ -24,9 +24,11 @@ from .models import (
 )
 from .serializers import (
     CargaProductoURLSerializer,
+    ConectorFuenteSerializer,
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
     DecisionTecnicaSerializer,
+    EjecucionConectorSerializer,
     FuenteWebSerializer,
     ImportacionProductosCreateSerializer,
     ImportacionProductosSerializer,
@@ -47,6 +49,9 @@ from .services.importacion_service import (
     detectar_tipo_archivo,
     procesar_importacion,
 )
+from .models import ConectorFuente, EjecucionConector
+from .services.conectores_service import validar_conector_segun_politica
+from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
     buscar_productos,
     diagnosticar_endpoints_meli,
@@ -363,6 +368,48 @@ def detalle_producto_multifuente(request, pk):
     return render(request, "oportunidades/detalle_producto_multifuente.html", {"producto": producto})
 
 
+def diagnostico_storage(request):
+    diagnostico = diagnosticar_storage_config()
+    return render(request, "oportunidades/diagnostico_storage.html", {"diagnostico": diagnostico})
+
+
+def lista_conectores(request):
+    conectores = ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion").all()
+    datos = [(conector, validar_conector_segun_politica(conector)) for conector in conectores]
+    return render(request, "oportunidades/lista_conectores.html", {"datos_conectores": datos})
+
+
+def detalle_conector(request, pk):
+    conector = get_object_or_404(
+        ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion").prefetch_related(
+            "ejecuciones",
+            "importaciones",
+        ),
+        pk=pk,
+    )
+    return render(
+        request,
+        "oportunidades/detalle_conector.html",
+        {
+            "conector": conector,
+            "validacion": validar_conector_segun_politica(conector),
+            "ejecuciones": conector.ejecuciones.all()[:20],
+            "importaciones": conector.importaciones.all()[:20],
+        },
+    )
+
+
+@require_POST
+def validar_conector(request, pk):
+    conector = get_object_or_404(ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion"), pk=pk)
+    validacion = validar_conector_segun_politica(conector)
+    level = messages.success if validacion["nivel"] == "ok" else messages.warning
+    if validacion["nivel"] == "bloqueado":
+        level = messages.error
+    level(request, validacion["mensaje"])
+    return redirect("oportunidades:detalle_conector", pk=conector.pk)
+
+
 @require_POST
 def recalcular_comparacion_multifuente(request, pk):
     producto = get_object_or_404(ProductoCanonico, pk=pk)
@@ -573,6 +620,35 @@ class ProductoCanonicoListAPIView(generics.ListAPIView):
 class ProductoFuenteListAPIView(generics.ListAPIView):
     queryset = ProductoFuente.objects.select_related("fuente_web", "categoria_fuente", "producto_canonico").all()
     serializer_class = ProductoFuenteSerializer
+
+
+class ConectorFuenteListAPIView(generics.ListAPIView):
+    queryset = ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion").all()
+    serializer_class = ConectorFuenteSerializer
+
+
+class ConectorFuenteDetailAPIView(generics.RetrieveAPIView):
+    queryset = ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion").all()
+    serializer_class = ConectorFuenteSerializer
+
+
+class ConectorFuenteValidarAPIView(APIView):
+    def post(self, request, pk):
+        conector = get_object_or_404(
+            ConectorFuente.objects.select_related("fuente_web", "fuente_web__politica_extraccion"),
+            pk=pk,
+        )
+        return Response(validar_conector_segun_politica(conector), status=status.HTTP_200_OK)
+
+
+class EjecucionConectorListAPIView(generics.ListAPIView):
+    queryset = EjecucionConector.objects.select_related("conector", "conector__fuente_web").all()
+    serializer_class = EjecucionConectorSerializer
+
+
+class EjecucionConectorDetailAPIView(generics.RetrieveAPIView):
+    queryset = EjecucionConector.objects.select_related("conector", "conector__fuente_web").prefetch_related("detalles")
+    serializer_class = EjecucionConectorSerializer
 
 
 class ImportacionProductosListCreateAPIView(generics.ListCreateAPIView):

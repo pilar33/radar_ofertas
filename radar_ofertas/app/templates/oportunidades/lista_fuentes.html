@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Fuentes - Radar Ofertas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Fuentes</h1>
+    <p class="text-muted mb-0">Registro multifuente y politica de extraccion.</p>
+  </div>
+</div>
+
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-dark">
+      <tr>
+        <th>Nombre</th>
+        <th>Tipo</th>
+        <th>Rubro</th>
+        <th>Semaforo</th>
+        <th>Metodo preferido</th>
+        <th>Activa</th>
+        <th>Prioridad</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for fuente in fuentes %}
+        <tr>
+          <td>{{ fuente.nombre }}</td>
+          <td>{{ fuente.get_tipo_fuente_display }}</td>
+          <td>{{ fuente.rubro_principal|default:"-" }}</td>
+          <td>{{ fuente.politica_extraccion.get_semaforo_display|default:"-" }}</td>
+          <td>{{ fuente.politica_extraccion.get_metodo_preferido_display|default:"-" }}</td>
+          <td>{{ fuente.activa|yesno:"Si,No" }}</td>
+          <td>{{ fuente.prioridad }}</td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_fuente' fuente.pk %}">Ver</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No hay fuentes cargadas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

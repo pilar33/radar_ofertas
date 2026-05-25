@@ -2,12 +2,21 @@ from rest_framework import serializers
 
 from .models import (
     CategoriaInteres,
+    CategoriaFuente,
+    ComparacionPrecio,
     ConsultaMercadoLibre,
     ContenidoSugerido,
+    DecisionTecnica,
+    EvaluacionOportunidadMultifuente,
     FuenteProducto,
+    FuenteWeb,
     Oportunidad,
+    PoliticaExtraccionFuente,
     PrecioProducto,
+    PrecioFuente,
     Producto,
+    ProductoCanonico,
+    ProductoFuente,
     Publicacion,
 )
 
@@ -98,3 +107,65 @@ class OportunidadEstadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Oportunidad
         fields = ["estado"]
+
+
+class PoliticaExtraccionFuenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PoliticaExtraccionFuente
+        fields = "__all__"
+
+
+class FuenteWebSerializer(serializers.ModelSerializer):
+    politica_extraccion = PoliticaExtraccionFuenteSerializer(read_only=True)
+
+    class Meta:
+        model = FuenteWeb
+        fields = "__all__"
+
+
+class CategoriaFuenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CategoriaFuente
+        fields = "__all__"
+
+
+class ProductoCanonicoSerializer(serializers.ModelSerializer):
+    categoria = CategoriaInteresSerializer(read_only=True)
+
+    class Meta:
+        model = ProductoCanonico
+        fields = "__all__"
+
+
+class ProductoFuenteSerializer(serializers.ModelSerializer):
+    fuente_web = FuenteWebSerializer(read_only=True)
+    categoria_fuente = CategoriaFuenteSerializer(read_only=True)
+    producto_canonico = ProductoCanonicoSerializer(read_only=True)
+
+    class Meta:
+        model = ProductoFuente
+        fields = "__all__"
+
+
+class PrecioFuenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PrecioFuente
+        fields = "__all__"
+
+
+class ComparacionPrecioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComparacionPrecio
+        fields = "__all__"
+
+
+class EvaluacionOportunidadMultifuenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EvaluacionOportunidadMultifuente
+        fields = "__all__"
+
+
+class DecisionTecnicaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DecisionTecnica
+        fields = "__all__"

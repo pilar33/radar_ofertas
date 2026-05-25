@@ -251,6 +251,68 @@ Si se confirma restriccion de `/sites/MLA/search`, no se debe usar scraping. Alt
 - Evaluar acceso partner/oficial si Mercado Libre lo requiere.
 - Mantener Mercado Libre API solo para endpoints permitidos por la app.
 
+## Etapa 3.2 - Base multifuente y documentacion tecnica
+
+Esta etapa consolida el proyecto como Radar Multifuente de Oportunidades Comerciales. Mercado Libre queda documentado como integracion limitada por politicas externas, y el sistema prepara una base propia de fuentes, productos normalizados, precios, comparaciones y decisiones tecnicas.
+
+### Proposito
+
+- No depender de Mercado Libre como fuente automatica principal.
+- Registrar fuentes web y su politica de extraccion antes de automatizar.
+- Preparar conectores permitidos por API, CSV/Excel, catalogos, carga por URL o acuerdos.
+- Crear base para comparacion de precios y dataset futuro.
+
+### Nuevos modelos
+
+- `FuenteWeb`
+- `PoliticaExtraccionFuente`
+- `CategoriaFuente`
+- `ProductoCanonico`
+- `ProductoFuente`
+- `PrecioFuente`
+- `ComparacionPrecio`
+- `EvaluacionOportunidadMultifuente`
+- `DecisionTecnica`
+
+Los modelos originales `Producto`, `PrecioProducto` y `Oportunidad` se mantienen por compatibilidad con las etapas anteriores.
+
+### Inicializar datos multifuente
+
+```bash
+docker compose exec web python manage.py inicializar_multifuente
+```
+
+Este comando crea fuentes iniciales:
+
+- Mercado Libre, marcado como fuente restringida/no automatica principal.
+- Deco Home, como candidata pendiente de revision.
+- Mayoristas/catalogos, como fuente verde para CSV/Excel.
+- Carga asistida, como fuente verde para carga manual o por URL.
+
+Tambien registra la decision tecnica:
+
+```text
+Mercado Libre no sera fuente automatica principal en esta etapa
+```
+
+### Vistas
+
+- http://localhost:8000/fuentes/
+- http://localhost:8000/decisiones-tecnicas/
+
+En Render:
+
+- https://radar-ofertas.onrender.com/fuentes/
+- https://radar-ofertas.onrender.com/decisiones-tecnicas/
+
+### Semaforo de fuentes
+
+- Verde: API oficial, CSV/Excel, feed, catalogo permitido o acuerdo directo.
+- Amarillo: web publica sin API que requiere revision manual antes de automatizar.
+- Rojo: bloqueos persistentes, captcha, login obligatorio, prohibicion explicita o restricciones de terminos.
+
+No se implementa scraping en esta etapa. Primero se documentan fuentes, politicas y riesgos. Los conectores se haran fuente por fuente y solo cuando el metodo sea permitido.
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

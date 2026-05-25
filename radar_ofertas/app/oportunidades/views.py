@@ -7,14 +7,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .forms import MercadoLibreBusquedaForm, OportunidadFiltroForm
-from .models import CategoriaInteres, ConsultaMercadoLibre, MercadoLibreToken, Oportunidad
+from .models import (
+    CategoriaInteres,
+    ConsultaMercadoLibre,
+    DecisionTecnica,
+    FuenteWeb,
+    MercadoLibreToken,
+    Oportunidad,
+    ProductoCanonico,
+    ProductoFuente,
+)
 from .serializers import (
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
+    DecisionTecnicaSerializer,
+    FuenteWebSerializer,
     MeliSincronizarSerializer,
     OportunidadDetalleSerializer,
     OportunidadEstadoSerializer,
     OportunidadSerializer,
+    ProductoCanonicoSerializer,
+    ProductoFuenteSerializer,
 )
 from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
@@ -199,6 +212,35 @@ def oauth_callback(request):
     return redirect("oportunidades:buscar_meli")
 
 
+def lista_fuentes(request):
+    fuentes = FuenteWeb.objects.select_related("politica_extraccion").all()
+    return render(request, "oportunidades/lista_fuentes.html", {"fuentes": fuentes})
+
+
+def detalle_fuente(request, pk):
+    fuente = get_object_or_404(
+        FuenteWeb.objects.select_related("politica_extraccion").prefetch_related(
+            "categorias_fuente",
+            "productos_fuente",
+        ),
+        pk=pk,
+    )
+    decisiones = DecisionTecnica.objects.filter(descripcion__icontains=fuente.nombre)[:10]
+    return render(
+        request,
+        "oportunidades/detalle_fuente.html",
+        {
+            "fuente": fuente,
+            "decisiones": decisiones,
+        },
+    )
+
+
+def lista_decisiones_tecnicas(request):
+    decisiones = DecisionTecnica.objects.all()
+    return render(request, "oportunidades/lista_decisiones_tecnicas.html", {"decisiones": decisiones})
+
+
 def _recalcular_oportunidad(oportunidad):
     evaluacion = clasificar_oportunidad(
         oportunidad.producto,
@@ -368,3 +410,28 @@ class MeliSincronizarAPIView(APIView):
 class MeliConsultasAPIView(generics.ListAPIView):
     queryset = ConsultaMercadoLibre.objects.select_related("categoria").all()
     serializer_class = ConsultaMercadoLibreSerializer
+
+
+class FuenteWebListAPIView(generics.ListAPIView):
+    queryset = FuenteWeb.objects.select_related("politica_extraccion").all()
+    serializer_class = FuenteWebSerializer
+
+
+class FuenteWebDetailAPIView(generics.RetrieveAPIView):
+    queryset = FuenteWeb.objects.select_related("politica_extraccion").all()
+    serializer_class = FuenteWebSerializer
+
+
+class DecisionTecnicaListAPIView(generics.ListAPIView):
+    queryset = DecisionTecnica.objects.all()
+    serializer_class = DecisionTecnicaSerializer
+
+
+class ProductoCanonicoListAPIView(generics.ListAPIView):
+    queryset = ProductoCanonico.objects.select_related("categoria").all()
+    serializer_class = ProductoCanonicoSerializer
+
+
+class ProductoFuenteListAPIView(generics.ListAPIView):
+    queryset = ProductoFuente.objects.select_related("fuente_web", "categoria_fuente", "producto_canonico").all()
+    serializer_class = ProductoFuenteSerializer

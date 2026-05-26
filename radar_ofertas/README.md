@@ -534,6 +534,36 @@ Documentacion:
 
 - `docs/auditoria_fuentes_web.md`
 
+## Etapa 3.7 - Extractor web controlado
+
+Esta etapa agrega un extractor web limitado y auditable para fuentes que ya fueron revisadas. Por defecto todo queda en preview y bloqueado hasta que la politica de la fuente cumpla las condiciones requeridas.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py configurar_extractor_decohome
+docker compose exec web python manage.py preview_decohome
+docker compose exec web python manage.py ejecutar_extractor_web --conector-id ID
+```
+
+URLs:
+
+- http://localhost:8000/extractores/
+- http://localhost:8000/extractores/<id>/
+- http://localhost:8000/scraping/politica/
+
+Aclaraciones:
+
+- No se procesa nada sin habilitacion explicita.
+- No se ejecuta si la politica bloquea la fuente.
+- No se usan proxies, captcha bypass, login automatizado ni scraping masivo.
+- Si el sitio requiere JavaScript, se documenta y se evaluara navegador headless en una etapa posterior.
+- OpenAI sigue pendiente para Etapa 4 bajo demanda.
+
+Documentacion:
+
+- `docs/extractor_web_controlado.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

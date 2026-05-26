@@ -1,3 +1,7 @@
+from decimal import Decimal
+from urllib.parse import urlparse
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -704,6 +708,104 @@ class DetalleEjecucionConector(models.Model):
 
     def __str__(self):
         return f"{self.ejecucion} - {self.estado}"
+
+
+class ConfiguracionExtractorWeb(models.Model):
+    MODO_JSON_LD = "json_ld"
+    MODO_CSS_SELECTORS = "css_selectors"
+    MODO_MIXTO = "mixto"
+    MODO_PREVIEW_MANUAL = "preview_manual"
+    MODO_CHOICES = [
+        (MODO_JSON_LD, "JSON-LD"),
+        (MODO_CSS_SELECTORS, "Selectores CSS"),
+        (MODO_MIXTO, "Mixto"),
+        (MODO_PREVIEW_MANUAL, "Preview manual"),
+    ]
+
+    conector = models.OneToOneField(ConectorFuente, on_delete=models.CASCADE, related_name="configuracion_web")
+    url_inicio = models.URLField()
+    url_categoria = models.URLField(blank=True, null=True)
+    dominio_permitido = models.CharField(max_length=200)
+    modo_extraccion = models.CharField(max_length=30, choices=MODO_CHOICES, default=MODO_PREVIEW_MANUAL)
+    product_card_selector = models.CharField(max_length=255, blank=True, null=True)
+    title_selector = models.CharField(max_length=255, blank=True, null=True)
+    price_selector = models.CharField(max_length=255, blank=True, null=True)
+    url_selector = models.CharField(max_length=255, blank=True, null=True)
+    image_selector = models.CharField(max_length=255, blank=True, null=True)
+    description_selector = models.CharField(max_length=255, blank=True, null=True)
+    next_page_selector = models.CharField(max_length=255, blank=True, null=True)
+    max_paginas = models.PositiveIntegerField(default=1)
+    max_productos = models.PositiveIntegerField(default=20)
+    delay_segundos = models.DecimalField(max_digits=5, decimal_places=2, default=2)
+    timeout_segundos = models.PositiveIntegerField(default=15)
+    habilitado = models.BooleanField(default=False)
+    solo_preview = models.BooleanField(default=True)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "configuracion de extractor web"
+        verbose_name_plural = "configuraciones de extractores web"
+
+    def __str__(self):
+        return f"Extractor {self.conector}"
+
+    def clean(self):
+        errores = {}
+        if self.max_paginas and self.max_paginas > 3:
+            errores["max_paginas"] = "En esta etapa el extractor no puede superar 3 paginas."
+        if self.max_productos and self.max_productos > 50:
+            errores["max_productos"] = "En esta etapa el extractor no puede superar 50 productos."
+        if self.delay_segundos is not None and self.delay_segundos < Decimal("1.50"):
+            errores["delay_segundos"] = "El delay minimo permitido es 1.5 segundos."
+        if self.dominio_permitido:
+            for campo in ["url_inicio", "url_categoria"]:
+                valor = getattr(self, campo)
+                if valor and urlparse(valor).netloc != self.dominio_permitido:
+                    errores[campo] = "La URL debe pertenecer al dominio permitido."
+        if self.modo_extraccion == self.MODO_CSS_SELECTORS:
+            requeridos = ["product_card_selector", "title_selector", "price_selector"]
+            faltantes = [campo for campo in requeridos if not getattr(self, campo)]
+            if faltantes:
+                errores["modo_extraccion"] = "CSS requiere selector de tarjeta, titulo y precio."
+        if errores:
+            raise ValidationError(errores)
+
+
+class ResultadoExtraccionWeb(models.Model):
+    ESTADO_DETECTADO = "detectado"
+    ESTADO_PROCESADO = "procesado"
+    ESTADO_OMITIDO = "omitido"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_DETECTADO, "Detectado"),
+        (ESTADO_PROCESADO, "Procesado"),
+        (ESTADO_OMITIDO, "Omitido"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    ejecucion = models.ForeignKey(EjecucionConector, on_delete=models.CASCADE, related_name="resultados_web")
+    titulo = models.CharField(max_length=255, blank=True, null=True)
+    precio_texto = models.CharField(max_length=100, blank=True, null=True)
+    precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    url_producto = models.URLField(blank=True, null=True)
+    imagen_url = models.URLField(blank=True, null=True)
+    descripcion = models.TextField(blank=True, null=True)
+    fuente_url = models.URLField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_DETECTADO)
+    mensaje = models.TextField(blank=True, null=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    raw_data = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "resultado de extraccion web"
+        verbose_name_plural = "resultados de extraccion web"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return self.titulo or f"Resultado #{self.pk}"
 
 
 class ImportacionProductos(models.Model):

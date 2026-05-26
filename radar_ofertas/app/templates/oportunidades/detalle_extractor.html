@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Extractor{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ extractor.conector.nombre }}</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_extractores' %}">Volver</a>
+</div>
+
+<div class="alert alert-{% if validacion.nivel == 'ok' %}success{% else %}danger{% endif %}">{{ validacion.mensaje }}</div>
+
+<div class="bg-white border rounded p-3 mb-3">
+  <div class="row">
+    <div class="col-md-3"><strong>Dominio</strong><br>{{ extractor.dominio_permitido }}</div>
+    <div class="col-md-3"><strong>Modo</strong><br>{{ extractor.get_modo_extraccion_display }}</div>
+    <div class="col-md-3"><strong>Habilitado</strong><br>{{ extractor.habilitado|yesno:"Si,No" }}</div>
+    <div class="col-md-3"><strong>Solo preview</strong><br>{{ extractor.solo_preview|yesno:"Si,No" }}</div>
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <form method="post" action="{% url 'oportunidades:preview_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Ejecutar preview</button></form>
+    <form method="post" action="{% url 'oportunidades:procesar_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-warning btn-sm">Procesar resultados</button></form>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'oportunidades:editar_extractor' extractor.pk %}">Editar</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Ejecuciones</h2>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Inicio</th><th>Estado</th><th>Detectados</th><th>Errores</th></tr></thead>
+        <tbody>
+          {% for ejecucion in ejecuciones %}
+            <tr><td>{{ ejecucion.inicio|date:"d/m/Y H:i" }}</td><td>{{ ejecucion.get_estado_display }}</td><td>{{ ejecucion.productos_detectados }}</td><td>{{ ejecucion.errores }}</td></tr>
+          {% empty %}<tr><td colspan="4" class="text-muted">Sin ejecuciones.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="bg-white border rounded p-3 h-100">
+      <h2 class="h5">Resultados recientes</h2>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Titulo</th><th>Precio</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for resultado in resultados %}
+            <tr><td>{{ resultado.titulo|default:"-" }}</td><td>{{ resultado.precio_decimal }}</td><td>{{ resultado.get_estado_display }}</td></tr>
+          {% empty %}<tr><td colspan="3" class="text-muted">Sin resultados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

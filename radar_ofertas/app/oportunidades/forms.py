@@ -1,6 +1,14 @@
 from django import forms
 
-from .models import CategoriaInteres, ConectorFuente, FuenteWeb, Oportunidad, PoliticaExtraccionFuente, PrecioFuente
+from .models import (
+    CategoriaInteres,
+    ConectorFuente,
+    ConfiguracionExtractorWeb,
+    FuenteWeb,
+    Oportunidad,
+    PoliticaExtraccionFuente,
+    PrecioFuente,
+)
 
 
 class OportunidadFiltroForm(forms.Form):
@@ -220,4 +228,67 @@ class ConectorCatalogoForm(forms.Form):
             politica = getattr(fuente, "politica_extraccion", None)
             if not autorizado and not (politica and politica.semaforo == PoliticaExtraccionFuente.SEMAFORO_VERDE):
                 raise forms.ValidationError("Para conectores remotos se requiere autorizacion de uso o fuente verde.")
+        return cleaned_data
+
+
+class ConfiguracionExtractorWebForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracionExtractorWeb
+        fields = [
+            "url_inicio",
+            "url_categoria",
+            "dominio_permitido",
+            "modo_extraccion",
+            "product_card_selector",
+            "title_selector",
+            "price_selector",
+            "url_selector",
+            "image_selector",
+            "description_selector",
+            "next_page_selector",
+            "max_paginas",
+            "max_productos",
+            "delay_segundos",
+            "timeout_segundos",
+            "habilitado",
+            "solo_preview",
+            "observaciones",
+        ]
+        widgets = {
+            "url_inicio": forms.URLInput(attrs={"class": "form-control"}),
+            "url_categoria": forms.URLInput(attrs={"class": "form-control"}),
+            "dominio_permitido": forms.TextInput(attrs={"class": "form-control"}),
+            "modo_extraccion": forms.Select(attrs={"class": "form-select"}),
+            "product_card_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "title_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "price_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "url_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "image_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "description_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "next_page_selector": forms.TextInput(attrs={"class": "form-control"}),
+            "max_paginas": forms.NumberInput(attrs={"class": "form-control"}),
+            "max_productos": forms.NumberInput(attrs={"class": "form-control"}),
+            "delay_segundos": forms.NumberInput(attrs={"class": "form-control", "step": "0.25"}),
+            "timeout_segundos": forms.NumberInput(attrs={"class": "form-control"}),
+            "habilitado": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "solo_preview": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        modo = cleaned_data.get("modo_extraccion")
+        max_paginas = cleaned_data.get("max_paginas") or 1
+        max_productos = cleaned_data.get("max_productos") or 20
+        delay = cleaned_data.get("delay_segundos")
+        if max_paginas > 3:
+            raise forms.ValidationError("max_paginas no puede superar 3 en esta etapa.")
+        if max_productos > 50:
+            raise forms.ValidationError("max_productos no puede superar 50 en esta etapa.")
+        if delay is not None and delay < 1.5:
+            raise forms.ValidationError("delay_segundos debe ser al menos 1.5.")
+        if modo == ConfiguracionExtractorWeb.MODO_CSS_SELECTORS:
+            for field in ["product_card_selector", "title_selector", "price_selector"]:
+                if not cleaned_data.get(field):
+                    raise forms.ValidationError("CSS selectors requiere tarjeta, titulo y precio.")
         return cleaned_data

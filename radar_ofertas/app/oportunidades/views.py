@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from .forms import (
     CargaProductoURLForm,
+    ConfiguracionExtractorWebForm,
     ConectorCatalogoForm,
     ImportacionProductosForm,
     MercadoLibreBusquedaForm,
@@ -17,6 +18,7 @@ from .forms import (
 from .models import (
     AuditoriaFuenteWeb,
     CategoriaInteres,
+    ConfiguracionExtractorWeb,
     ConsultaMercadoLibre,
     DecisionTecnica,
     DetalleImportacionProducto,
@@ -28,11 +30,13 @@ from .models import (
     PrecioFuente,
     ProductoCanonico,
     ProductoFuente,
+    ResultadoExtraccionWeb,
 )
 from .serializers import (
     CargaProductoURLSerializer,
     AuditoriaFuenteWebSerializer,
     ConectorFuenteSerializer,
+    ConfiguracionExtractorWebSerializer,
     ContenidoSugeridoSerializer,
     ConsultaMercadoLibreSerializer,
     DecisionTecnicaSerializer,
@@ -47,6 +51,7 @@ from .serializers import (
     ProductoCanonicoSerializer,
     ProductoFuenteSerializer,
     ProductoMultifuenteSerializer,
+    ResultadoExtraccionWebSerializer,
 )
 from oportunidades.management.commands.preparar_decohome import preparar_decohome
 from .services.auditoria_fuentes_service import (
@@ -66,6 +71,7 @@ from .services.importacion_service import (
 from .models import ConectorFuente, EjecucionConector
 from .services.conectores_service import validar_conector_segun_politica
 from .services.conector_catalogo_service import ejecutar_conector_catalogo, validar_conector_catalogo
+from .services.extractor_web_service import extraer_productos_preview, validar_ejecucion_extractor
 from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
     buscar_productos,
@@ -322,6 +328,67 @@ def auditar_decohome_view(request):
 
 def politica_scraping(request):
     return render(request, "oportunidades/politica_scraping.html")
+
+
+def lista_extractores(request):
+    extractores = ConfiguracionExtractorWeb.objects.select_related("conector", "conector__fuente_web").all()
+    datos = [(extractor, validar_ejecucion_extractor(extractor.conector)) for extractor in extractores]
+    return render(request, "oportunidades/lista_extractores.html", {"datos_extractores": datos})
+
+
+def detalle_extractor(request, pk):
+    extractor = get_object_or_404(
+        ConfiguracionExtractorWeb.objects.select_related(
+            "conector",
+            "conector__fuente_web",
+            "conector__fuente_web__politica_extraccion",
+        ),
+        pk=pk,
+    )
+    ejecuciones = extractor.conector.ejecuciones.prefetch_related("resultados_web").all()[:10]
+    resultados = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector)[:20]
+    return render(
+        request,
+        "oportunidades/detalle_extractor.html",
+        {
+            "extractor": extractor,
+            "validacion": validar_ejecucion_extractor(extractor.conector),
+            "ejecuciones": ejecuciones,
+            "resultados": resultados,
+        },
+    )
+
+
+def editar_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+    form = ConfiguracionExtractorWebForm(request.POST or None, instance=extractor)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Configuracion de extractor actualizada.")
+        return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+    return render(request, "oportunidades/editar_extractor.html", {"form": form, "extractor": extractor})
+
+
+@require_POST
+def preview_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    ejecucion = extraer_productos_preview(extractor.conector, procesar=False)
+    if ejecucion.errores:
+        messages.error(request, ejecucion.mensaje)
+    else:
+        messages.success(request, ejecucion.mensaje)
+    return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+
+
+@require_POST
+def procesar_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    ejecucion = extraer_productos_preview(extractor.conector, procesar=True)
+    if ejecucion.errores:
+        messages.error(request, ejecucion.mensaje)
+    else:
+        messages.success(request, ejecucion.mensaje)
+    return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
 
 
 def lista_decisiones_tecnicas(request):
@@ -843,6 +910,30 @@ class DecoHomeAuditarAPIView(APIView):
         fuente, _ = preparar_decohome()
         auditoria = auditar_fuente_basica(fuente)
         return Response(AuditoriaFuenteWebSerializer(auditoria).data, status=status.HTTP_201_CREATED)
+
+
+class ConfiguracionExtractorWebListAPIView(generics.ListAPIView):
+    queryset = ConfiguracionExtractorWeb.objects.select_related("conector", "conector__fuente_web").all()
+    serializer_class = ConfiguracionExtractorWebSerializer
+
+
+class ConfiguracionExtractorWebDetailAPIView(generics.RetrieveAPIView):
+    queryset = ConfiguracionExtractorWeb.objects.select_related("conector", "conector__fuente_web").all()
+    serializer_class = ConfiguracionExtractorWebSerializer
+
+
+class ExtractorPreviewAPIView(APIView):
+    def post(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+        ejecucion = extraer_productos_preview(extractor.conector, procesar=False)
+        return Response(EjecucionConectorSerializer(ejecucion).data, status=status.HTTP_200_OK)
+
+
+class ExtractorProcesarAPIView(APIView):
+    def post(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+        ejecucion = extraer_productos_preview(extractor.conector, procesar=True)
+        return Response(EjecucionConectorSerializer(ejecucion).data, status=status.HTTP_200_OK)
 
 
 class ImportacionProductosListCreateAPIView(generics.ListCreateAPIView):

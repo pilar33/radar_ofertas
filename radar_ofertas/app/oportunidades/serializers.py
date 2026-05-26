@@ -6,6 +6,7 @@ from .models import (
     CategoriaFuente,
     ComparacionPrecio,
     ConectorFuente,
+    ConfiguracionExtractorWeb,
     ConsultaMercadoLibre,
     ContenidoSugerido,
     DecisionTecnica,
@@ -25,6 +26,7 @@ from .models import (
     ProductoFuente,
     Publicacion,
     RecursoFuenteDetectado,
+    ResultadoExtraccionWeb,
 )
 
 
@@ -270,6 +272,20 @@ class AuditoriaFuenteWebSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditoriaFuenteWeb
+        fields = "__all__"
+
+
+class ConfiguracionExtractorWebSerializer(serializers.ModelSerializer):
+    conector = ConectorFuenteSerializer(read_only=True)
+
+    class Meta:
+        model = ConfiguracionExtractorWeb
+        fields = "__all__"
+
+
+class ResultadoExtraccionWebSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResultadoExtraccionWeb
         fields = "__all__"
 
 

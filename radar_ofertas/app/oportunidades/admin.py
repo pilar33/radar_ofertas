@@ -6,6 +6,7 @@ from .models import (
     CategoriaFuente,
     ComparacionPrecio,
     ConectorFuente,
+    ConfiguracionExtractorWeb,
     ContenidoSugerido,
     ConsultaMercadoLibre,
     DecisionTecnica,
@@ -26,6 +27,7 @@ from .models import (
     ProductoFuente,
     Publicacion,
     RecursoFuenteDetectado,
+    ResultadoExtraccionWeb,
 )
 
 
@@ -283,3 +285,26 @@ class DetalleEjecucionConectorAdmin(admin.ModelAdmin):
     list_display = ("ejecucion", "estado", "producto_fuente", "fecha_creacion")
     list_filter = ("estado",)
     search_fields = ("mensaje", "datos_originales")
+
+
+@admin.register(ConfiguracionExtractorWeb)
+class ConfiguracionExtractorWebAdmin(admin.ModelAdmin):
+    list_display = (
+        "conector",
+        "dominio_permitido",
+        "modo_extraccion",
+        "habilitado",
+        "solo_preview",
+        "max_paginas",
+        "max_productos",
+        "delay_segundos",
+    )
+    list_filter = ("modo_extraccion", "habilitado", "solo_preview")
+    search_fields = ("conector__nombre", "conector__fuente_web__nombre", "dominio_permitido")
+
+
+@admin.register(ResultadoExtraccionWeb)
+class ResultadoExtraccionWebAdmin(admin.ModelAdmin):
+    list_display = ("ejecucion", "titulo", "precio_decimal", "estado", "fecha_creacion")
+    list_filter = ("estado", "ejecucion__conector__fuente_web")
+    search_fields = ("titulo", "url_producto", "mensaje")

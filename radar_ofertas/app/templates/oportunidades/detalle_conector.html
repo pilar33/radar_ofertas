@@ -34,6 +34,9 @@
       {% csrf_token %}
       <button class="btn btn-success btn-sm">Ejecutar conector</button>
     </form>
+    {% if conector.configuracion_web %}
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'oportunidades:detalle_extractor' conector.configuracion_web.pk %}">Ver extractor</a>
+    {% endif %}
   </div>
 </div>
 

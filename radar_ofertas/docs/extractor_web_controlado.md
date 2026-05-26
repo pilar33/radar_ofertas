@@ -94,3 +94,18 @@ docker compose exec web python manage.py ejecutar_extractor_web --conector-id ID
 - `max_productos=10`
 
 Antes de habilitar el extractor se deben revisar manualmente terminos, robots.txt y selectores reales.
+
+## Etapa 3.8 - Selectores y preview controlado
+
+La etapa 3.8 agrega revision manual de terminos/robots, configuracion de `pagina_prueba_url`, diagnostico de HTML y prueba de selectores sin procesar productos.
+
+El preview queda bloqueado si faltan:
+
+- terminos revisados;
+- robots revisado;
+- semaforo verde o amarillo;
+- `permite_scraping=True`;
+- conector activo;
+- configuracion habilitada.
+
+Los resultados detectados se guardan como `ResultadoExtraccionWeb` y sirven para revisar muestras antes de decidir si una etapa futura debe procesarlos como `ProductoFuente`.

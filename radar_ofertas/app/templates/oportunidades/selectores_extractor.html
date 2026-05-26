@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Selectores extractor{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <a class="text-decoration-none" href="{% url 'oportunidades:detalle_extractor' extractor.pk %}">Volver al extractor</a>
+    <h1 class="h3 mt-2 mb-0">Selectores - {{ extractor.conector.nombre }}</h1>
+  </div>
+  <form method="post" action="{% url 'oportunidades:probar_selectores_extractor' extractor.pk %}">
+    {% csrf_token %}
+    <button class="btn btn-outline-primary">Probar preview</button>
+  </form>
+</div>
+
+<div class="alert alert-info">
+  Usar selectores CSS copiados desde inspeccionar elemento. Para modo JSON-LD no hacen falta selectores. El preview no procesa productos.
+</div>
+
+<form method="post" class="bg-white border rounded p-3">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <div class="row g-3">
+    {% for field in form %}
+      <div class="{% if field.name == 'observaciones' %}col-12{% else %}col-md-6{% endif %}">
+        {% if field.field.widget.input_type == "checkbox" %}
+          <div class="form-check mt-4">{{ field }} <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+        {% else %}
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+        {% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="mt-3">
+    <button class="btn btn-primary">Guardar selectores</button>
+  </div>
+</form>
+{% endblock %}

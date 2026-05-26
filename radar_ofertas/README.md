@@ -564,6 +564,41 @@ Documentacion:
 
 - `docs/extractor_web_controlado.md`
 
+## Etapa 3.8 - Revision manual, selectores reales y preview controlado
+
+Esta etapa permite registrar revisiones manuales de terminos/robots, configurar una URL concreta de prueba y probar selectores reales sin procesar productos automaticamente.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py registrar_revision_decohome --tipo terminos --resultado dudoso --url "URL" --resumen "..." --decision "..." --aplicar
+docker compose exec web python manage.py configurar_selectores_decohome --pagina-prueba "URL"
+docker compose exec web python manage.py probar_selectores_extractor --extractor-id ID
+docker compose exec web python manage.py preview_decohome
+```
+
+URLs:
+
+- http://localhost:8000/fuentes/
+- http://localhost:8000/fuentes/<id>/revision-manual/nueva/
+- http://localhost:8000/extractores/
+- http://localhost:8000/extractores/<id>/selectores/
+- http://localhost:8000/extractores/<id>/probar-selectores/
+- http://localhost:8000/fuentes/decohome/selectores/
+
+Aclaraciones:
+
+- No se ejecuta si no se revisaron terminos.
+- No se ejecuta si robots no esta revisado.
+- No se ejecuta si el semaforo no permite.
+- Si requiere JavaScript, se documenta y queda para etapa posterior.
+- No se procesa nada como producto sin accion explicita.
+- OpenAI sigue pendiente para Etapa 4.
+
+Documentacion:
+
+- `docs/configuracion_selectores_decohome.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

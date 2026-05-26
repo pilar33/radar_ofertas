@@ -26,6 +26,7 @@ from .models import (
     ProductoFuente,
     Publicacion,
     RecursoFuenteDetectado,
+    RevisionManualFuente,
     ResultadoExtraccionWeb,
 )
 
@@ -286,6 +287,12 @@ class ConfiguracionExtractorWebSerializer(serializers.ModelSerializer):
 class ResultadoExtraccionWebSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResultadoExtraccionWeb
+        fields = "__all__"
+
+
+class RevisionManualFuenteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RevisionManualFuente
         fields = "__all__"
 
 

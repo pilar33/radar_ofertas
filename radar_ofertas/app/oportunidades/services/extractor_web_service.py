@@ -37,7 +37,10 @@ HEADERS = {
 
 def validar_ejecucion_extractor(conector):
     politica = getattr(conector.fuente_web, "politica_extraccion", None)
-    config = getattr(conector, "configuracion_web", None)
+    try:
+        config = conector.configuracion_web
+    except ConfiguracionExtractorWeb.DoesNotExist:
+        config = None
     if conector.tipo_conector != "scraping_permitido":
         return {"valido": False, "mensaje": "El conector no es scraping_permitido.", "nivel": "bloqueado"}
     if conector.estado != "activo":
@@ -68,12 +71,53 @@ def validar_ejecucion_extractor(conector):
         return {"valido": False, "mensaje": "La configuracion del extractor no esta habilitada.", "nivel": "bloqueado"}
     if config.max_paginas > 3 or config.max_productos > 50 or config.delay_segundos < Decimal("1.50"):
         return {"valido": False, "mensaje": "Limites de paginas/productos/delay fuera de rango.", "nivel": "bloqueado"}
-    for url in [config.url_inicio, config.url_categoria]:
+    for url in [config.pagina_prueba_url, config.url_inicio, config.url_categoria]:
         if url:
             parsed = urlparse(url)
             if parsed.netloc != config.dominio_permitido:
                 return {"valido": False, "mensaje": "URL fuera del dominio permitido.", "nivel": "bloqueado"}
     return {"valido": True, "mensaje": "Extractor habilitado para ejecucion controlada.", "nivel": "ok"}
+
+
+def obtener_condiciones_faltantes_extractor(conector):
+    condiciones = []
+    politica = getattr(conector.fuente_web, "politica_extraccion", None)
+    try:
+        config = conector.configuracion_web
+    except ConfiguracionExtractorWeb.DoesNotExist:
+        config = None
+
+    if conector.tipo_conector != "scraping_permitido":
+        condiciones.append("tipo_conector debe ser scraping_permitido")
+    if conector.estado != "activo":
+        condiciones.append("ConectorFuente.estado debe ser activo")
+    if not conector.fuente_web.activa:
+        condiciones.append("FuenteWeb.activa debe ser True")
+    if not politica:
+        condiciones.append("falta PoliticaExtraccionFuente")
+    else:
+        if politica.semaforo not in {PoliticaExtraccionFuente.SEMAFORO_VERDE, PoliticaExtraccionFuente.SEMAFORO_AMARILLO}:
+            condiciones.append("semaforo debe ser verde o amarillo")
+        if not politica.permite_scraping:
+            condiciones.append("permite_scraping debe ser True")
+        if not politica.robots_txt_revisado:
+            condiciones.append("robots_txt_revisado debe ser True")
+        if not politica.terminos_revisados:
+            condiciones.append("terminos_revisados debe ser True")
+        if politica.requiere_login:
+            condiciones.append("requiere_login debe ser False")
+        if politica.tiene_captcha:
+            condiciones.append("tiene_captcha debe ser False")
+    if not conector.respeta_politica_fuente:
+        condiciones.append("respeta_politica_fuente debe ser True")
+    if conector.requiere_revision_manual:
+        condiciones.append("requiere_revision_manual debe ser False o autorizacion explicita")
+    if not config:
+        condiciones.append("falta ConfiguracionExtractorWeb")
+    else:
+        if not config.habilitado:
+            condiciones.append("ConfiguracionExtractorWeb.habilitado debe ser True")
+    return condiciones
 
 
 def normalizar_url_absoluta(url_base, url, dominio_permitido=None):

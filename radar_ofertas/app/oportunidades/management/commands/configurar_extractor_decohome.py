@@ -14,6 +14,7 @@ def configurar_extractor_decohome():
     config, creado = ConfiguracionExtractorWeb.objects.update_or_create(
         conector=conector,
         defaults={
+            "pagina_prueba_url": url_base,
             "url_inicio": url_base,
             "url_categoria": "",
             "dominio_permitido": dominio,

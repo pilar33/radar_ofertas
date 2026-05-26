@@ -575,6 +575,52 @@ class RecursoFuenteDetectado(models.Model):
         return f"{self.tipo_recurso} - {self.url}"
 
 
+class RevisionManualFuente(models.Model):
+    TIPO_TERMINOS = "terminos"
+    TIPO_ROBOTS = "robots"
+    TIPO_PRIVACIDAD = "privacidad"
+    TIPO_COMERCIAL = "comercial"
+    TIPO_OTRA = "otra"
+    TIPO_CHOICES = [
+        (TIPO_TERMINOS, "Terminos"),
+        (TIPO_ROBOTS, "Robots"),
+        (TIPO_PRIVACIDAD, "Privacidad"),
+        (TIPO_COMERCIAL, "Comercial"),
+        (TIPO_OTRA, "Otra"),
+    ]
+
+    RESULTADO_PERMITE = "permite"
+    RESULTADO_PROHIBE = "prohibe"
+    RESULTADO_DUDOSO = "dudoso"
+    RESULTADO_NO_ENCONTRADO = "no_encontrado"
+    RESULTADO_PENDIENTE = "pendiente"
+    RESULTADO_CHOICES = [
+        (RESULTADO_PERMITE, "Permite"),
+        (RESULTADO_PROHIBE, "Prohibe"),
+        (RESULTADO_DUDOSO, "Dudoso"),
+        (RESULTADO_NO_ENCONTRADO, "No encontrado"),
+        (RESULTADO_PENDIENTE, "Pendiente"),
+    ]
+
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.CASCADE, related_name="revisiones_manuales")
+    tipo_revision = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    url_revisada = models.URLField(blank=True, null=True)
+    resultado = models.CharField(max_length=30, choices=RESULTADO_CHOICES, default=RESULTADO_PENDIENTE)
+    resumen = models.TextField()
+    decision = models.TextField(blank=True, null=True)
+    revisado_por = models.CharField(max_length=150, blank=True, null=True)
+    fecha_revision = models.DateTimeField(auto_now_add=True)
+    aplicar_a_politica = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "revision manual de fuente"
+        verbose_name_plural = "revisiones manuales de fuentes"
+        ordering = ["-fecha_revision"]
+
+    def __str__(self):
+        return f"{self.fuente_web} - {self.tipo_revision} - {self.resultado}"
+
+
 class ConectorFuente(models.Model):
     TIPO_CSV_MANUAL = "csv_manual"
     TIPO_EXCEL_MANUAL = "excel_manual"
@@ -723,6 +769,7 @@ class ConfiguracionExtractorWeb(models.Model):
     ]
 
     conector = models.OneToOneField(ConectorFuente, on_delete=models.CASCADE, related_name="configuracion_web")
+    pagina_prueba_url = models.URLField(blank=True, null=True)
     url_inicio = models.URLField()
     url_categoria = models.URLField(blank=True, null=True)
     dominio_permitido = models.CharField(max_length=200)
@@ -740,6 +787,10 @@ class ConfiguracionExtractorWeb(models.Model):
     timeout_segundos = models.PositiveIntegerField(default=15)
     habilitado = models.BooleanField(default=False)
     solo_preview = models.BooleanField(default=True)
+    requiere_js_detectado = models.BooleanField(default=False)
+    ultimo_preview_ok = models.BooleanField(default=False)
+    ultimo_preview_mensaje = models.TextField(blank=True, null=True)
+    ultima_revision_selectores = models.DateTimeField(blank=True, null=True)
     observaciones = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
@@ -760,10 +811,12 @@ class ConfiguracionExtractorWeb(models.Model):
         if self.delay_segundos is not None and self.delay_segundos < Decimal("1.50"):
             errores["delay_segundos"] = "El delay minimo permitido es 1.5 segundos."
         if self.dominio_permitido:
-            for campo in ["url_inicio", "url_categoria"]:
+            for campo in ["pagina_prueba_url", "url_inicio", "url_categoria"]:
                 valor = getattr(self, campo)
                 if valor and urlparse(valor).netloc != self.dominio_permitido:
                     errores[campo] = "La URL debe pertenecer al dominio permitido."
+                if valor and valor.strip().lower().startswith(("javascript:", "data:", "mailto:")):
+                    errores[campo] = "La URL no puede usar esquemas javascript, data o mailto."
         if self.modo_extraccion == self.MODO_CSS_SELECTORS:
             requeridos = ["product_card_selector", "title_selector", "price_selector"]
             faltantes = [campo for campo in requeridos if not getattr(self, campo)]

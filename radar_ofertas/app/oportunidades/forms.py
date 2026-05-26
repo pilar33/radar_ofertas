@@ -1,3 +1,6 @@
+from decimal import Decimal
+from urllib.parse import urlparse
+
 from django import forms
 
 from .models import (
@@ -8,6 +11,7 @@ from .models import (
     Oportunidad,
     PoliticaExtraccionFuente,
     PrecioFuente,
+    RevisionManualFuente,
 )
 
 
@@ -231,10 +235,49 @@ class ConectorCatalogoForm(forms.Form):
         return cleaned_data
 
 
+class RevisionManualFuenteForm(forms.ModelForm):
+    class Meta:
+        model = RevisionManualFuente
+        fields = [
+            "fuente_web",
+            "tipo_revision",
+            "url_revisada",
+            "resultado",
+            "resumen",
+            "decision",
+            "aplicar_a_politica",
+        ]
+        widgets = {
+            "fuente_web": forms.Select(attrs={"class": "form-select"}),
+            "tipo_revision": forms.Select(attrs={"class": "form-select"}),
+            "url_revisada": forms.URLInput(attrs={"class": "form-control"}),
+            "resultado": forms.Select(attrs={"class": "form-select"}),
+            "resumen": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "decision": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "aplicar_a_politica": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def clean_resumen(self):
+        resumen = self.cleaned_data.get("resumen", "").strip()
+        if not resumen:
+            raise forms.ValidationError("El resumen es obligatorio.")
+        return resumen
+
+    def clean(self):
+        cleaned_data = super().clean()
+        resultado = cleaned_data.get("resultado")
+        decision = (cleaned_data.get("decision") or "").strip()
+        aplicar = cleaned_data.get("aplicar_a_politica")
+        if resultado == RevisionManualFuente.RESULTADO_PERMITE and aplicar and not decision:
+            raise forms.ValidationError("Para aplicar un resultado permite se requiere una decision explicita.")
+        return cleaned_data
+
+
 class ConfiguracionExtractorWebForm(forms.ModelForm):
     class Meta:
         model = ConfiguracionExtractorWeb
         fields = [
+            "pagina_prueba_url",
             "url_inicio",
             "url_categoria",
             "dominio_permitido",
@@ -255,6 +298,7 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
             "observaciones",
         ]
         widgets = {
+            "pagina_prueba_url": forms.URLInput(attrs={"class": "form-control"}),
             "url_inicio": forms.URLInput(attrs={"class": "form-control"}),
             "url_categoria": forms.URLInput(attrs={"class": "form-control"}),
             "dominio_permitido": forms.TextInput(attrs={"class": "form-control"}),
@@ -278,6 +322,7 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         modo = cleaned_data.get("modo_extraccion")
+        dominio = cleaned_data.get("dominio_permitido")
         max_paginas = cleaned_data.get("max_paginas") or 1
         max_productos = cleaned_data.get("max_productos") or 20
         delay = cleaned_data.get("delay_segundos")
@@ -285,8 +330,16 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
             raise forms.ValidationError("max_paginas no puede superar 3 en esta etapa.")
         if max_productos > 50:
             raise forms.ValidationError("max_productos no puede superar 50 en esta etapa.")
-        if delay is not None and delay < 1.5:
+        if delay is not None and delay < Decimal("1.50"):
             raise forms.ValidationError("delay_segundos debe ser al menos 1.5.")
+        for field in ["pagina_prueba_url", "url_inicio", "url_categoria"]:
+            url = cleaned_data.get(field)
+            if not url:
+                continue
+            if url.strip().lower().startswith(("javascript:", "data:", "mailto:")):
+                raise forms.ValidationError("No se aceptan URLs javascript:, data: ni mailto:.")
+            if dominio and urlparse(url).netloc != dominio:
+                raise forms.ValidationError("Las URLs del extractor deben pertenecer al dominio permitido.")
         if modo == ConfiguracionExtractorWeb.MODO_CSS_SELECTORS:
             for field in ["product_card_selector", "title_selector", "price_selector"]:
                 if not cleaned_data.get(field):

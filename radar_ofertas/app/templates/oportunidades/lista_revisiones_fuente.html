@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Revisiones manuales{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <a class="text-decoration-none" href="{% url 'oportunidades:detalle_fuente' fuente.pk %}">Volver a fuente</a>
+    <h1 class="h3 mt-2 mb-0">Revisiones manuales - {{ fuente.nombre }}</h1>
+  </div>
+  <a class="btn btn-primary" href="{% url 'oportunidades:nueva_revision_fuente' fuente.pk %}">Nueva revision</a>
+</div>
+
+<div class="bg-white border rounded p-3">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Resultado</th><th>Aplicada</th><th>Resumen</th></tr></thead>
+    <tbody>
+      {% for revision in revisiones %}
+        <tr>
+          <td>{{ revision.fecha_revision|date:"d/m/Y H:i" }}</td>
+          <td>{{ revision.get_tipo_revision_display }}</td>
+          <td>{{ revision.get_resultado_display }}</td>
+          <td>{{ revision.aplicar_a_politica|yesno:"Si,No" }}</td>
+          <td>{{ revision.resumen|truncatechars:120 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-muted">Sin revisiones manuales.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -27,6 +27,7 @@ from .models import (
     ProductoFuente,
     Publicacion,
     RecursoFuenteDetectado,
+    RevisionManualFuente,
     ResultadoExtraccionWeb,
 )
 
@@ -218,6 +219,13 @@ class RecursoFuenteDetectadoAdmin(admin.ModelAdmin):
     search_fields = ("url", "observaciones", "auditoria__fuente_web__nombre")
 
 
+@admin.register(RevisionManualFuente)
+class RevisionManualFuenteAdmin(admin.ModelAdmin):
+    list_display = ("fuente_web", "tipo_revision", "resultado", "aplicar_a_politica", "fecha_revision")
+    list_filter = ("tipo_revision", "resultado", "aplicar_a_politica")
+    search_fields = ("fuente_web__nombre", "resumen", "decision")
+
+
 @admin.register(ImportacionProductos)
 class ImportacionProductosAdmin(admin.ModelAdmin):
     list_display = (
@@ -292,9 +300,13 @@ class ConfiguracionExtractorWebAdmin(admin.ModelAdmin):
     list_display = (
         "conector",
         "dominio_permitido",
+        "pagina_prueba_url",
         "modo_extraccion",
         "habilitado",
         "solo_preview",
+        "requiere_js_detectado",
+        "ultimo_preview_ok",
+        "ultima_revision_selectores",
         "max_paginas",
         "max_productos",
         "delay_segundos",

@@ -1,0 +1,24 @@
+from django.core.management.base import BaseCommand, CommandError
+
+from oportunidades.services.wizard_fuentes_service import preparar_fuente_generica
+
+
+class Command(BaseCommand):
+    help = "Prepara una fuente generica con politica inicial y conector web en borrador."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--nombre", required=True)
+        parser.add_argument("--url-base", required=True)
+        parser.add_argument("--rubro", default="")
+
+    def handle(self, *args, **options):
+        if not options["url_base"]:
+            raise CommandError("--url-base es requerido.")
+        fuente, conector, creada, conector_creado = preparar_fuente_generica(
+            options["nombre"],
+            options["url_base"],
+            options["rubro"],
+        )
+        self.stdout.write(self.style.SUCCESS("Fuente generica preparada."))
+        self.stdout.write(f"Fuente ID: {fuente.pk} ({'creada' if creada else 'existente'})")
+        self.stdout.write(f"Conector ID: {conector.pk} ({'creado' if conector_creado else 'existente'})")

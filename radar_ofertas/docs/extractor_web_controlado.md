@@ -109,3 +109,11 @@ El preview queda bloqueado si faltan:
 - configuracion habilitada.
 
 Los resultados detectados se guardan como `ResultadoExtraccionWeb` y sirven para revisar muestras antes de decidir si una etapa futura debe procesarlos como `ProductoFuente`.
+
+## Procesamiento de seleccionados
+
+Desde la etapa 3.9, los resultados preview pueden marcarse como seleccionados y procesarse de forma limitada. El procesamiento crea o vincula productos y precios solo cuando la politica sigue habilitada y el resultado es procesable.
+
+## Diagnostico JS/headless opcional
+
+El diagnostico headless queda deshabilitado por defecto con `ENABLE_HEADLESS_DIAGNOSTIC=False`. Si un sitio parece requerir JavaScript, la recomendacion es documentarlo y evaluar una etapa posterior con navegador headless controlado.

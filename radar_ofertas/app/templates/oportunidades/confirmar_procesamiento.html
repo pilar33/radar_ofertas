@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Confirmar procesamiento{% endblock %}
+
+{% block content %}
+<div class="bg-white border rounded p-4">
+  <h1 class="h3">Confirmar procesamiento</h1>
+  <p><strong>Fuente:</strong> {{ extractor.conector.fuente_web.nombre }}</p>
+  <p><strong>Conector:</strong> {{ extractor.conector.nombre }}</p>
+  <p><strong>Resultados seleccionados:</strong> {{ cantidad }}</p>
+  <div class="alert alert-warning">Se crearan productos y precios en la base propia. Limite de seguridad: 20 resultados por ejecucion.</div>
+  <div class="d-flex gap-2">
+    <form method="post" action="{% url 'oportunidades:procesar_seleccionados_extractor' extractor.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-success">Confirmar procesamiento</button>
+    </form>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:resultados_extractor' extractor.pk %}">Cancelar</a>
+  </div>
+</div>
+{% endblock %}

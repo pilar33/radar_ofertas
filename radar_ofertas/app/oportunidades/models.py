@@ -847,10 +847,14 @@ class ResultadoExtraccionWeb(models.Model):
     descripcion = models.TextField(blank=True, null=True)
     fuente_url = models.URLField(blank=True, null=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_DETECTADO)
+    seleccionado = models.BooleanField(default=False)
+    procesable = models.BooleanField(default=True)
+    motivo_no_procesable = models.TextField(blank=True, null=True)
     mensaje = models.TextField(blank=True, null=True)
     producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
     raw_data = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_procesamiento = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         verbose_name = "resultado de extraccion web"

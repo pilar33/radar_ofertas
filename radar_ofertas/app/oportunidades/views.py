@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django.contrib import messages
 from django.db.models import Count, Max, Prefetch
 from django.http import HttpResponse
@@ -11,6 +13,7 @@ from .forms import (
     CargaProductoURLForm,
     ConfiguracionExtractorWebForm,
     ConectorCatalogoForm,
+    FuenteWizardForm,
     ImportacionProductosForm,
     MercadoLibreBusquedaForm,
     OportunidadFiltroForm,
@@ -81,6 +84,13 @@ from .services.extractor_web_service import (
 )
 from .services.revision_fuentes_service import aplicar_revision_a_politica
 from .services.selector_preview_service import probar_url_preview
+from .services.procesamiento_preview_service import (
+    marcar_resultado_seleccionado,
+    procesar_resultados_seleccionados,
+    validar_resultado_procesable,
+)
+from .services.headless_diagnostic_service import diagnosticar_requiere_headless
+from .services.wizard_fuentes_service import crear_fuente_wizard, preparar_fuente_generica
 from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
     buscar_productos,
@@ -268,6 +278,15 @@ def lista_fuentes(request):
     return render(request, "oportunidades/lista_fuentes.html", {"fuentes": fuentes})
 
 
+def wizard_nueva_fuente(request):
+    form = FuenteWizardForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        fuente, _ = crear_fuente_wizard(form.cleaned_data)
+        messages.success(request, "Fuente creada con politica inicial pendiente de revision.")
+        return redirect("oportunidades:wizard_auditoria_fuente", pk=fuente.pk)
+    return render(request, "oportunidades/wizard_nueva_fuente.html", {"form": form})
+
+
 def detalle_fuente(request, pk):
     fuente = get_object_or_404(
         FuenteWeb.objects.select_related("politica_extraccion").prefetch_related(
@@ -285,6 +304,70 @@ def detalle_fuente(request, pk):
             "decisiones": decisiones,
         },
     )
+
+
+def wizard_auditoria_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    auditoria = fuente.auditorias.first()
+    return render(request, "oportunidades/wizard_auditoria_fuente.html", {"fuente": fuente, "auditoria": auditoria})
+
+
+def wizard_revision_fuente(request, pk):
+    return nueva_revision_fuente(request, pk)
+
+
+def wizard_conector_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    conector, _ = ConectorFuente.objects.get_or_create(
+        fuente_web=fuente,
+        nombre=f"{fuente.nombre} - Conector web pendiente",
+        defaults={
+            "tipo_conector": ConectorFuente.TIPO_SCRAPING_PERMITIDO,
+            "estado": ConectorFuente.ESTADO_BORRADOR,
+            "requiere_revision_manual": True,
+            "respeta_politica_fuente": False,
+        },
+    )
+    messages.success(request, "Conector base creado en borrador.")
+    return redirect("oportunidades:detalle_conector", pk=conector.pk)
+
+
+def wizard_extractor_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    conector = fuente.conectores.filter(tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO).first()
+    if not conector:
+        messages.warning(request, "Primero crea el conector del wizard.")
+        return redirect("oportunidades:wizard_conector_fuente", pk=fuente.pk)
+    extractor, _ = ConfiguracionExtractorWeb.objects.get_or_create(
+        conector=conector,
+        defaults={
+            "url_inicio": fuente.url_base,
+            "pagina_prueba_url": fuente.url_base,
+            "dominio_permitido": urlparse(fuente.url_base).netloc,
+            "modo_extraccion": ConfiguracionExtractorWeb.MODO_PREVIEW_MANUAL,
+            "habilitado": False,
+            "solo_preview": True,
+        },
+    )
+    return redirect("oportunidades:selectores_extractor", pk=extractor.pk)
+
+
+def wizard_preview_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    extractor = ConfiguracionExtractorWeb.objects.filter(conector__fuente_web=fuente).first()
+    if not extractor:
+        messages.warning(request, "Primero configura el extractor.")
+        return redirect("oportunidades:wizard_extractor_fuente", pk=fuente.pk)
+    return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+
+
+def wizard_procesar_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    extractor = ConfiguracionExtractorWeb.objects.filter(conector__fuente_web=fuente).first()
+    if not extractor:
+        messages.warning(request, "No hay extractor configurado.")
+        return redirect("oportunidades:detalle_fuente", pk=fuente.pk)
+    return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
 
 
 def lista_revisiones_fuente(request, pk):
@@ -432,6 +515,92 @@ def probar_selectores_extractor(request, pk):
         request,
         "oportunidades/resultado_preview_selectores.html",
         {"extractor": extractor, "resultado": resultado},
+    )
+
+
+def resultados_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    ejecucion = extractor.conector.ejecuciones.prefetch_related("resultados_web").first()
+    resultados = ejecucion.resultados_web.all() if ejecucion else ResultadoExtraccionWeb.objects.none()
+    validaciones = [(resultado, validar_resultado_procesable(resultado)) for resultado in resultados]
+    return render(
+        request,
+        "oportunidades/resultados_extractor.html",
+        {"extractor": extractor, "ejecucion": ejecucion, "validaciones": validaciones},
+    )
+
+
+@require_POST
+def seleccionar_resultado_extractor(request, resultado_id):
+    resultado = get_object_or_404(ResultadoExtraccionWeb.objects.select_related("ejecucion__conector"), pk=resultado_id)
+    seleccionado = request.POST.get("seleccionado") != "0"
+    marcar_resultado_seleccionado(resultado.pk, seleccionado)
+    messages.success(request, "Seleccion actualizada.")
+    return redirect("oportunidades:resultados_extractor", pk=resultado.ejecucion.conector.configuracion_web.pk)
+
+
+@require_POST
+def limpiar_seleccion_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+    ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector).update(seleccionado=False)
+    messages.success(request, "Seleccion limpiada.")
+    return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
+
+
+@require_POST
+def seleccionar_todos_procesables_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+    actualizados = 0
+    for resultado in ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector):
+        if validar_resultado_procesable(resultado)["valido"]:
+            resultado.seleccionado = True
+            resultado.save(update_fields=["seleccionado"])
+            actualizados += 1
+    messages.success(request, f"{actualizados} resultados procesables seleccionados.")
+    return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
+
+
+def confirmar_procesamiento_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    cantidad = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector, seleccionado=True).count()
+    return render(
+        request,
+        "oportunidades/confirmar_procesamiento.html",
+        {"extractor": extractor, "cantidad": cantidad},
+    )
+
+
+@require_POST
+def procesar_seleccionados_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    ejecucion = extractor.conector.ejecuciones.first()
+    if not ejecucion:
+        messages.warning(request, "No hay ejecucion con resultados.")
+        return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+    resumen = procesar_resultados_seleccionados(ejecucion, limite=20)
+    messages.success(
+        request,
+        f"Procesados={resumen['procesados']}, errores={resumen['errores']}, precios={resumen['precios_creados']}.",
+    )
+    return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
+
+
+def diagnostico_js_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+    diagnostico = diagnosticar_requiere_headless(extractor)
+    return render(request, "oportunidades/diagnostico_js_extractor.html", {"extractor": extractor, "diagnostico": diagnostico})
+
+
+def estado_operativo_decohome(request):
+    fuente, _ = preparar_decohome()
+    conector = fuente.conectores.filter(tipo_conector=ConectorFuente.TIPO_SCRAPING_PERMITIDO).first()
+    extractor = ConfiguracionExtractorWeb.objects.filter(conector=conector).first() if conector else None
+    faltantes = obtener_condiciones_faltantes_extractor(conector) if conector else ["falta conector"]
+    resultados = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=conector)[:20] if conector else []
+    return render(
+        request,
+        "oportunidades/estado_operativo_decohome.html",
+        {"fuente": fuente, "conector": conector, "extractor": extractor, "faltantes": faltantes, "resultados": resultados},
     )
 
 
@@ -1055,6 +1224,54 @@ class ExtractorProbarSelectoresAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ExtractorResultadosAPIView(generics.ListAPIView):
+    serializer_class = ResultadoExtraccionWebSerializer
+
+    def get_queryset(self):
+        return ResultadoExtraccionWeb.objects.filter(ejecucion__conector__configuracion_web_id=self.kwargs["pk"])
+
+
+class ResultadoSeleccionarAPIView(APIView):
+    def post(self, request, resultado_id):
+        seleccionado = bool(request.data.get("seleccionado", True))
+        resultado = marcar_resultado_seleccionado(resultado_id, seleccionado)
+        return Response(ResultadoExtraccionWebSerializer(resultado).data, status=status.HTTP_200_OK)
+
+
+class ExtractorProcesarSeleccionadosAPIView(APIView):
+    def post(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+        ejecucion = extractor.conector.ejecuciones.first()
+        if not ejecucion:
+            return Response({"detail": "No hay ejecucion con resultados."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(procesar_resultados_seleccionados(ejecucion), status=status.HTTP_200_OK)
+
+
+class ExtractorDiagnosticoJSAPIView(APIView):
+    def get(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+        return Response(diagnosticar_requiere_headless(extractor), status=status.HTTP_200_OK)
+
+
+class FuenteWizardNuevaAPIView(APIView):
+    def post(self, request):
+        form = FuenteWizardForm(request.data)
+        if not form.is_valid():
+            return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
+        fuente, _ = crear_fuente_wizard(form.cleaned_data)
+        return Response(FuenteWebSerializer(fuente).data, status=status.HTTP_201_CREATED)
+
+
+class FuenteGenericaPrepararAPIView(APIView):
+    def post(self, request):
+        nombre = request.data.get("nombre")
+        url_base = request.data.get("url_base")
+        if not nombre or not url_base:
+            return Response({"detail": "nombre y url_base son requeridos."}, status=status.HTTP_400_BAD_REQUEST)
+        fuente, conector, _, _ = preparar_fuente_generica(nombre, url_base, request.data.get("rubro", ""))
+        return Response({"fuente": FuenteWebSerializer(fuente).data, "conector": ConectorFuenteSerializer(conector).data})
 
 
 class ImportacionProductosListCreateAPIView(generics.ListCreateAPIView):

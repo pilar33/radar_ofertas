@@ -39,7 +39,8 @@
   <div class="d-flex gap-2 mt-3">
     <form method="post" action="{% url 'oportunidades:preview_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Ejecutar preview</button></form>
     <form method="post" action="{% url 'oportunidades:probar_selectores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Probar selectores</button></form>
-    <form method="post" action="{% url 'oportunidades:procesar_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-warning btn-sm">Procesar resultados</button></form>
+    <a class="btn btn-warning btn-sm" href="{% url 'oportunidades:resultados_extractor' extractor.pk %}">Resultados preview</a>
+    <a class="btn btn-outline-info btn-sm" href="{% url 'oportunidades:diagnostico_js_extractor' extractor.pk %}">Diagnostico JS</a>
     <a class="btn btn-outline-secondary btn-sm" href="{% url 'oportunidades:selectores_extractor' extractor.pk %}">Editar selectores</a>
     <a class="btn btn-outline-secondary btn-sm" href="{% url 'oportunidades:editar_extractor' extractor.pk %}">Editar</a>
   </div>

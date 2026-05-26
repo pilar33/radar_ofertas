@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnostico JS{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Diagnostico JS - {{ extractor.conector.nombre }}</h1>
+<div class="bg-white border rounded p-3">
+  <p><strong>Requiere JS detectado:</strong> {{ diagnostico.requiere_js_detectado|yesno:"Si,No" }}</p>
+  <p><strong>Headless habilitado:</strong> {{ diagnostico.habilitado|yesno:"Si,No" }}</p>
+  <p><strong>Playwright disponible:</strong> {{ diagnostico.playwright_disponible|yesno:"Si,No" }}</p>
+  <p>{{ diagnostico.mensaje }}</p>
+  <div class="alert alert-info mb-0">Si el sitio requiere JS, evaluar Etapa 3.10 con navegador headless controlado.</div>
+</div>
+{% endblock %}

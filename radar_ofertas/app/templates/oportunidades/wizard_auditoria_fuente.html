@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Wizard auditoria{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3">Auditoria - {{ fuente.nombre }}</h1>
+  <form method="post" action="{% url 'oportunidades:auditar_fuente' fuente.pk %}">{% csrf_token %}<button class="btn btn-primary">Auditar robots/home/sitemap</button></form>
+</div>
+{% if auditoria %}
+  <div class="bg-white border rounded p-3">
+    <p><strong>Semaforo sugerido:</strong> {{ auditoria.get_semaforo_sugerido_display }}</p>
+    <p><strong>Metodo recomendado:</strong> {{ auditoria.get_metodo_recomendado_display }}</p>
+    <p>{{ auditoria.recomendacion }}</p>
+  </div>
+{% else %}
+  <div class="alert alert-info">Sin auditoria todavia.</div>
+{% endif %}
+<a class="btn btn-outline-primary mt-3" href="{% url 'oportunidades:wizard_revision_fuente' fuente.pk %}">Continuar a revision manual</a>
+{% endblock %}

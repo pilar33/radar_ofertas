@@ -599,6 +599,39 @@ Documentacion:
 
 - `docs/configuracion_selectores_decohome.md`
 
+## Etapa 3.9 - Procesamiento de preview y wizard de fuentes
+
+Esta etapa permite seleccionar resultados detectados por preview y procesarlos a `ProductoCanonico`, `ProductoFuente` y `PrecioFuente`, con limites de seguridad. Tambien agrega un wizard reutilizable para registrar nuevas fuentes como GangaHome sin crear modelos nuevos.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py preparar_fuente_generica --nombre "GangaHome" --url-base "URL" --rubro "hogar/deco"
+docker compose exec web python manage.py preview_decohome
+docker compose exec web python manage.py procesar_preview_decohome --max 10
+```
+
+URLs:
+
+- http://localhost:8000/fuentes/decohome/estado-operativo/
+- http://localhost:8000/fuentes/wizard/nueva/
+- http://localhost:8000/extractores/
+- http://localhost:8000/extractores/<id>/resultados/
+- http://localhost:8000/extractores/<id>/diagnostico-js/
+
+Aclaraciones:
+
+- Para una nueva web ya no se crean modelos nuevos.
+- Se usa el wizard para fuente, politica, conector y selectores.
+- Solo se procesan resultados seleccionados explicitamente.
+- Si requiere JS, queda para etapa posterior.
+- OpenAI queda para Etapa 4.
+
+Documentacion:
+
+- `docs/procesamiento_preview.md`
+- `docs/wizard_fuentes.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

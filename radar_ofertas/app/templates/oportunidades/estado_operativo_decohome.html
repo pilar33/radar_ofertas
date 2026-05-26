@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Estado operativo Deco Home{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Estado operativo Deco Home</h1>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="bg-white border rounded p-3">
+    <h2 class="h5">Politica</h2>
+    <p>Semaforo: {{ fuente.politica_extraccion.get_semaforo_display }}</p>
+    <p>Scraping: {{ fuente.politica_extraccion.permite_scraping|yesno:"Si,No" }}</p>
+    <p>Robots: {{ fuente.politica_extraccion.robots_txt_revisado|yesno:"Si,No" }}</p>
+    <p>Terminos: {{ fuente.politica_extraccion.terminos_revisados|yesno:"Si,No" }}</p>
+  </div></div>
+  <div class="col-lg-6"><div class="bg-white border rounded p-3">
+    <h2 class="h5">Que falta</h2>
+    <ul>{% for item in faltantes %}<li>{{ item }}</li>{% empty %}<li>Listo para preview controlado.</li>{% endfor %}</ul>
+  </div></div>
+</div>
+<div class="d-flex gap-2 mt-3">
+  {% if extractor %}<a class="btn btn-outline-primary" href="{% url 'oportunidades:selectores_extractor' extractor.pk %}">Ir a selectores</a>{% endif %}
+  {% if extractor %}<a class="btn btn-outline-secondary" href="{% url 'oportunidades:resultados_extractor' extractor.pk %}">Ver resultados</a>{% endif %}
+</div>
+{% endblock %}

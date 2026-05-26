@@ -273,6 +273,15 @@ class RevisionManualFuenteForm(forms.ModelForm):
         return cleaned_data
 
 
+class FuenteWizardForm(forms.Form):
+    nombre = forms.CharField(max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
+    url_base = forms.URLField(widget=forms.URLInput(attrs={"class": "form-control"}))
+    rubro_principal = forms.CharField(required=False, max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
+    tipo_fuente = forms.ChoiceField(choices=FuenteWeb.TIPO_CHOICES, widget=forms.Select(attrs={"class": "form-select"}))
+    pais = forms.CharField(initial="Argentina", max_length=80, widget=forms.TextInput(attrs={"class": "form-control"}))
+    moneda_principal = forms.CharField(initial="ARS", max_length=10, widget=forms.TextInput(attrs={"class": "form-control"}))
+
+
 class ConfiguracionExtractorWebForm(forms.ModelForm):
     class Meta:
         model = ConfiguracionExtractorWeb

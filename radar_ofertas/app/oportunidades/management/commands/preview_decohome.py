@@ -14,6 +14,17 @@ class Command(BaseCommand):
         faltantes = obtener_condiciones_faltantes_extractor(config.conector)
         if faltantes:
             self.stdout.write(self.style.WARNING("Preview bloqueado. Falta: " + ", ".join(faltantes)))
+            politica = getattr(config.conector.fuente_web, "politica_extraccion", None)
+            if politica:
+                self.stdout.write(f"semaforo={politica.semaforo}")
+                self.stdout.write(f"permite_scraping={politica.permite_scraping}")
+                self.stdout.write(f"robots_txt_revisado={politica.robots_txt_revisado}")
+                self.stdout.write(f"terminos_revisados={politica.terminos_revisados}")
+                self.stdout.write(f"requiere_login={politica.requiere_login}")
+                self.stdout.write(f"tiene_captcha={politica.tiene_captcha}")
+            self.stdout.write(f"conector_activo={config.conector.estado == 'activo'}")
+            self.stdout.write(f"extractor_habilitado={config.habilitado}")
+            self.stdout.write(f"selectores_configurados={bool(config.product_card_selector or config.modo_extraccion == ConfiguracionExtractorWeb.MODO_JSON_LD)}")
             return
         if config.modo_extraccion == ConfiguracionExtractorWeb.MODO_PREVIEW_MANUAL:
             self.stdout.write(

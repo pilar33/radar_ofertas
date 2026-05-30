@@ -172,8 +172,19 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
 
 @admin.register(PrecioFuente)
 class PrecioFuenteAdmin(admin.ModelAdmin):
-    list_display = ("producto_fuente", "precio", "precio_lista", "descuento_porcentaje", "moneda", "origen_dato", "fecha_relevamiento")
-    list_filter = ("moneda", "origen_dato", "fecha_relevamiento")
+    list_display = (
+        "producto_fuente",
+        "precio",
+        "precio_lista",
+        "precio_transferencia",
+        "precio_tarjeta",
+        "precio_oportunidad",
+        "tipo_precio_oportunidad",
+        "moneda",
+        "origen_dato",
+        "fecha_relevamiento",
+    )
+    list_filter = ("moneda", "origen_dato", "tipo_precio_oportunidad", "fecha_relevamiento")
     search_fields = ("producto_fuente__titulo_original",)
 
 
@@ -322,6 +333,8 @@ class ResultadoExtraccionWebAdmin(admin.ModelAdmin):
     list_display = (
         "titulo",
         "precio_decimal",
+        "precio_oportunidad_decimal",
+        "tipo_precio_oportunidad",
         "score_preview",
         "duplicado_probable",
         "estado",
@@ -330,7 +343,14 @@ class ResultadoExtraccionWebAdmin(admin.ModelAdmin):
         "producto_fuente",
         "fecha_creacion",
     )
-    list_filter = ("estado", "seleccionado", "procesable", "duplicado_probable", "ejecucion__conector__fuente_web")
+    list_filter = (
+        "estado",
+        "tipo_precio_oportunidad",
+        "seleccionado",
+        "procesable",
+        "duplicado_probable",
+        "ejecucion__conector__fuente_web",
+    )
     search_fields = ("titulo", "url_producto", "mensaje", "motivo_score")
 
 
@@ -343,6 +363,14 @@ class SesionLaboratorioMapeoAdmin(admin.ModelAdmin):
 
 @admin.register(ResultadoLaboratorioMapeo)
 class ResultadoLaboratorioMapeoAdmin(admin.ModelAdmin):
-    list_display = ("titulo", "precio_decimal", "score", "seleccionado", "procesado")
-    list_filter = ("seleccionado", "procesado")
+    list_display = (
+        "titulo",
+        "precio_decimal",
+        "precio_oportunidad_decimal",
+        "tipo_precio_oportunidad",
+        "score",
+        "seleccionado",
+        "procesado",
+    )
+    list_filter = ("tipo_precio_oportunidad", "seleccionado", "procesado")
     search_fields = ("titulo", "url_producto")

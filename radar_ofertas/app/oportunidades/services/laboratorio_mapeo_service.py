@@ -23,9 +23,15 @@ from oportunidades.models import (
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
 from oportunidades.services.extractor_web_service import (
+    detectar_plataforma_ecommerce,
+    enriquecer_item_con_precios,
     extraer_css_productos,
+    extraer_imagen_producto,
     extraer_json_ld_productos,
+    extraer_titulo_producto,
+    extraer_url_producto,
     normalizar_url_absoluta,
+    obtener_preset_selectores_tiendanube,
     parsear_precio_web,
 )
 from oportunidades.services.importacion_service import (
@@ -43,7 +49,8 @@ HEADERS = {
     "Accept-Language": "es-AR,es;q=0.9",
 }
 CLASES_TARJETA = ["product", "producto", "item", "card", "grid", "collection", "catalog", "articulo", "article"]
-BLOQUEOS = ["captcha", "recaptcha", "cloudflare", "forbidden", "access denied", "challenge", "login", "iniciar sesion", "iniciar sesión"]
+BLOQUEOS_FUERTES = ["captcha", "g-recaptcha", "hcaptcha", "captcha challenge", "recaptcha", "cloudflare challenge", "access denied", "forbidden", "challenge"]
+BLOQUEOS_LOGIN = ["debes iniciar sesion", "debes iniciar sesión", "contenido restringido", "acceso exclusivo"]
 
 
 def normalizar_url_laboratorio(url):
@@ -103,9 +110,12 @@ def _hacer_request_laboratorio(url):
         return {"ok": False, "status_code": None, "content_type": "", "text": "", "error": str(exc)}
 
 
-def detectar_bloqueos_laboratorio(html):
+def detectar_bloqueos_laboratorio(html, productos_detectados=False):
     texto = (html or "").lower()
-    return [bloqueo for bloqueo in BLOQUEOS if bloqueo in texto]
+    bloqueos = [bloqueo for bloqueo in BLOQUEOS_FUERTES if bloqueo in texto]
+    if not productos_detectados:
+        bloqueos.extend([bloqueo for bloqueo in BLOQUEOS_LOGIN if bloqueo in texto])
+    return bloqueos
 
 
 def diagnosticar_js_laboratorio(html, productos):
@@ -120,7 +130,8 @@ def _score_producto(item):
     score = 0
     if item.get("titulo"):
         score += 30
-    if item.get("precio_decimal") and item["precio_decimal"] > 0:
+    precio = item.get("precio_oportunidad_decimal") or item.get("precio_decimal")
+    if precio and precio > 0:
         score += 30
     if item.get("url_producto"):
         score += 20
@@ -132,13 +143,25 @@ def _score_producto(item):
 
 
 def _normalizar_item(item, url_base):
-    precio_decimal, mensaje_precio = parsear_precio_web(item.get("precio_texto") or "")
+    item = enriquecer_item_con_precios(item)
+    precio_decimal = item.get("precio_decimal") or Decimal("0.00")
+    mensaje_precio = ""
     normalizado = {
         "titulo": (item.get("titulo") or "").strip() or None,
         "precio_texto": (item.get("precio_texto") or "").strip() or None,
         "precio_decimal": precio_decimal or Decimal("0.00"),
+        "precio_lista_texto": item.get("precio_lista_texto"),
+        "precio_lista_decimal": item.get("precio_lista_decimal") or Decimal("0.00"),
+        "precio_transferencia_texto": item.get("precio_transferencia_texto"),
+        "precio_transferencia_decimal": item.get("precio_transferencia_decimal") or Decimal("0.00"),
+        "precio_tarjeta_texto": item.get("precio_tarjeta_texto"),
+        "precio_tarjeta_decimal": item.get("precio_tarjeta_decimal") or Decimal("0.00"),
+        "cuotas_texto": item.get("cuotas_texto"),
+        "precio_oportunidad_decimal": item.get("precio_oportunidad_decimal") or Decimal("0.00"),
+        "tipo_precio_oportunidad": item.get("tipo_precio_oportunidad"),
+        "texto_precios_detectado": item.get("texto_precios_detectado"),
         "url_producto": normalizar_url_absoluta(url_base, item.get("url_producto"), urlparse(url_base).netloc) if item.get("url_producto") else None,
-        "imagen_url": normalizar_url_absoluta(url_base, item.get("imagen_url"), urlparse(url_base).netloc) if item.get("imagen_url") else None,
+        "imagen_url": normalizar_url_absoluta(url_base, item.get("imagen_url"), None) if item.get("imagen_url") else None,
         "descripcion": (item.get("descripcion") or "").strip() or None,
         "mensaje": mensaje_precio,
     }
@@ -171,26 +194,28 @@ def _extraer_css_heuristico(html, url, limite=30):
     tarjetas = [tag for tag in soup.find_all(["article", "li", "div", "section"]) if _parece_tarjeta(tag)]
     productos = []
     for tarjeta in tarjetas[: limite * 5]:
-        titulo_el = tarjeta.select_one("h2, h3, h4, .title, .name, .product-title, .nombre, a")
-        enlace = tarjeta.find("a", href=True)
-        imagen = tarjeta.find("img")
-        titulo = titulo_el.get_text(" ", strip=True) if titulo_el else ""
+        titulo = extraer_titulo_producto(tarjeta)
         precio_texto = _buscar_precio_texto(tarjeta)
         if not (titulo or precio_texto):
             continue
         item = {
             "titulo": titulo[:255],
             "precio_texto": precio_texto,
-            "url_producto": enlace.get("href") if enlace else "",
-            "imagen_url": (imagen.get("src") or imagen.get("data-src") or "") if imagen else "",
+            "texto_precios_detectado": tarjeta.get_text(" ", strip=True),
+            "url_producto": extraer_url_producto(tarjeta, url) or "",
+            "imagen_url": extraer_imagen_producto(tarjeta, url),
             "descripcion": "",
         }
+        if not item["url_producto"] and (titulo or "").strip().lower() in {"menu", "inicio", "ver carrito", "registrate"}:
+            continue
         productos.append(_normalizar_item(item, url))
     productos.sort(key=lambda item: item["score"], reverse=True)
     return productos[:limite]
 
 
 def sugerir_selectores(html):
+    if detectar_plataforma_ecommerce(html) == "tiendanube":
+        return obtener_preset_selectores_tiendanube()
     soup = BeautifulSoup(html or "", "lxml")
     for tag in soup.find_all(["article", "li", "div", "section"]):
         if not _parece_tarjeta(tag):
@@ -237,27 +262,34 @@ def probar_selectores_laboratorio(html, url, selectores, limite=10):
     }
 
 
-def analizar_url_laboratorio(url, limite=10, modo="auto", selectores=None):
+def analizar_url_laboratorio(url, limite=10, modo="auto", selectores=None, preset=None):
     url = normalizar_url_laboratorio(url)
     limite = max(1, min(int(limite or 10), 30))
     if not url:
-        return {"ok": False, "url": "", "status_code": None, "content_type": "", "requiere_js_probable": False, "bloqueos_detectados": [], "tiene_json_ld": False, "productos_detectados": [], "selectores_sugeridos": {}, "mensaje": "URL requerida.", "html_preview_limitado": ""}
+        return {"ok": False, "url": "", "status_code": None, "content_type": "", "plataforma_detectada": "desconocida", "requiere_js_probable": False, "bloqueos_detectados": [], "tiene_json_ld": False, "productos_detectados": [], "selectores_sugeridos": {}, "mensaje": "URL requerida.", "html_preview_limitado": ""}
     if _es_mercado_libre(url):
-        return {"ok": False, "url": url, "status_code": None, "content_type": "", "requiere_js_probable": False, "bloqueos_detectados": ["mercado_libre_restringido"], "tiene_json_ld": False, "productos_detectados": [], "selectores_sugeridos": {}, "mensaje": "Mercado Libre esta restringido para scraping en este sistema.", "html_preview_limitado": ""}
+        return {"ok": False, "url": url, "status_code": None, "content_type": "", "plataforma_detectada": "mercado_libre", "requiere_js_probable": False, "bloqueos_detectados": ["mercado_libre_restringido"], "tiene_json_ld": False, "productos_detectados": [], "selectores_sugeridos": {}, "mensaje": "Mercado Libre esta restringido para scraping en este sistema.", "html_preview_limitado": ""}
 
     respuesta = _hacer_request_laboratorio(url)
     html = respuesta.get("text", "")
-    bloqueos = detectar_bloqueos_laboratorio(html)
+    plataforma = detectar_plataforma_ecommerce(html)
+    if preset == "tiendanube":
+        plataforma = "tiendanube"
     selectores_sugeridos = sugerir_selectores(html)
+    if plataforma == "tiendanube":
+        selectores_sugeridos = obtener_preset_selectores_tiendanube()
     config = _config_temporal(url, modo)
     productos = []
     if modo in {"auto", "json_ld"}:
         productos.extend(_extraer_json_ld(html, url, config))
     if modo == "css_selectors" and selectores:
         productos.extend(probar_selectores_laboratorio(html, url, selectores, limite)["productos_detectados"])
+    elif plataforma == "tiendanube" and modo in {"auto", "css_selectors", "css"}:
+        productos.extend(probar_selectores_laboratorio(html, url, selectores_sugeridos, limite)["productos_detectados"])
     elif modo in {"auto", "css_selectors", "css"}:
         productos.extend(_extraer_css_heuristico(html, url, limite=limite))
     productos = sorted(productos, key=lambda item: item["score"], reverse=True)[:limite]
+    bloqueos = detectar_bloqueos_laboratorio(html, productos_detectados=bool(productos))
     tiene_json_ld = bool(BeautifulSoup(html or "", "lxml").find_all("script", attrs={"type": "application/ld+json"}))
     requiere_js = diagnosticar_js_laboratorio(html, productos)
     ok = respuesta["ok"] and not bloqueos
@@ -271,6 +303,7 @@ def analizar_url_laboratorio(url, limite=10, modo="auto", selectores=None):
         "url": url,
         "status_code": respuesta.get("status_code"),
         "content_type": respuesta.get("content_type"),
+        "plataforma_detectada": plataforma,
         "requiere_js_probable": requiere_js,
         "bloqueos_detectados": bloqueos,
         "tiene_json_ld": tiene_json_ld,
@@ -298,6 +331,16 @@ def crear_sesion_laboratorio(resultado, fuente_web=None):
             titulo=item.get("titulo"),
             precio_texto=item.get("precio_texto"),
             precio_decimal=item.get("precio_decimal") or Decimal("0.00"),
+            precio_lista_texto=item.get("precio_lista_texto"),
+            precio_lista_decimal=item.get("precio_lista_decimal") or Decimal("0.00"),
+            precio_transferencia_texto=item.get("precio_transferencia_texto"),
+            precio_transferencia_decimal=item.get("precio_transferencia_decimal") or Decimal("0.00"),
+            precio_tarjeta_texto=item.get("precio_tarjeta_texto"),
+            precio_tarjeta_decimal=item.get("precio_tarjeta_decimal") or Decimal("0.00"),
+            cuotas_texto=item.get("cuotas_texto"),
+            precio_oportunidad_decimal=item.get("precio_oportunidad_decimal") or Decimal("0.00"),
+            tipo_precio_oportunidad=item.get("tipo_precio_oportunidad") or PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+            texto_precios_detectado=item.get("texto_precios_detectado"),
             url_producto=item.get("url_producto"),
             imagen_url=item.get("imagen_url"),
             descripcion=item.get("descripcion"),
@@ -392,7 +435,13 @@ def procesar_resultados_laboratorio(sesion, limite=10):
     for resultado in resultados:
         row = {
             "titulo": resultado.titulo,
-            "precio": resultado.precio_decimal,
+            "precio": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
+            "precio_lista": resultado.precio_lista_decimal,
+            "precio_transferencia": resultado.precio_transferencia_decimal,
+            "precio_tarjeta": resultado.precio_tarjeta_decimal,
+            "cuotas_texto": resultado.cuotas_texto,
+            "precio_oportunidad": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
+            "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
             "url_producto": resultado.url_producto or sesion.url,
             "imagen_url": resultado.imagen_url,
             "descripcion": resultado.descripcion,

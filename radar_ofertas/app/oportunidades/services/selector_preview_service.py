@@ -7,6 +7,7 @@ from oportunidades.models import ConfiguracionExtractorWeb, ResultadoExtraccionW
 from oportunidades.services.conectores_service import crear_ejecucion_conector, finalizar_ejecucion_conector
 from oportunidades.services.extractor_web_service import (
     detectar_bloqueos_html,
+    enriquecer_item_con_precios,
     extraer_css_productos,
     extraer_json_ld_productos,
     hacer_request_extractor,
@@ -17,19 +18,31 @@ from oportunidades.services.ranking_preview_service import rankear_resultados_ej
 
 
 def _guardar_resultado(ejecucion, item, url_base, estado=ResultadoExtraccionWeb.ESTADO_DETECTADO, mensaje=""):
-    precio, precio_mensaje = parsear_precio_web(item.get("precio_texto"))
+    item = enriquecer_item_con_precios(item)
+    precio = item.get("precio_decimal")
+    precio_mensaje = ""
     return ResultadoExtraccionWeb.objects.create(
         ejecucion=ejecucion,
         titulo=item.get("titulo"),
         precio_texto=item.get("precio_texto"),
         precio_decimal=precio,
+        precio_lista_texto=item.get("precio_lista_texto"),
+        precio_lista_decimal=item.get("precio_lista_decimal"),
+        precio_transferencia_texto=item.get("precio_transferencia_texto"),
+        precio_transferencia_decimal=item.get("precio_transferencia_decimal"),
+        precio_tarjeta_texto=item.get("precio_tarjeta_texto"),
+        precio_tarjeta_decimal=item.get("precio_tarjeta_decimal"),
+        cuotas_texto=item.get("cuotas_texto"),
+        precio_oportunidad_decimal=item.get("precio_oportunidad_decimal"),
+        tipo_precio_oportunidad=item.get("tipo_precio_oportunidad"),
+        texto_precios_detectado=item.get("texto_precios_detectado"),
         url_producto=item.get("url_producto"),
         imagen_url=item.get("imagen_url"),
         descripcion=item.get("descripcion"),
         fuente_url=item.get("fuente_url") or url_base,
         estado=estado,
         mensaje=mensaje or precio_mensaje,
-        raw_data=json.dumps(item, ensure_ascii=True),
+        raw_data=json.dumps(item, ensure_ascii=True, default=str),
     )
 
 
@@ -43,12 +56,19 @@ def probar_selectores_en_html(html, config, url_base):
             errores.append(f"No se pudieron aplicar selectores CSS: {exc}")
     muestras = []
     for item in productos[:10]:
-        precio, _ = parsear_precio_web(item.get("precio_texto"))
+        item = enriquecer_item_con_precios(item)
+        precio = item.get("precio_decimal")
         muestras.append(
             {
                 "titulo": item.get("titulo") or "",
                 "precio_texto": item.get("precio_texto") or "",
                 "precio_decimal": str(precio),
+                "precio_lista_decimal": str(item.get("precio_lista_decimal") or ""),
+                "precio_transferencia_decimal": str(item.get("precio_transferencia_decimal") or ""),
+                "precio_tarjeta_decimal": str(item.get("precio_tarjeta_decimal") or ""),
+                "cuotas_texto": item.get("cuotas_texto") or "",
+                "precio_oportunidad_decimal": str(item.get("precio_oportunidad_decimal") or ""),
+                "tipo_precio_oportunidad": item.get("tipo_precio_oportunidad") or "",
                 "url_producto": item.get("url_producto") or "",
                 "imagen_url": item.get("imagen_url") or "",
             }
@@ -124,7 +144,7 @@ def probar_url_preview(config):
     diagnostico = diagnosticar_html_para_extraccion(html)
     productos = []
     errores = []
-    if detectar_bloqueos_html(html):
+    if detectar_bloqueos_html(html, productos_detectados=False):
         errores.append("El HTML contiene senales de bloqueo, login o captcha.")
     if config.modo_extraccion in {ConfiguracionExtractorWeb.MODO_JSON_LD, ConfiguracionExtractorWeb.MODO_MIXTO}:
         productos.extend(extraer_json_ld_productos(html, url, config))
@@ -138,11 +158,13 @@ def probar_url_preview(config):
         normalizado = {
             "titulo": item.get("titulo") or "",
             "precio_texto": item.get("precio_texto") or "",
+            "texto_precios_detectado": item.get("texto_precios_detectado") or "",
             "url_producto": item.get("url_producto") or "",
             "imagen_url": item.get("imagen_url") or "",
             "descripcion": item.get("descripcion") or "",
             "fuente_url": item.get("fuente_url") or url,
         }
+        normalizado = enriquecer_item_con_precios(normalizado)
         muestras.append(normalizado)
         _guardar_resultado(ejecucion, normalizado, url)
 

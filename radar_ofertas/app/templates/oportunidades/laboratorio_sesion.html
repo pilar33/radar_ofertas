@@ -20,8 +20,23 @@
       <button class="btn btn-success btn-sm">Procesar seleccionados</button>
     </form>
   </div>
+  <div class="table-responsive">
   <table class="table table-sm align-middle">
-    <thead><tr><th></th><th>Titulo</th><th>Precio</th><th>Score</th><th>Procesado</th><th>URL</th></tr></thead>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Titulo</th>
+        <th>Lista</th>
+        <th>Transferencia</th>
+        <th>Tarjeta/cuotas</th>
+        <th>Oportunidad</th>
+        <th>Tipo</th>
+        <th>Imagen</th>
+        <th>Score</th>
+        <th>Procesado</th>
+        <th>URL</th>
+      </tr>
+    </thead>
     <tbody>
       {% for resultado in sesion.resultados.all %}
         <tr>
@@ -33,15 +48,24 @@
             </form>
           </td>
           <td>{{ resultado.titulo|default:"-" }}</td>
-          <td>{{ resultado.precio_decimal }}</td>
+          <td>{{ resultado.precio_lista_decimal }}</td>
+          <td>{{ resultado.precio_transferencia_decimal }}</td>
+          <td>
+            {{ resultado.precio_tarjeta_decimal }}
+            {% if resultado.cuotas_texto %}<div class="small text-muted">{{ resultado.cuotas_texto }}</div>{% endif %}
+          </td>
+          <td><strong>{{ resultado.precio_oportunidad_decimal|default:resultado.precio_decimal }}</strong></td>
+          <td><span class="badge text-bg-light">{{ resultado.tipo_precio_oportunidad }}</span></td>
+          <td>{% if resultado.imagen_url %}<img src="{{ resultado.imagen_url }}" alt="" style="width:48px;height:48px;object-fit:cover" class="border rounded">{% else %}-{% endif %}</td>
           <td>{{ resultado.score }}</td>
           <td>{{ resultado.procesado|yesno:"Si,No" }}</td>
           <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-muted">Sin resultados.</td></tr>
+        <tr><td colspan="11" class="text-muted">Sin resultados.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

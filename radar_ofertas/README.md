@@ -710,6 +710,28 @@ Documentacion:
 
 - `docs/laboratorio_mapeo_web.md`
 
+### Ajuste correctivo - Multiprecio y preset Tienda Nube
+
+El laboratorio y el extractor web existente ahora detectan mejor tarjetas de Tienda Nube y evitan falsos positivos de menu, login, cuenta o carrito.
+
+Campos nuevos aditivos:
+
+- `PrecioFuente.precio_transferencia`
+- `PrecioFuente.precio_tarjeta`
+- `PrecioFuente.cuotas_texto`
+- `PrecioFuente.precio_oportunidad`
+- `PrecioFuente.tipo_precio_oportunidad`
+- campos equivalentes en `ResultadoExtraccionWeb` y `ResultadoLaboratorioMapeo`
+
+Comandos utiles:
+
+```bash
+docker compose exec web python manage.py laboratorio_analizar_url --url "URL" --limite 10 --preset tiendanube
+docker compose exec web python manage.py test oportunidades
+```
+
+El ajuste no crea otro laboratorio ni otro extractor. Extiende el flujo actual para distinguir precio lista, transferencia, tarjeta/cuotas e imagenes antes de procesar resultados seleccionados.
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

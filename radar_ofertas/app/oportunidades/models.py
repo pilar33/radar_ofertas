@@ -330,10 +330,29 @@ class PrecioFuente(models.Model):
         (ORIGEN_URL_ASISTIDA, "URL asistida"),
         (ORIGEN_OTRO, "Otro"),
     ]
+    TIPO_PRECIO_LISTA = "lista"
+    TIPO_PRECIO_TRANSFERENCIA = "transferencia"
+    TIPO_PRECIO_TARJETA = "tarjeta"
+    TIPO_PRECIO_DESCONOCIDO = "desconocido"
+    TIPO_PRECIO_CHOICES = [
+        (TIPO_PRECIO_LISTA, "Lista"),
+        (TIPO_PRECIO_TRANSFERENCIA, "Transferencia"),
+        (TIPO_PRECIO_TARJETA, "Tarjeta"),
+        (TIPO_PRECIO_DESCONOCIDO, "Desconocido"),
+    ]
 
     producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="precios_fuente")
     precio = models.DecimalField(max_digits=12, decimal_places=2)
     precio_lista = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_transferencia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_tarjeta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cuotas_texto = models.CharField(max_length=200, blank=True, null=True)
+    precio_oportunidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_precio_oportunidad = models.CharField(
+        max_length=20,
+        choices=TIPO_PRECIO_CHOICES,
+        default=TIPO_PRECIO_DESCONOCIDO,
+    )
     descuento_porcentaje = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     costo_envio = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     moneda = models.CharField(max_length=10, default="ARS")
@@ -842,6 +861,20 @@ class ResultadoExtraccionWeb(models.Model):
     titulo = models.CharField(max_length=255, blank=True, null=True)
     precio_texto = models.CharField(max_length=100, blank=True, null=True)
     precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_lista_texto = models.CharField(max_length=100, blank=True, null=True)
+    precio_lista_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_transferencia_texto = models.CharField(max_length=150, blank=True, null=True)
+    precio_transferencia_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_tarjeta_texto = models.CharField(max_length=150, blank=True, null=True)
+    precio_tarjeta_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cuotas_texto = models.CharField(max_length=200, blank=True, null=True)
+    precio_oportunidad_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_precio_oportunidad = models.CharField(
+        max_length=20,
+        choices=PrecioFuente.TIPO_PRECIO_CHOICES,
+        default=PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+    )
+    texto_precios_detectado = models.TextField(blank=True, null=True)
     url_producto = models.URLField(blank=True, null=True)
     imagen_url = models.URLField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)
@@ -904,6 +937,20 @@ class ResultadoLaboratorioMapeo(models.Model):
     titulo = models.CharField(max_length=255, blank=True, null=True)
     precio_texto = models.CharField(max_length=100, blank=True, null=True)
     precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_lista_texto = models.CharField(max_length=100, blank=True, null=True)
+    precio_lista_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_transferencia_texto = models.CharField(max_length=150, blank=True, null=True)
+    precio_transferencia_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_tarjeta_texto = models.CharField(max_length=150, blank=True, null=True)
+    precio_tarjeta_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cuotas_texto = models.CharField(max_length=200, blank=True, null=True)
+    precio_oportunidad_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_precio_oportunidad = models.CharField(
+        max_length=20,
+        choices=PrecioFuente.TIPO_PRECIO_CHOICES,
+        default=PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+    )
+    texto_precios_detectado = models.TextField(blank=True, null=True)
     url_producto = models.URLField(blank=True, null=True)
     imagen_url = models.URLField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)

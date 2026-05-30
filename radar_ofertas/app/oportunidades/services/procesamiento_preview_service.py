@@ -72,7 +72,13 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
     categoria = obtener_o_crear_categoria_desde_texto(None, None)
     row = {
         "titulo": resultado.titulo,
-        "precio": resultado.precio_decimal,
+        "precio": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
+        "precio_lista": resultado.precio_lista_decimal,
+        "precio_transferencia": resultado.precio_transferencia_decimal,
+        "precio_tarjeta": resultado.precio_tarjeta_decimal,
+        "cuotas_texto": resultado.cuotas_texto,
+        "precio_oportunidad": resultado.precio_oportunidad_decimal,
+        "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
         "url_producto": resultado.url_producto or resultado.fuente_url or fuente.url_base,
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,

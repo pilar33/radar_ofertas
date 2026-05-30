@@ -12,6 +12,9 @@ El laboratorio permite probar una pagina concreta de productos pegando una URL. 
 - Detecta posible dependencia de JavaScript.
 - Busca productos en JSON-LD y HTML.
 - Sugiere selectores CSS cuando encuentra tarjetas de producto.
+- Detecta multiples precios cuando la tarjeta expone lista, transferencia o tarjeta/cuotas.
+- Calcula `precio_oportunidad` priorizando transferencia cuando aparece.
+- Mejora la deteccion de imagenes con `src`, `data-src`, `srcset`, `data-srcset`, fondos CSS y atributos de CDN.
 
 ## JSON-LD
 
@@ -28,6 +31,31 @@ Los selectores CSS indican donde esta cada dato en el HTML:
 - `image_selector`: imagen.
 
 Si el selector no encuentra elementos, puede estar mal mapeado o la pagina puede requerir JavaScript.
+
+## Preset Tienda Nube
+
+Cuando el HTML tiene senales de Tienda Nube, el laboratorio usa un preset conservador:
+
+- tarjetas: `.js-item-product, .item-product`
+- titulo: `.js-item-name, .item-name, [title], [aria-label]`
+- precio: `.js-price-display, .price, [class*='price'], [class*='precio'], [class*='payment'], [class*='discount']`
+- URL: enlaces a `/productos/`
+- imagen: imagenes con `src`, `data-src`, `srcset`, `data-srcset` y variantes usadas por Tienda Nube
+
+El preset evita tomar enlaces de menu, login, cuenta o carrito como productos.
+
+## Multiprecio
+
+El laboratorio y el extractor guardan estos datos cuando se detectan:
+
+- `precio_lista`
+- `precio_transferencia`
+- `precio_tarjeta`
+- `cuotas_texto`
+- `precio_oportunidad`
+- `tipo_precio_oportunidad`
+
+`precio_oportunidad` usa transferencia si esta disponible. Si no hay transferencia, usa el menor precio total valido detectado. Los precios por cuotas se guardan como referencia, pero no se toman como precio total si el texto indica importe de cuota.
 
 ## Guardar extractor
 
@@ -47,5 +75,6 @@ Solo se procesan resultados seleccionados explicitamente, con limite de 10 y si 
 
 ```bash
 docker compose exec web python manage.py laboratorio_analizar_url --url "URL" --limite 10
+docker compose exec web python manage.py laboratorio_analizar_url --url "URL" --limite 10 --preset tiendanube
 docker compose exec web python manage.py laboratorio_guardar_extractor --url "URL" --fuente-id ID
 ```

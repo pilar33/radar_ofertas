@@ -53,9 +53,10 @@
     <div class="row">
       <div class="col-md-2"><strong>Status</strong><br>{{ resultado.status_code|default:"-" }}</div>
       <div class="col-md-3"><strong>Content type</strong><br>{{ resultado.content_type|default:"-" }}</div>
+      <div class="col-md-2"><strong>Plataforma</strong><br>{{ resultado.plataforma_detectada|default:"-" }}</div>
       <div class="col-md-2"><strong>JSON-LD</strong><br>{{ resultado.tiene_json_ld|yesno:"Si,No" }}</div>
       <div class="col-md-2"><strong>JS probable</strong><br>{{ resultado.requiere_js_probable|yesno:"Si,No" }}</div>
-      <div class="col-md-3"><strong>Bloqueos</strong><br>{{ resultado.bloqueos_detectados|join:", "|default:"-" }}</div>
+      <div class="col-md-1"><strong>Bloqueos</strong><br>{{ resultado.bloqueos_detectados|join:", "|default:"-" }}</div>
     </div>
     <p class="mt-3 mb-0">{{ resultado.mensaje }}</p>
     {% if resultado.requiere_js_probable %}
@@ -70,23 +71,43 @@
         <a class="btn btn-outline-primary btn-sm" href="{% url 'oportunidades:laboratorio_sesion' sesion.pk %}">Abrir sesion</a>
       {% endif %}
     </div>
+    <div class="table-responsive">
     <table class="table table-sm align-middle">
-      <thead><tr><th>Titulo</th><th>Precio texto</th><th>Precio</th><th>URL</th><th>Imagen</th><th>Score</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Titulo</th>
+          <th>Lista</th>
+          <th>Transferencia</th>
+          <th>Tarjeta/cuotas</th>
+          <th>Oportunidad</th>
+          <th>Tipo</th>
+          <th>URL</th>
+          <th>Imagen</th>
+          <th>Score</th>
+        </tr>
+      </thead>
       <tbody>
         {% for producto in resultado.productos_detectados %}
           <tr>
             <td>{{ producto.titulo|default:"-" }}</td>
-            <td>{{ producto.precio_texto|default:"-" }}</td>
-            <td>{{ producto.precio_decimal }}</td>
+            <td>{{ producto.precio_lista_decimal|default:"0.00" }}</td>
+            <td>{{ producto.precio_transferencia_decimal|default:"0.00" }}</td>
+            <td>
+              {{ producto.precio_tarjeta_decimal|default:"0.00" }}
+              {% if producto.cuotas_texto %}<div class="small text-muted">{{ producto.cuotas_texto }}</div>{% endif %}
+            </td>
+            <td><strong>{{ producto.precio_oportunidad_decimal|default:producto.precio_decimal }}</strong></td>
+            <td><span class="badge text-bg-light">{{ producto.tipo_precio_oportunidad|default:"desconocido" }}</span></td>
             <td>{% if producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
-            <td>{% if producto.imagen_url %}<a href="{{ producto.imagen_url }}" target="_blank" rel="noreferrer">Imagen</a>{% else %}-{% endif %}</td>
+            <td>{% if producto.imagen_url %}<img src="{{ producto.imagen_url }}" alt="" style="width:48px;height:48px;object-fit:cover" class="border rounded"> <a href="{{ producto.imagen_url }}" target="_blank" rel="noreferrer">Ver</a>{% else %}-{% endif %}</td>
             <td>{{ producto.score }}</td>
           </tr>
         {% empty %}
-          <tr><td colspan="6" class="text-muted">No se detectaron productos.</td></tr>
+          <tr><td colspan="9" class="text-muted">No se detectaron productos.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 
   <div class="bg-white border rounded p-3">

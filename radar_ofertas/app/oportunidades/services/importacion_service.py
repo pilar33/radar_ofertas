@@ -243,7 +243,11 @@ def crear_o_actualizar_producto_fuente(row, fuente_web, categoria, producto_cano
 
 
 def crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False):
-    precio = parsear_decimal(row.get("precio"))
+    precio_oportunidad = parsear_decimal(row.get("precio_oportunidad"))
+    precio_transferencia = parsear_decimal(row.get("precio_transferencia")) or Decimal("0.00")
+    precio_tarjeta = parsear_decimal(row.get("precio_tarjeta")) or Decimal("0.00")
+    precio_lista = parsear_decimal(row.get("precio_lista")) or Decimal("0.00")
+    precio = precio_oportunidad or precio_transferencia or precio_tarjeta or precio_lista or parsear_decimal(row.get("precio"))
     if precio is None:
         return None, False
 
@@ -254,7 +258,12 @@ def crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False):
     precio_fuente = PrecioFuente.objects.create(
         producto_fuente=producto_fuente,
         precio=precio,
-        precio_lista=parsear_decimal(row.get("precio_lista")) or Decimal("0.00"),
+        precio_lista=precio_lista,
+        precio_transferencia=precio_transferencia,
+        precio_tarjeta=precio_tarjeta,
+        cuotas_texto=_valor_texto(row.get("cuotas_texto")) or None,
+        precio_oportunidad=precio_oportunidad or precio,
+        tipo_precio_oportunidad=row.get("tipo_precio_oportunidad") or PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
         descuento_porcentaje=parsear_decimal(row.get("descuento_porcentaje")) or Decimal("0.00"),
         costo_envio=parsear_decimal(row.get("costo_envio")) or Decimal("0.00"),
         moneda=_valor_texto(row.get("moneda"), "ARS") or "ARS",

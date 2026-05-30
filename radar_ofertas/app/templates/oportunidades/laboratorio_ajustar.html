@@ -22,12 +22,21 @@
     <h2 class="h5">Muestra</h2>
     <p>{{ resultado.mensaje }}</p>
     <table class="table table-sm">
-      <thead><tr><th>Titulo</th><th>Precio</th><th>URL</th><th>Score</th></tr></thead>
+      <thead><tr><th>Titulo</th><th>Lista</th><th>Transferencia</th><th>Tarjeta</th><th>Oportunidad</th><th>URL</th><th>Imagen</th><th>Score</th></tr></thead>
       <tbody>
         {% for producto in resultado.productos_detectados %}
-          <tr><td>{{ producto.titulo|default:"-" }}</td><td>{{ producto.precio_decimal }}</td><td>{{ producto.url_producto|default:"-" }}</td><td>{{ producto.score }}</td></tr>
+          <tr>
+            <td>{{ producto.titulo|default:"-" }}</td>
+            <td>{{ producto.precio_lista_decimal }}</td>
+            <td>{{ producto.precio_transferencia_decimal }}</td>
+            <td>{{ producto.precio_tarjeta_decimal }}</td>
+            <td>{{ producto.precio_oportunidad_decimal|default:producto.precio_decimal }}</td>
+            <td>{{ producto.url_producto|default:"-" }}</td>
+            <td>{% if producto.imagen_url %}<a href="{{ producto.imagen_url }}" target="_blank" rel="noreferrer">Imagen</a>{% else %}-{% endif %}</td>
+            <td>{{ producto.score }}</td>
+          </tr>
         {% empty %}
-          <tr><td colspan="4" class="text-muted">Sin productos detectados.</td></tr>
+          <tr><td colspan="8" class="text-muted">Sin productos detectados.</td></tr>
         {% endfor %}
       </tbody>
     </table>

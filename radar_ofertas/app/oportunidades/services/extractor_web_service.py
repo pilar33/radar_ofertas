@@ -1,6 +1,7 @@
 import json
 import re
 import time
+import unicodedata
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urljoin, urlparse
 
@@ -33,6 +34,12 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "es-AR,es;q=0.9",
 }
+TITULOS_INVALIDOS = {"menu", "inicio", "entendido", "cambiar cp", "ver carrito", "ingresa", "ingresá", "registrate", "mi cuenta"}
+URLS_INVALIDAS = ["carrito", "cart", "login", "account", "cuenta", "checkout", "registr"]
+
+
+def _sin_acentos(texto):
+    return "".join(c for c in unicodedata.normalize("NFKD", str(texto or "")) if not unicodedata.combining(c)).lower()
 
 
 def validar_ejecucion_extractor(conector):
@@ -156,9 +163,54 @@ def hacer_request_extractor(url, config):
         return {"ok": False, "status_code": None, "content_type": "", "text": "", "error": str(exc)}
 
 
-def detectar_bloqueos_html(html):
+def detectar_bloqueos_html(html, productos_detectados=False):
     texto = (html or "").lower()
-    return any(p in texto for p in ["captcha", "recaptcha", "cloudflare", "access denied", "forbidden", "iniciar sesión", "login", "robot", "challenge"])
+    captcha = ["captcha", "g-recaptcha", "hcaptcha", "captcha challenge", "recaptcha"]
+    acceso = ["access denied", "forbidden", "contenido restringido", "acceso exclusivo"]
+    infraestructura = ["cloudflare challenge", "challenge-platform", "cf-chl"]
+    if any(p in texto for p in captcha + infraestructura + acceso):
+        return True
+    if productos_detectados:
+        return False
+    texto_visible = BeautifulSoup(html or "", "lxml").get_text(" ", strip=True)
+    login_generico = ["debes iniciar sesion", "iniciar sesion", "mi cuenta"]
+    return any(p in _sin_acentos(texto_visible) for p in login_generico) and len(texto_visible) < 250
+
+
+def detectar_plataforma_ecommerce(html):
+    texto = (html or "").lower()
+    if any(
+        senal in texto
+        for senal in [
+            "js-product-item",
+            "js-item-product",
+            "js-product-item-image-link-private",
+            "data-nuvemshop",
+            "mitiendanube.com",
+            "product_grid_item",
+            "js-price-display",
+            "js-payment-discount",
+            "nuvemshop",
+        ]
+    ):
+        return "tiendanube"
+    if "cdn.shopify.com" in texto or "shopify" in texto:
+        return "shopify"
+    if "woocommerce" in texto or "wp-content/plugins/woocommerce" in texto:
+        return "woocommerce"
+    return "desconocida"
+
+
+def obtener_preset_selectores_tiendanube():
+    return {
+        "product_card_selector": ".js-item-product, .item-product",
+        "title_selector": ".js-item-name, .item-name, [title], [aria-label]",
+        "price_selector": ".js-price-display, .price, [class*='price'], [class*='precio'], [class*='payment'], [class*='discount']",
+        "url_selector": "a.js-product-item-image-link-private[href*='/productos/'], a[href*='/productos/']",
+        "image_selector": "img.js-product-item-image-private, img.item-image-featured, img[data-src], img[data-original], img[src], img[srcset], img[data-srcset]",
+        "description_selector": "",
+        "mensaje": "Preset Tienda Nube aplicado automaticamente.",
+    }
 
 
 def _walk_json(value):
@@ -186,7 +238,7 @@ def _producto_desde_json(obj, url_base, config):
         "titulo": obj.get("name"),
         "precio_texto": str(offers.get("price") or ""),
         "url_producto": normalizar_url_absoluta(url_base, obj.get("url"), config.dominio_permitido),
-        "imagen_url": normalizar_url_absoluta(url_base, image, config.dominio_permitido) if image else None,
+        "imagen_url": normalizar_url_absoluta(url_base, image, None) if image else None,
         "descripcion": obj.get("description"),
         "fuente_url": url_base,
     }
@@ -207,8 +259,183 @@ def extraer_json_ld_productos(html, url_base, config):
     return productos
 
 
+def _fragmento_alrededor(texto, inicio, fin, ventana=80):
+    return texto[max(0, inicio - ventana) : min(len(texto), fin + ventana)]
+
+
+def extraer_precios_multiples_desde_texto(texto):
+    texto = re.sub(r"\s+", " ", str(texto or "")).strip()
+    resultado = {
+        "precio_lista_texto": None,
+        "precio_lista_decimal": Decimal("0.00"),
+        "precio_transferencia_texto": None,
+        "precio_transferencia_decimal": Decimal("0.00"),
+        "precio_tarjeta_texto": None,
+        "precio_tarjeta_decimal": Decimal("0.00"),
+        "cuotas_texto": None,
+        "precio_oportunidad_decimal": Decimal("0.00"),
+        "tipo_precio_oportunidad": PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+        "texto_precios_detectado": texto[:1000] or None,
+    }
+    if not texto:
+        return resultado
+
+    patron = re.compile(
+        r"(?:ARS\s*)?\$\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?"
+        r"|(?:ARS\s*)?\$\s*\d+(?:,\d{2})?"
+        r"|\b\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?\b"
+        r"|\b\d{4,}(?:,\d{2})?\b",
+        flags=re.IGNORECASE,
+    )
+    candidatos = []
+    for match in patron.finditer(texto):
+        valor_texto = match.group(0).strip()
+        decimal = parsear_precio_web(valor_texto)[0]
+        if decimal <= 0:
+            continue
+        contexto_previo = _sin_acentos(texto[max(0, match.start() - 90) : match.start()])
+        contexto_posterior = _sin_acentos(texto[match.end() : min(len(texto), match.end() + 45)])
+        contexto_total = f"{contexto_previo} {contexto_posterior}"
+        if decimal < Decimal("1000") and "$" not in valor_texto and "ars" not in _sin_acentos(valor_texto):
+            if any(palabra in contexto_total for palabra in ["cuota", "off", "%", "descuento"]):
+                continue
+        candidatos.append(
+            {
+                "texto": valor_texto,
+                "decimal": decimal,
+                "contexto": contexto_total,
+                "contexto_previo": contexto_previo,
+            }
+        )
+
+    cuota_match = re.search(r"\d+\s+cuotas?.{0,80}?\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?", texto, flags=re.IGNORECASE)
+    if cuota_match:
+        resultado["cuotas_texto"] = cuota_match.group(0).strip()[:200]
+
+    totalizables = []
+    for candidato in candidatos:
+        contexto = candidato.get("contexto_previo", "")
+        es_cuota = "cuota" in contexto or "sin interes" in contexto
+        es_transferencia = "transferencia" in contexto or "efectivo" in contexto or "deposito" in contexto
+        es_tarjeta = "tarjeta" in contexto or "credito" in contexto
+        if es_transferencia and not resultado["precio_transferencia_decimal"]:
+            resultado["precio_transferencia_texto"] = candidato["texto"]
+            resultado["precio_transferencia_decimal"] = candidato["decimal"]
+            totalizables.append((PrecioFuente.TIPO_PRECIO_TRANSFERENCIA, candidato["decimal"]))
+        elif (es_tarjeta or es_cuota) and not resultado["precio_tarjeta_decimal"]:
+            resultado["precio_tarjeta_texto"] = candidato["texto"]
+            resultado["precio_tarjeta_decimal"] = candidato["decimal"]
+            if not es_cuota:
+                totalizables.append((PrecioFuente.TIPO_PRECIO_TARJETA, candidato["decimal"]))
+        elif not resultado["precio_lista_decimal"]:
+            resultado["precio_lista_texto"] = candidato["texto"]
+            resultado["precio_lista_decimal"] = candidato["decimal"]
+            totalizables.append((PrecioFuente.TIPO_PRECIO_LISTA, candidato["decimal"]))
+
+    if not resultado["precio_lista_decimal"] and candidatos:
+        candidato = candidatos[0]
+        resultado["precio_lista_texto"] = candidato["texto"]
+        resultado["precio_lista_decimal"] = candidato["decimal"]
+        totalizables.append((PrecioFuente.TIPO_PRECIO_LISTA, candidato["decimal"]))
+
+    if resultado["precio_transferencia_decimal"]:
+        resultado["precio_oportunidad_decimal"] = resultado["precio_transferencia_decimal"]
+        resultado["tipo_precio_oportunidad"] = PrecioFuente.TIPO_PRECIO_TRANSFERENCIA
+    elif totalizables:
+        tipo, precio = min(totalizables, key=lambda item: item[1])
+        resultado["precio_oportunidad_decimal"] = precio
+        resultado["tipo_precio_oportunidad"] = tipo
+    elif resultado["precio_tarjeta_decimal"]:
+        resultado["precio_oportunidad_decimal"] = resultado["precio_tarjeta_decimal"]
+        resultado["tipo_precio_oportunidad"] = PrecioFuente.TIPO_PRECIO_TARJETA
+    return resultado
+
+
+def enriquecer_item_con_precios(item):
+    datos = extraer_precios_multiples_desde_texto(
+        " ".join(
+            filter(
+                None,
+                [item.get("precio_texto"), item.get("texto_precios_detectado"), item.get("descripcion")],
+            )
+        )
+    )
+    item.update(datos)
+    oportunidad = datos["precio_oportunidad_decimal"]
+    item["precio_decimal"] = oportunidad if oportunidad > 0 else parsear_precio_web(item.get("precio_texto"))[0]
+    return item
+
+
 def _text(el):
     return el.get_text(" ", strip=True) if el else ""
+
+
+def _url_imagen_desde_srcset(valor):
+    if not valor:
+        return ""
+    partes = [parte.strip().split(" ")[0] for parte in valor.split(",") if parte.strip()]
+    return partes[-1] if partes else ""
+
+
+def extraer_imagen_producto(card, url_base):
+    img = card.select_one(
+        "img.js-product-item-image-private, img.item-image-featured, img[data-src], img[data-original], img[src], img[srcset], img[data-srcset]"
+    ) or card.find("img")
+    candidatos = []
+    if img:
+        for attr in ["src", "data-src", "data-original", "data-image"]:
+            candidatos.append(img.get(attr))
+        candidatos.append(_url_imagen_desde_srcset(img.get("srcset")))
+        candidatos.append(_url_imagen_desde_srcset(img.get("data-srcset")))
+    for tag in [card, *(card.find_all(True)[:20])]:
+        style = tag.get("style") or ""
+        match = re.search(r"background-image\s*:\s*url\(['\"]?([^'\")]+)", style)
+        if match:
+            candidatos.append(match.group(1))
+        append_images = tag.get("data-append-images") or ""
+        candidatos.extend(re.findall(r"https?://[^'\"\s]+(?:jpg|jpeg|png|webp)", append_images, flags=re.IGNORECASE))
+        for valor in tag.attrs.values():
+            if isinstance(valor, str):
+                candidatos.extend(re.findall(r"https?://[^'\"\s]+(?:jpg|jpeg|png|webp)", valor, flags=re.IGNORECASE))
+    for candidato in candidatos:
+        if not candidato or str(candidato).startswith("data:image"):
+            continue
+        absoluta = normalizar_url_absoluta(url_base, str(candidato), None)
+        if absoluta and re.search(r"\.(jpg|jpeg|png|webp)(\?|$)|mitiendanube|cdn-", absoluta, flags=re.IGNORECASE):
+            return absoluta
+    return ""
+
+
+def extraer_url_producto(card, url_base):
+    link = (
+        card.select_one("a.js-product-item-image-link-private[href]")
+        or card.select_one("a[href*='/productos/']")
+        or card.find("a", href=True)
+    )
+    href = link.get("href") if link else card.get("href")
+    absoluta = normalizar_url_absoluta(url_base, href or "", None)
+    if not absoluta:
+        return None
+    path = urlparse(absoluta).path.lower()
+    if any(invalida in path for invalida in URLS_INVALIDAS):
+        return None
+    if "/productos/" in path or "/produto/" in path or re.search(r"/p/|/product", path):
+        return absoluta
+    return absoluta if link else None
+
+
+def extraer_titulo_producto(card):
+    candidatos = []
+    for selector in [".js-item-name", ".item-name", "h2", "h3", "h4", "a.js-product-item-image-link-private", "a[href*='/productos/']", "a"]:
+        el = card.select_one(selector)
+        if not el:
+            continue
+        candidatos.extend([el.get_text(" ", strip=True), el.get("title"), el.get("aria-label")])
+    for candidato in candidatos:
+        texto = (candidato or "").strip()
+        if texto and _sin_acentos(texto) not in TITULOS_INVALIDOS:
+            return texto[:255]
+    return ""
 
 
 def extraer_css_productos(html, url_base, config):
@@ -219,21 +446,25 @@ def extraer_css_productos(html, url_base, config):
         title_el = card.select_one(config.title_selector) if config.title_selector else None
         price_el = card.select_one(config.price_selector) if config.price_selector else None
         url_el = card.select_one(config.url_selector) if config.url_selector else title_el
-        image_el = card.select_one(config.image_selector) if config.image_selector else None
         desc_el = card.select_one(config.description_selector) if config.description_selector else None
-        titulo = _text(title_el)
+        titulo = _text(title_el) or extraer_titulo_producto(card)
         precio = _text(price_el)
+        texto_precios = card.get_text(" ", strip=True)
         if not titulo and not precio:
             continue
         productos.append(
-            {
-                "titulo": titulo,
-                "precio_texto": precio,
-                "url_producto": normalizar_url_absoluta(url_base, url_el.get("href") if url_el else "", config.dominio_permitido),
-                "imagen_url": normalizar_url_absoluta(url_base, image_el.get("src") if image_el else "", config.dominio_permitido),
-                "descripcion": _text(desc_el),
-                "fuente_url": url_base,
-            }
+            enriquecer_item_con_precios(
+                {
+                    "titulo": titulo,
+                    "precio_texto": precio,
+                    "texto_precios_detectado": texto_precios,
+                    "url_producto": extraer_url_producto(card, url_base)
+                    or normalizar_url_absoluta(url_base, url_el.get("href") if url_el else "", config.dominio_permitido),
+                    "imagen_url": extraer_imagen_producto(card, url_base),
+                    "descripcion": _text(desc_el),
+                    "fuente_url": url_base,
+                }
+            )
         )
     return productos
 
@@ -258,7 +489,13 @@ def procesar_resultado_a_producto(resultado, conector):
     categoria = obtener_o_crear_categoria_desde_texto(None, None)
     row = {
         "titulo": resultado.titulo,
-        "precio": resultado.precio_decimal,
+        "precio": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
+        "precio_lista": resultado.precio_lista_decimal,
+        "precio_transferencia": resultado.precio_transferencia_decimal,
+        "precio_tarjeta": resultado.precio_tarjeta_decimal,
+        "cuotas_texto": resultado.cuotas_texto,
+        "precio_oportunidad": resultado.precio_oportunidad_decimal,
+        "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
         "url_producto": resultado.url_producto or conector.fuente_web.url_base,
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,
@@ -307,18 +544,30 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
         if config.modo_extraccion == ConfiguracionExtractorWeb.MODO_PREVIEW_MANUAL and not productos:
             productos = []
         for item in productos[: max(0, limite_productos - detectados)]:
-            precio, mensaje = parsear_precio_web(item.get("precio_texto"))
+            item = enriquecer_item_con_precios(item)
+            precio = item.get("precio_decimal") or Decimal("0.00")
+            mensaje = ""
             resultado = ResultadoExtraccionWeb.objects.create(
                 ejecucion=ejecucion,
                 titulo=item.get("titulo"),
                 precio_texto=item.get("precio_texto"),
                 precio_decimal=precio,
+                precio_lista_texto=item.get("precio_lista_texto"),
+                precio_lista_decimal=item.get("precio_lista_decimal") or Decimal("0.00"),
+                precio_transferencia_texto=item.get("precio_transferencia_texto"),
+                precio_transferencia_decimal=item.get("precio_transferencia_decimal") or Decimal("0.00"),
+                precio_tarjeta_texto=item.get("precio_tarjeta_texto"),
+                precio_tarjeta_decimal=item.get("precio_tarjeta_decimal") or Decimal("0.00"),
+                cuotas_texto=item.get("cuotas_texto"),
+                precio_oportunidad_decimal=item.get("precio_oportunidad_decimal") or Decimal("0.00"),
+                tipo_precio_oportunidad=item.get("tipo_precio_oportunidad") or PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+                texto_precios_detectado=item.get("texto_precios_detectado"),
                 url_producto=item.get("url_producto"),
                 imagen_url=item.get("imagen_url"),
                 descripcion=item.get("descripcion"),
                 fuente_url=item.get("fuente_url") or url,
                 mensaje=mensaje,
-                raw_data=json.dumps(item, ensure_ascii=True),
+                raw_data=json.dumps(item, ensure_ascii=True, default=str),
             )
             detectados += 1
             if procesar:

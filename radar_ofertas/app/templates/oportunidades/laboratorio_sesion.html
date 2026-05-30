@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Sesion laboratorio{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Sesion laboratorio</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:laboratorio_mapeo_web' %}">Nuevo analisis</a>
+</div>
+<div class="bg-white border rounded p-3 mb-3">
+  <p><strong>URL:</strong> <a href="{{ sesion.url }}" target="_blank" rel="noreferrer">{{ sesion.url }}</a></p>
+  <p><strong>Fuente:</strong> {{ sesion.fuente_web|default:"-" }} | <strong>Estado:</strong> {{ sesion.get_estado_display }} | <strong>HTTP:</strong> {{ sesion.status_code|default:"-" }}</p>
+  <p class="mb-0"><strong>JS probable:</strong> {{ sesion.requiere_js_probable|yesno:"Si,No" }} | <strong>JSON-LD:</strong> {{ sesion.tiene_json_ld|yesno:"Si,No" }}</p>
+</div>
+<div class="bg-white border rounded p-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h5 mb-0">Resultados</h2>
+    <form method="post" action="{% url 'oportunidades:laboratorio_procesar_seleccionados' sesion.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-success btn-sm">Procesar seleccionados</button>
+    </form>
+  </div>
+  <table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Titulo</th><th>Precio</th><th>Score</th><th>Procesado</th><th>URL</th></tr></thead>
+    <tbody>
+      {% for resultado in sesion.resultados.all %}
+        <tr>
+          <td>
+            <form method="post" action="{% url 'oportunidades:laboratorio_seleccionar_resultado' resultado.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="seleccionado" value="{% if resultado.seleccionado %}0{% else %}1{% endif %}">
+              <button class="btn btn-sm {% if resultado.seleccionado %}btn-primary{% else %}btn-outline-primary{% endif %}">{% if resultado.seleccionado %}Sel{% else %}Elegir{% endif %}</button>
+            </form>
+          </td>
+          <td>{{ resultado.titulo|default:"-" }}</td>
+          <td>{{ resultado.precio_decimal }}</td>
+          <td>{{ resultado.score }}</td>
+          <td>{{ resultado.procesado|yesno:"Si,No" }}</td>
+          <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin resultados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

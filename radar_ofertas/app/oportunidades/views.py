@@ -1,3 +1,4 @@
+import json
 from urllib.parse import urlparse
 
 from django.contrib import messages
@@ -15,6 +16,8 @@ from .forms import (
     ConectorCatalogoForm,
     FuenteWizardForm,
     ImportacionProductosForm,
+    LaboratorioMapeoForm,
+    LaboratorioSelectoresForm,
     MercadoLibreBusquedaForm,
     OportunidadFiltroForm,
     RevisionManualFuenteForm,
@@ -36,6 +39,8 @@ from .models import (
     ProductoFuente,
     RevisionManualFuente,
     ResultadoExtraccionWeb,
+    ResultadoLaboratorioMapeo,
+    SesionLaboratorioMapeo,
 )
 from .serializers import (
     CargaProductoURLSerializer,
@@ -57,6 +62,7 @@ from .serializers import (
     ProductoFuenteSerializer,
     ProductoMultifuenteSerializer,
     ResultadoExtraccionWebSerializer,
+    SesionLaboratorioMapeoSerializer,
     RevisionManualFuenteSerializer,
 )
 from oportunidades.management.commands.preparar_decohome import preparar_decohome
@@ -73,6 +79,13 @@ from .services.importacion_service import (
     crear_producto_desde_carga_url,
     detectar_tipo_archivo,
     procesar_importacion,
+)
+from .services.laboratorio_mapeo_service import (
+    analizar_url_laboratorio,
+    crear_sesion_laboratorio,
+    guardar_laboratorio_como_extractor,
+    procesar_resultados_laboratorio,
+    probar_selectores_laboratorio,
 )
 from .models import ConectorFuente, EjecucionConector
 from .services.conectores_service import validar_conector_segun_politica
@@ -476,6 +489,116 @@ def auditar_decohome_view(request):
 
 def politica_scraping(request):
     return render(request, "oportunidades/politica_scraping.html")
+
+
+def laboratorio_mapeo_web(request, fuente_id=None):
+    fuente = FuenteWeb.objects.filter(pk=fuente_id).first() if fuente_id else None
+    initial = {"fuente_web": fuente.pk} if fuente else {}
+    form = LaboratorioMapeoForm(request.POST or None, initial=initial)
+    sesion = None
+    resultado = None
+    if request.method == "POST" and form.is_valid():
+        fuente = form.cleaned_data.get("fuente_web")
+        resultado = analizar_url_laboratorio(
+            form.cleaned_data["url"],
+            limite=form.cleaned_data["limite"],
+            modo=form.cleaned_data["modo"],
+        )
+        sesion = crear_sesion_laboratorio(resultado, fuente_web=fuente)
+        if resultado["ok"]:
+            messages.success(request, resultado["mensaje"])
+        else:
+            messages.warning(request, resultado["mensaje"])
+    return render(
+        request,
+        "oportunidades/laboratorio_mapeo_web.html",
+        {"form": form, "sesion": sesion, "resultado": resultado},
+    )
+
+
+def laboratorio_decohome(request):
+    fuente = FuenteWeb.objects.filter(nombre="Deco Home").first()
+    if not fuente:
+        messages.warning(request, "Primero prepara Deco Home.")
+        return redirect("oportunidades:preparar_decohome")
+    return laboratorio_mapeo_web(request, fuente_id=fuente.pk)
+
+
+def laboratorio_ayuda(request):
+    return render(request, "oportunidades/laboratorio_ayuda.html")
+
+
+def laboratorio_ajustar(request):
+    sesion = SesionLaboratorioMapeo.objects.filter(pk=request.GET.get("sesion") or request.POST.get("sesion_id")).first()
+    initial = {}
+    if sesion:
+        initial = {"url": sesion.url, "sesion_id": sesion.pk}
+        try:
+            initial.update(json.loads(sesion.selectores_sugeridos or "{}"))
+        except json.JSONDecodeError:
+            pass
+    form = LaboratorioSelectoresForm(request.POST or None, initial=initial)
+    resultado = None
+    if request.method == "POST" and form.is_valid():
+        selectores = {
+            "product_card_selector": form.cleaned_data.get("product_card_selector"),
+            "title_selector": form.cleaned_data.get("title_selector"),
+            "price_selector": form.cleaned_data.get("price_selector"),
+            "url_selector": form.cleaned_data.get("url_selector"),
+            "image_selector": form.cleaned_data.get("image_selector"),
+            "description_selector": form.cleaned_data.get("description_selector"),
+        }
+        analisis = analizar_url_laboratorio(form.cleaned_data["url"], limite=10, modo="css_selectors", selectores=selectores)
+        resultado = analisis
+        if sesion:
+            sesion.selectores_sugeridos = json.dumps(selectores, ensure_ascii=True)
+            sesion.save(update_fields=["selectores_sugeridos"])
+        if analisis["productos_detectados"]:
+            messages.success(request, f"Selectores probados: {len(analisis['productos_detectados'])} productos detectados.")
+        else:
+            messages.warning(request, "El selector no encontro elementos. Revisa el HTML o puede requerir JavaScript.")
+    return render(request, "oportunidades/laboratorio_ajustar.html", {"form": form, "sesion": sesion, "resultado": resultado})
+
+
+@require_POST
+def laboratorio_guardar_extractor(request, sesion_id):
+    sesion = get_object_or_404(SesionLaboratorioMapeo, pk=sesion_id)
+    fuente = sesion.fuente_web or FuenteWeb.objects.filter(pk=request.POST.get("fuente_web")).first()
+    extractor = guardar_laboratorio_como_extractor(
+        sesion,
+        fuente_web=fuente,
+        nombre_fuente=request.POST.get("nombre_fuente", ""),
+        rubro=request.POST.get("rubro", ""),
+    )
+    messages.success(
+        request,
+        "Extractor guardado. Puede requerir auditoria/revision antes de ejecutarse automaticamente.",
+    )
+    return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+
+
+@require_POST
+def laboratorio_seleccionar_resultado(request, resultado_id):
+    resultado = get_object_or_404(ResultadoLaboratorioMapeo, pk=resultado_id)
+    resultado.seleccionado = request.POST.get("seleccionado") != "0"
+    resultado.save(update_fields=["seleccionado"])
+    return redirect("oportunidades:laboratorio_sesion", sesion_id=resultado.sesion_id)
+
+
+def laboratorio_sesion(request, sesion_id):
+    sesion = get_object_or_404(SesionLaboratorioMapeo.objects.prefetch_related("resultados"), pk=sesion_id)
+    return render(request, "oportunidades/laboratorio_sesion.html", {"sesion": sesion})
+
+
+@require_POST
+def laboratorio_procesar_seleccionados(request, sesion_id):
+    sesion = get_object_or_404(SesionLaboratorioMapeo, pk=sesion_id)
+    resumen = procesar_resultados_laboratorio(sesion, limite=10)
+    if resumen["ok"]:
+        messages.success(request, f"Procesados={resumen['procesados']}, precios={resumen.get('precios_creados', 0)}.")
+    else:
+        messages.error(request, resumen["mensaje"])
+    return redirect("oportunidades:laboratorio_sesion", sesion_id=sesion.pk)
 
 
 def lista_extractores(request):
@@ -1433,6 +1556,53 @@ class ExtractorDiagnosticoHeadlessAPIView(APIView):
     def post(self, request, pk):
         extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
         return Response(comparar_html_requests_vs_headless(extractor), status=status.HTTP_200_OK)
+
+
+class LaboratorioAnalizarAPIView(APIView):
+    def post(self, request):
+        resultado = analizar_url_laboratorio(
+            request.data.get("url"),
+            limite=request.data.get("limite", 10),
+            modo=request.data.get("modo", "auto"),
+        )
+        fuente = FuenteWeb.objects.filter(pk=request.data.get("fuente_id")).first()
+        sesion = crear_sesion_laboratorio(resultado, fuente_web=fuente)
+        return Response(
+            {"sesion": SesionLaboratorioMapeoSerializer(sesion).data, "resultado": resultado},
+            status=status.HTTP_201_CREATED if resultado["ok"] else status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class LaboratorioSesionesAPIView(generics.ListAPIView):
+    queryset = SesionLaboratorioMapeo.objects.prefetch_related("resultados").select_related("fuente_web").all()
+    serializer_class = SesionLaboratorioMapeoSerializer
+
+
+class LaboratorioSesionDetailAPIView(generics.RetrieveAPIView):
+    queryset = SesionLaboratorioMapeo.objects.prefetch_related("resultados").select_related("fuente_web").all()
+    serializer_class = SesionLaboratorioMapeoSerializer
+
+
+class LaboratorioProcesarSeleccionadosAPIView(APIView):
+    def post(self, request, pk):
+        sesion = get_object_or_404(SesionLaboratorioMapeo, pk=pk)
+        resumen = procesar_resultados_laboratorio(sesion, limite=10)
+        return Response(resumen, status=status.HTTP_200_OK if resumen["ok"] else status.HTTP_400_BAD_REQUEST)
+
+
+class FuenteLaboratorioAnalizarAPIView(APIView):
+    def post(self, request, pk):
+        fuente = get_object_or_404(FuenteWeb, pk=pk)
+        resultado = analizar_url_laboratorio(
+            request.data.get("url") or fuente.url_base,
+            limite=request.data.get("limite", 10),
+            modo=request.data.get("modo", "auto"),
+        )
+        sesion = crear_sesion_laboratorio(resultado, fuente_web=fuente)
+        return Response(
+            {"sesion": SesionLaboratorioMapeoSerializer(sesion).data, "resultado": resultado},
+            status=status.HTTP_201_CREATED if resultado["ok"] else status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class FuenteWizardNuevaAPIView(APIView):

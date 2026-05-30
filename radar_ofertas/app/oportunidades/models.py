@@ -868,6 +868,59 @@ class ResultadoExtraccionWeb(models.Model):
         return self.titulo or f"Resultado #{self.pk}"
 
 
+class SesionLaboratorioMapeo(models.Model):
+    ESTADO_ANALIZADA = "analizada"
+    ESTADO_GUARDADA = "guardada"
+    ESTADO_PROCESADA = "procesada"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_ANALIZADA, "Analizada"),
+        (ESTADO_GUARDADA, "Guardada"),
+        (ESTADO_PROCESADA, "Procesada"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    url = models.URLField()
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_ANALIZADA)
+    status_code = models.PositiveIntegerField(null=True, blank=True)
+    requiere_js_probable = models.BooleanField(default=False)
+    tiene_json_ld = models.BooleanField(default=False)
+    bloqueos_detectados = models.TextField(blank=True, null=True)
+    selectores_sugeridos = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "sesion de laboratorio de mapeo"
+        verbose_name_plural = "sesiones de laboratorio de mapeo"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return f"Laboratorio {self.url}"
+
+
+class ResultadoLaboratorioMapeo(models.Model):
+    sesion = models.ForeignKey(SesionLaboratorioMapeo, on_delete=models.CASCADE, related_name="resultados")
+    titulo = models.CharField(max_length=255, blank=True, null=True)
+    precio_texto = models.CharField(max_length=100, blank=True, null=True)
+    precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    url_producto = models.URLField(blank=True, null=True)
+    imagen_url = models.URLField(blank=True, null=True)
+    descripcion = models.TextField(blank=True, null=True)
+    score = models.PositiveIntegerField(default=0)
+    seleccionado = models.BooleanField(default=False)
+    procesado = models.BooleanField(default=False)
+    mensaje = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "resultado de laboratorio de mapeo"
+        verbose_name_plural = "resultados de laboratorio de mapeo"
+        ordering = ["-score", "id"]
+
+    def __str__(self):
+        return self.titulo or f"Resultado laboratorio #{self.pk}"
+
+
 class ImportacionProductos(models.Model):
     TIPO_CSV = "csv"
     TIPO_XLSX = "xlsx"

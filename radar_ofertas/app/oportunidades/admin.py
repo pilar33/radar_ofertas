@@ -29,6 +29,8 @@ from .models import (
     RecursoFuenteDetectado,
     RevisionManualFuente,
     ResultadoExtraccionWeb,
+    ResultadoLaboratorioMapeo,
+    SesionLaboratorioMapeo,
 )
 
 
@@ -330,3 +332,17 @@ class ResultadoExtraccionWebAdmin(admin.ModelAdmin):
     )
     list_filter = ("estado", "seleccionado", "procesable", "duplicado_probable", "ejecucion__conector__fuente_web")
     search_fields = ("titulo", "url_producto", "mensaje", "motivo_score")
+
+
+@admin.register(SesionLaboratorioMapeo)
+class SesionLaboratorioMapeoAdmin(admin.ModelAdmin):
+    list_display = ("url", "fuente_web", "estado", "status_code", "requiere_js_probable", "tiene_json_ld", "fecha_creacion")
+    list_filter = ("estado", "requiere_js_probable", "tiene_json_ld")
+    search_fields = ("url", "fuente_web__nombre")
+
+
+@admin.register(ResultadoLaboratorioMapeo)
+class ResultadoLaboratorioMapeoAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "precio_decimal", "score", "seleccionado", "procesado")
+    list_filter = ("seleccionado", "procesado")
+    search_fields = ("titulo", "url_producto")

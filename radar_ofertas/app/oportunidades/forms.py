@@ -354,3 +354,49 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
                 if not cleaned_data.get(field):
                     raise forms.ValidationError("CSS selectors requiere tarjeta, titulo y precio.")
         return cleaned_data
+
+
+class LaboratorioMapeoForm(forms.Form):
+    MODO_AUTO = "auto"
+    MODO_JSON_LD = "json_ld"
+    MODO_CSS_SELECTORS = "css_selectors"
+    MODO_CHOICES = [
+        (MODO_AUTO, "Detectar automaticamente"),
+        (MODO_JSON_LD, "Usar JSON-LD"),
+        (MODO_CSS_SELECTORS, "Usar selectores CSS manuales"),
+    ]
+
+    url = forms.URLField(label="URL de prueba", widget=forms.URLInput(attrs={"class": "form-control"}))
+    nombre_fuente = forms.CharField(required=False, max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
+    fuente_web = forms.ModelChoiceField(
+        required=False,
+        queryset=FuenteWeb.objects.filter(activa=True),
+        empty_label="Crear o no asociar fuente",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    rubro = forms.CharField(required=False, max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
+    modo = forms.ChoiceField(choices=MODO_CHOICES, initial=MODO_AUTO, widget=forms.Select(attrs={"class": "form-select"}))
+    limite = forms.IntegerField(initial=10, min_value=1, max_value=30, widget=forms.NumberInput(attrs={"class": "form-control"}))
+    solo_preview = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Solo preview, no guardar productos",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+
+class LaboratorioSelectoresForm(forms.Form):
+    url = forms.URLField(widget=forms.HiddenInput())
+    sesion_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
+    product_card_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    title_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    price_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    url_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    image_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    description_selector = forms.CharField(required=False, max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get("product_card_selector"):
+            raise forms.ValidationError("Indicar al menos product_card_selector.")
+        return cleaned_data

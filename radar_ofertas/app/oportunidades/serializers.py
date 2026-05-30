@@ -28,6 +28,8 @@ from .models import (
     RecursoFuenteDetectado,
     RevisionManualFuente,
     ResultadoExtraccionWeb,
+    ResultadoLaboratorioMapeo,
+    SesionLaboratorioMapeo,
 )
 
 
@@ -287,6 +289,20 @@ class ConfiguracionExtractorWebSerializer(serializers.ModelSerializer):
 class ResultadoExtraccionWebSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResultadoExtraccionWeb
+        fields = "__all__"
+
+
+class ResultadoLaboratorioMapeoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResultadoLaboratorioMapeo
+        fields = "__all__"
+
+
+class SesionLaboratorioMapeoSerializer(serializers.ModelSerializer):
+    resultados = ResultadoLaboratorioMapeoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SesionLaboratorioMapeo
         fields = "__all__"
 
 

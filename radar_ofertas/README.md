@@ -680,6 +680,36 @@ Documentacion:
 - `docs/segunda_fuente_real.md`
 - `docs/headless_opcional.md`
 
+## Etapa 3.11 - Laboratorio de mapeo web
+
+El laboratorio es la forma rapida de probar Deco Home, GangaHome u otra pagina pegando una URL concreta. Analiza una sola pagina, detecta JSON-LD o tarjetas HTML, sugiere selectores y permite guardar la configuracion como extractor reutilizable.
+
+URLs:
+
+- http://localhost:8000/laboratorio/mapeo-web/
+- http://localhost:8000/laboratorio/mapeo-web/ayuda/
+- http://localhost:8000/fuentes/<id>/laboratorio/
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py laboratorio_analizar_url --url "URL" --limite 10
+docker compose exec web python manage.py laboratorio_guardar_extractor --url "URL" --fuente-id ID
+```
+
+Aclaraciones:
+
+- No reemplaza auditoria, pero acelera el mapeo.
+- Por defecto no guarda productos.
+- No pagina automaticamente.
+- No usa Mercado Libre como fuente scrapeada.
+- Solo procesa resultados seleccionados y con politica valida.
+- Si detecta JavaScript requerido, se documenta y queda para evaluar headless opcional.
+
+Documentacion:
+
+- `docs/laboratorio_mapeo_web.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

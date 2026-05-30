@@ -13,6 +13,7 @@ from oportunidades.services.extractor_web_service import (
     parsear_precio_web,
     validar_ejecucion_extractor,
 )
+from oportunidades.services.ranking_preview_service import rankear_resultados_ejecucion
 
 
 def _guardar_resultado(ejecucion, item, url_base, estado=ResultadoExtraccionWeb.ESTADO_DETECTADO, mensaje=""):
@@ -170,6 +171,7 @@ def probar_url_preview(config):
         ejecucion,
         {"productos_detectados": len(muestras), "errores": len(errores), "mensaje": mensaje},
     )
+    rankear_resultados_ejecucion(ejecucion)
     return {
         "ok": ok,
         "ejecucion": ejecucion,

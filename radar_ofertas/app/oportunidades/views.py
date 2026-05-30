@@ -89,7 +89,9 @@ from .services.procesamiento_preview_service import (
     procesar_resultados_seleccionados,
     validar_resultado_procesable,
 )
-from .services.headless_diagnostic_service import diagnosticar_requiere_headless
+from .services.estado_fuente_service import evaluar_estado_operativo_fuente
+from .services.headless_diagnostic_service import comparar_html_requests_vs_headless, diagnosticar_requiere_headless
+from .services.ranking_preview_service import rankear_resultados_ejecucion
 from .services.wizard_fuentes_service import crear_fuente_wizard, preparar_fuente_generica
 from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
@@ -287,6 +289,29 @@ def wizard_nueva_fuente(request):
     return render(request, "oportunidades/wizard_nueva_fuente.html", {"form": form})
 
 
+def estado_operativo_fuentes(request):
+    fuentes = FuenteWeb.objects.prefetch_related("conectores").all()
+    estados = [(fuente, evaluar_estado_operativo_fuente(fuente)) for fuente in fuentes]
+    return render(request, "oportunidades/lista_estado_fuentes.html", {"estados": estados})
+
+
+def preparar_gangahome_view(request):
+    contexto = {"preparada": False}
+    if request.method == "POST":
+        url_base = (request.POST.get("url_base") or "").strip()
+        rubro = (request.POST.get("rubro") or "hogar/deco").strip()
+        if not url_base:
+            messages.error(request, "Indicar URL base de GangaHome.")
+        else:
+            try:
+                fuente, conector, creada, conector_creado = preparar_fuente_generica("GangaHome", url_base, rubro)
+                messages.success(request, "GangaHome preparada como fuente candidata.")
+                return redirect("oportunidades:detalle_fuente", pk=fuente.pk)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+    return render(request, "oportunidades/preparar_gangahome.html", contexto)
+
+
 def detalle_fuente(request, pk):
     fuente = get_object_or_404(
         FuenteWeb.objects.select_related("politica_extraccion").prefetch_related(
@@ -469,7 +494,7 @@ def detalle_extractor(request, pk):
         pk=pk,
     )
     ejecuciones = extractor.conector.ejecuciones.prefetch_related("resultados_web").all()[:10]
-    resultados = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector)[:20]
+    resultados = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector).order_by("-score_preview", "-fecha_creacion")[:20]
     return render(
         request,
         "oportunidades/detalle_extractor.html",
@@ -521,13 +546,24 @@ def probar_selectores_extractor(request, pk):
 def resultados_extractor(request, pk):
     extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
     ejecucion = extractor.conector.ejecuciones.prefetch_related("resultados_web").first()
-    resultados = ejecucion.resultados_web.all() if ejecucion else ResultadoExtraccionWeb.objects.none()
+    if ejecucion:
+        rankear_resultados_ejecucion(ejecucion)
+    resultados = ejecucion.resultados_web.order_by("-score_preview", "-fecha_creacion") if ejecucion else ResultadoExtraccionWeb.objects.none()
     validaciones = [(resultado, validar_resultado_procesable(resultado)) for resultado in resultados]
     return render(
         request,
         "oportunidades/resultados_extractor.html",
         {"extractor": extractor, "ejecucion": ejecucion, "validaciones": validaciones},
     )
+
+
+def resultados_pendientes_extractores(request):
+    resultados = (
+        ResultadoExtraccionWeb.objects.select_related("ejecucion__conector__fuente_web", "producto_fuente")
+        .filter(estado=ResultadoExtraccionWeb.ESTADO_DETECTADO, procesable=True, producto_fuente__isnull=True)
+        .order_by("-score_preview", "-fecha_creacion")[:100]
+    )
+    return render(request, "oportunidades/resultados_pendientes.html", {"resultados": resultados})
 
 
 @require_POST
@@ -537,6 +573,30 @@ def seleccionar_resultado_extractor(request, resultado_id):
     marcar_resultado_seleccionado(resultado.pk, seleccionado)
     messages.success(request, "Seleccion actualizada.")
     return redirect("oportunidades:resultados_extractor", pk=resultado.ejecucion.conector.configuracion_web.pk)
+
+
+@require_POST
+def seleccionar_mejores_extractor(request, pk):
+    extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+    ejecucion = extractor.conector.ejecuciones.prefetch_related("resultados_web").first()
+    if not ejecucion:
+        messages.warning(request, "No hay ejecucion preview para seleccionar.")
+        return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+    rankear_resultados_ejecucion(ejecucion)
+    limite = min(int(request.POST.get("limite", 10)), 20)
+    seleccionados = 0
+    for resultado in ejecucion.resultados_web.filter(
+        estado=ResultadoExtraccionWeb.ESTADO_DETECTADO,
+        procesable=True,
+        producto_fuente__isnull=True,
+        duplicado_probable=False,
+    ).order_by("-score_preview", "-fecha_creacion")[:limite]:
+        if resultado.score_preview >= 50:
+            resultado.seleccionado = True
+            resultado.save(update_fields=["seleccionado"])
+            seleccionados += 1
+    messages.success(request, f"Se seleccionaron {seleccionados} resultados mejor rankeados.")
+    return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
 
 
 @require_POST
@@ -588,7 +648,12 @@ def procesar_seleccionados_extractor(request, pk):
 def diagnostico_js_extractor(request, pk):
     extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
     diagnostico = diagnosticar_requiere_headless(extractor)
-    return render(request, "oportunidades/diagnostico_js_extractor.html", {"extractor": extractor, "diagnostico": diagnostico})
+    comparacion = comparar_html_requests_vs_headless(extractor)
+    return render(
+        request,
+        "oportunidades/diagnostico_js_extractor.html",
+        {"extractor": extractor, "diagnostico": diagnostico, "comparacion": comparacion},
+    )
 
 
 def estado_operativo_decohome(request):
@@ -601,6 +666,21 @@ def estado_operativo_decohome(request):
         request,
         "oportunidades/estado_operativo_decohome.html",
         {"fuente": fuente, "conector": conector, "extractor": extractor, "faltantes": faltantes, "resultados": resultados},
+    )
+
+
+def estado_operativo_fuente(request, pk):
+    fuente = get_object_or_404(FuenteWeb, pk=pk)
+    estado = evaluar_estado_operativo_fuente(fuente)
+    resultados = (
+        ResultadoExtraccionWeb.objects.filter(ejecucion__conector=estado["conector"]).order_by("-score_preview", "-fecha_creacion")[:20]
+        if estado["conector"]
+        else []
+    )
+    return render(
+        request,
+        "oportunidades/estado_operativo_fuente.html",
+        {"fuente": fuente, "estado": estado, "resultados": resultados},
     )
 
 
@@ -1253,6 +1333,106 @@ class ExtractorDiagnosticoJSAPIView(APIView):
     def get(self, request, pk):
         extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
         return Response(diagnosticar_requiere_headless(extractor), status=status.HTTP_200_OK)
+
+
+class FuenteEstadoOperativoListAPIView(APIView):
+    def get(self, request):
+        data = []
+        for fuente in FuenteWeb.objects.all():
+            estado = evaluar_estado_operativo_fuente(fuente)
+            data.append(
+                {
+                    "fuente": FuenteWebSerializer(fuente).data,
+                    "estado": estado["estado"],
+                    "puede_preview": estado["puede_preview"],
+                    "puede_procesar": estado["puede_procesar"],
+                    "requiere_js": estado["requiere_js"],
+                    "faltantes": estado["faltantes"],
+                    "recomendacion": estado["recomendacion"],
+                }
+            )
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class FuenteEstadoOperativoAPIView(APIView):
+    def get(self, request, pk):
+        fuente = get_object_or_404(FuenteWeb, pk=pk)
+        estado = evaluar_estado_operativo_fuente(fuente)
+        return Response(
+            {
+                "fuente": FuenteWebSerializer(fuente).data,
+                "estado": estado["estado"],
+                "puede_preview": estado["puede_preview"],
+                "puede_procesar": estado["puede_procesar"],
+                "requiere_js": estado["requiere_js"],
+                "faltantes": estado["faltantes"],
+                "recomendacion": estado["recomendacion"],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class FuentePreviewAPIView(APIView):
+    def post(self, request, pk):
+        fuente = get_object_or_404(FuenteWeb, pk=pk)
+        estado_fuente = evaluar_estado_operativo_fuente(fuente)
+        if not estado_fuente["puede_preview"]:
+            return Response({"detail": "Preview bloqueado.", "faltantes": estado_fuente["faltantes"]}, status=status.HTTP_400_BAD_REQUEST)
+        resultado = probar_url_preview(estado_fuente["extractor"])
+        return Response(
+            {
+                "ok": resultado["ok"],
+                "ejecucion_id": resultado["ejecucion"].pk if resultado.get("ejecucion") else None,
+                "productos_detectados": resultado["productos_detectados"],
+                "muestras": resultado["muestras"],
+                "errores": resultado["errores"],
+                "diagnostico": resultado["diagnostico"],
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ExtractorSeleccionarMejoresAPIView(APIView):
+    def post(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
+        ejecucion = extractor.conector.ejecuciones.prefetch_related("resultados_web").first()
+        if not ejecucion:
+            return Response({"detail": "No hay ejecucion preview."}, status=status.HTTP_400_BAD_REQUEST)
+        rankear_resultados_ejecucion(ejecucion)
+        limite = min(int(request.data.get("limite", 10)), 20)
+        ids = []
+        for resultado in ejecucion.resultados_web.filter(
+            estado=ResultadoExtraccionWeb.ESTADO_DETECTADO,
+            procesable=True,
+            producto_fuente__isnull=True,
+            duplicado_probable=False,
+        ).order_by("-score_preview", "-fecha_creacion")[:limite]:
+            if resultado.score_preview >= 50:
+                resultado.seleccionado = True
+                resultado.save(update_fields=["seleccionado"])
+                ids.append(resultado.pk)
+        return Response({"seleccionados": ids}, status=status.HTTP_200_OK)
+
+
+class ExtractorResultadosPendientesAPIView(generics.ListAPIView):
+    serializer_class = ResultadoExtraccionWebSerializer
+
+    def get_queryset(self):
+        return (
+            ResultadoExtraccionWeb.objects.filter(
+                estado=ResultadoExtraccionWeb.ESTADO_DETECTADO,
+                procesable=True,
+                producto_fuente__isnull=True,
+            )
+            .select_related("ejecucion__conector__fuente_web")
+            .order_by("-score_preview", "-fecha_creacion")
+        )
+
+
+class ExtractorDiagnosticoHeadlessAPIView(APIView):
+    def post(self, request, pk):
+        extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
+        return Response(comparar_html_requests_vs_headless(extractor), status=status.HTTP_200_OK)
 
 
 class FuenteWizardNuevaAPIView(APIView):

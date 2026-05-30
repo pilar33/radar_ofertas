@@ -1,28 +1,26 @@
+import os
+
 from django.core.management.base import BaseCommand, CommandError
 
 from oportunidades.services.wizard_fuentes_service import preparar_fuente_generica
 
 
 class Command(BaseCommand):
-    help = "Prepara una fuente generica con politica inicial y conector web en borrador."
+    help = "Prepara GangaHome como segunda fuente real candidata sin activar scraping."
 
     def add_arguments(self, parser):
-        parser.add_argument("--nombre", required=True)
-        parser.add_argument("--url-base", required=True)
-        parser.add_argument("--rubro", required=True)
-        parser.add_argument("--tipo-fuente", default="tienda_online")
+        parser.add_argument("--url-base", default=os.getenv("GANGAHOME_URL_BASE", ""))
+        parser.add_argument("--rubro", default="hogar/deco")
 
     def handle(self, *args, **options):
         if not options["url_base"]:
-            raise CommandError("--url-base es requerido.")
-        if not options["rubro"]:
-            raise CommandError("--rubro es requerido.")
+            raise CommandError("Indicar --url-base o configurar GANGAHOME_URL_BASE.")
         fuente, conector, creada, conector_creado = preparar_fuente_generica(
-            options["nombre"],
+            "GangaHome",
             options["url_base"],
             options["rubro"],
-            options["tipo_fuente"],
         )
-        self.stdout.write(self.style.SUCCESS("Fuente generica preparada."))
+        self.stdout.write(self.style.SUCCESS("GangaHome preparada como fuente candidata."))
         self.stdout.write(f"Fuente ID: {fuente.pk} ({'creada' if creada else 'existente'})")
         self.stdout.write(f"Conector ID: {conector.pk} ({'creado' if conector_creado else 'existente'})")
+        self.stdout.write("Estado: pendiente de auditoria, revision manual y selectores.")

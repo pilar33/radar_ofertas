@@ -317,6 +317,16 @@ class ConfiguracionExtractorWebAdmin(admin.ModelAdmin):
 
 @admin.register(ResultadoExtraccionWeb)
 class ResultadoExtraccionWebAdmin(admin.ModelAdmin):
-    list_display = ("titulo", "precio_decimal", "estado", "seleccionado", "procesable", "producto_fuente", "fecha_creacion")
-    list_filter = ("estado", "seleccionado", "procesable", "ejecucion__conector__fuente_web")
-    search_fields = ("titulo", "url_producto", "mensaje")
+    list_display = (
+        "titulo",
+        "precio_decimal",
+        "score_preview",
+        "duplicado_probable",
+        "estado",
+        "seleccionado",
+        "procesable",
+        "producto_fuente",
+        "fecha_creacion",
+    )
+    list_filter = ("estado", "seleccionado", "procesable", "duplicado_probable", "ejecucion__conector__fuente_web")
+    search_fields = ("titulo", "url_producto", "mensaje", "motivo_score")

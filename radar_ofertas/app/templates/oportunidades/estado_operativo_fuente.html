@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Estado operativo{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">{{ fuente.nombre }}</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:estado_operativo_fuentes' %}">Todas las fuentes</a>
+</div>
+<div class="bg-white border rounded p-3 mb-3">
+  <div class="row">
+    <div class="col-md-3"><strong>Estado</strong><br>{{ estado.estado }}</div>
+    <div class="col-md-3"><strong>Preview</strong><br>{{ estado.puede_preview|yesno:"Si,No" }}</div>
+    <div class="col-md-3"><strong>Procesar</strong><br>{{ estado.puede_procesar|yesno:"Si,No" }}</div>
+    <div class="col-md-3"><strong>Requiere JS</strong><br>{{ estado.requiere_js|yesno:"Si,No" }}</div>
+  </div>
+  <hr>
+  <p class="mb-1"><strong>Faltantes:</strong> {{ estado.faltantes|join:", "|default:"-" }}</p>
+  <p class="mb-0"><strong>Recomendacion:</strong> {{ estado.recomendacion }}</p>
+</div>
+<div class="bg-white border rounded p-3">
+  <h2 class="h5">Resultados recientes</h2>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Titulo</th><th>Precio</th><th>Score</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for resultado in resultados %}
+        <tr><td>{{ resultado.titulo|default:"-" }}</td><td>{{ resultado.precio_decimal }}</td><td>{{ resultado.score_preview }}</td><td>{{ resultado.get_estado_display }}</td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-muted">Sin previews.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

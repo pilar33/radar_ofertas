@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados pendientes{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Resultados preview pendientes</h1>
+<div class="bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Fuente</th><th>Titulo</th><th>Precio</th><th>Score</th><th>Duplicado</th><th>Accion</th></tr></thead>
+    <tbody>
+      {% for resultado in resultados %}
+        <tr>
+          <td>{{ resultado.ejecucion.conector.fuente_web.nombre }}</td>
+          <td>{{ resultado.titulo|default:"-" }}</td>
+          <td>{{ resultado.precio_decimal }}</td>
+          <td>{{ resultado.score_preview }}</td>
+          <td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td>
+          <td><a class="btn btn-outline-primary btn-sm" href="{% url 'oportunidades:resultados_extractor' resultado.ejecucion.conector.configuracion_web.pk %}">Ver</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-muted">Sin resultados pendientes.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

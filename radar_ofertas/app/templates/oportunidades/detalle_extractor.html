@@ -39,6 +39,7 @@
   <div class="d-flex gap-2 mt-3">
     <form method="post" action="{% url 'oportunidades:preview_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Ejecutar preview</button></form>
     <form method="post" action="{% url 'oportunidades:probar_selectores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Probar selectores</button></form>
+    <form method="post" action="{% url 'oportunidades:seleccionar_mejores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-success btn-sm">Seleccionar mejores</button></form>
     <a class="btn btn-warning btn-sm" href="{% url 'oportunidades:resultados_extractor' extractor.pk %}">Resultados preview</a>
     <a class="btn btn-outline-info btn-sm" href="{% url 'oportunidades:diagnostico_js_extractor' extractor.pk %}">Diagnostico JS</a>
     <a class="btn btn-outline-secondary btn-sm" href="{% url 'oportunidades:selectores_extractor' extractor.pk %}">Editar selectores</a>
@@ -64,11 +65,11 @@
     <div class="bg-white border rounded p-3 h-100">
       <h2 class="h5">Resultados recientes</h2>
       <table class="table table-sm mb-0">
-        <thead><tr><th>Titulo</th><th>Precio</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Titulo</th><th>Precio</th><th>Score</th><th>Duplicado</th><th>Estado</th></tr></thead>
         <tbody>
           {% for resultado in resultados %}
-            <tr><td>{{ resultado.titulo|default:"-" }}</td><td>{{ resultado.precio_decimal }}</td><td>{{ resultado.get_estado_display }}</td></tr>
-          {% empty %}<tr><td colspan="3" class="text-muted">Sin resultados.</td></tr>{% endfor %}
+            <tr><td>{{ resultado.titulo|default:"-" }}</td><td>{{ resultado.precio_decimal }}</td><td>{{ resultado.score_preview }}</td><td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td><td>{{ resultado.get_estado_display }}</td></tr>
+          {% empty %}<tr><td colspan="5" class="text-muted">Sin resultados.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

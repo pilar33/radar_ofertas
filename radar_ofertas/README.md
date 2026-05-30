@@ -632,6 +632,54 @@ Documentacion:
 - `docs/procesamiento_preview.md`
 - `docs/wizard_fuentes.md`
 
+## Etapa 3.10 - Segunda fuente real y headless opcional
+
+Esta etapa agrega estado operativo reutilizable para fuentes, preparacion de una segunda fuente real como GangaHome, ranking de resultados preview y diagnostico headless opcional. El navegador headless queda deshabilitado por defecto y no procesa productos.
+
+Variables opcionales:
+
+```env
+ENABLE_HEADLESS_DIAGNOSTIC=False
+HEADLESS_PROVIDER=playwright
+HEADLESS_TIMEOUT_SECONDS=20
+HEADLESS_MAX_PAGES=1
+HEADLESS_SCREENSHOTS=False
+GANGAHOME_URL_BASE=
+```
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py preparar_gangahome --url-base "URL_REAL"
+docker compose exec web python manage.py preparar_fuente_generica --nombre "GangaHome" --url-base "URL_REAL" --rubro "hogar/deco"
+docker compose exec web python manage.py registrar_revision_fuente --fuente-id ID --tipo terminos --resultado dudoso --resumen "Revision manual" --decision "Pendiente"
+docker compose exec web python manage.py estado_fuente --fuente-id ID
+docker compose exec web python manage.py preview_fuente --fuente-id ID
+docker compose exec web python manage.py diagnosticar_headless_extractor --extractor-id ID
+```
+
+URLs:
+
+- http://localhost:8000/fuentes/estado-operativo/
+- http://localhost:8000/fuentes/gangahome/preparar/
+- http://localhost:8000/fuentes/<id>/estado-operativo/
+- http://localhost:8000/extractores/resultados-pendientes/
+- http://localhost:8000/extractores/<id>/diagnostico-js/
+
+Aclaraciones:
+
+- No se inventa URL de GangaHome.
+- No se ejecuta preview si la politica bloquea.
+- No se procesa nada sin seleccion explicita.
+- El ranking ayuda a elegir previews con mejor calidad de datos.
+- Si el sitio requiere JavaScript, queda documentado para una etapa posterior.
+- OpenAI queda pendiente para Etapa 4.
+
+Documentacion:
+
+- `docs/segunda_fuente_real.md`
+- `docs/headless_opcional.md`
+
 ## Despliegue staging en Render para OAuth Mercado Libre
 
 Render permite tener una URL publica HTTPS para validar OAuth de Mercado Libre. Esta configuracion usa SQLite solo como staging, sin cambiar la base empresarial local con SQL Server.

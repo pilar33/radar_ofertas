@@ -9,6 +9,7 @@
     <h1 class="h3 mt-2 mb-0">Resultados preview</h1>
   </div>
   <div class="d-flex gap-2">
+    <form method="post" action="{% url 'oportunidades:seleccionar_mejores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-success">Seleccionar mejores</button></form>
     <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-primary">Marcar procesables</button></form>
     <form method="post" action="{% url 'oportunidades:limpiar_seleccion_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-secondary">Limpiar seleccion</button></form>
     <a class="btn btn-success" href="{% url 'oportunidades:confirmar_procesamiento_extractor' extractor.pk %}">Procesar seleccionados</a>
@@ -17,7 +18,7 @@
 
 <div class="bg-white border rounded p-3">
   <table class="table table-sm align-middle mb-0">
-    <thead><tr><th></th><th>Titulo</th><th>Precio</th><th>URL</th><th>Estado</th><th>Procesable</th><th>Producto</th></tr></thead>
+    <thead><tr><th></th><th>Titulo</th><th>Precio</th><th>Score</th><th>Duplicado</th><th>URL</th><th>Estado</th><th>Procesable</th><th>Producto</th></tr></thead>
     <tbody>
       {% for resultado, validacion in validaciones %}
         <tr>
@@ -30,13 +31,15 @@
           </td>
           <td>{{ resultado.titulo|default:"-" }}</td>
           <td>{{ resultado.precio_decimal }}</td>
+          <td><span class="badge text-bg-info">{{ resultado.score_preview }}</span><br><small>{{ resultado.motivo_score|default:"" }}</small></td>
+          <td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td>
           <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
           <td>{{ resultado.get_estado_display }}</td>
           <td><span class="badge text-bg-{% if validacion.valido %}success{% else %}secondary{% endif %}">{{ validacion.mensaje }}</span></td>
           <td>{{ resultado.producto_fuente|default:"-" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="text-muted">Sin resultados.</td></tr>
+        <tr><td colspan="9" class="text-muted">Sin resultados.</td></tr>
       {% endfor %}
     </tbody>
   </table>

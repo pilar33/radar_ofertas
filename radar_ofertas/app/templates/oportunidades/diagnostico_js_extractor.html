@@ -8,7 +8,13 @@
   <p><strong>Requiere JS detectado:</strong> {{ diagnostico.requiere_js_detectado|yesno:"Si,No" }}</p>
   <p><strong>Headless habilitado:</strong> {{ diagnostico.habilitado|yesno:"Si,No" }}</p>
   <p><strong>Playwright disponible:</strong> {{ diagnostico.playwright_disponible|yesno:"Si,No" }}</p>
+  <p><strong>Provider:</strong> {{ diagnostico.provider }}</p>
   <p>{{ diagnostico.mensaje }}</p>
-  <div class="alert alert-info mb-0">Si el sitio requiere JS, evaluar Etapa 3.10 con navegador headless controlado.</div>
+  <hr>
+  <p><strong>Comparacion:</strong> {{ comparacion.estado }}</p>
+  <p><strong>Requests OK:</strong> {{ comparacion.requests_ok|yesno:"Si,No" }} ({{ comparacion.requests_len }} caracteres)</p>
+  <p><strong>Headless OK:</strong> {{ comparacion.headless_ok|yesno:"Si,No" }} ({{ comparacion.headless_len }} caracteres)</p>
+  <p class="mb-0">{{ comparacion.mensaje }}</p>
+  <div class="alert alert-info mt-3 mb-0">El diagnostico headless es opcional, deshabilitado por defecto y no procesa productos.</div>
 </div>
 {% endblock %}

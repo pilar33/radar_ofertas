@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Preparar GangaHome{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Preparar GangaHome</h1>
+<div class="bg-white border rounded p-3">
+  <form method="post" class="row g-3">
+    {% csrf_token %}
+    <div class="col-md-8">
+      <label class="form-label">URL base</label>
+      <input class="form-control" type="url" name="url_base" required placeholder="https://ejemplo.com/">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Rubro</label>
+      <input class="form-control" type="text" name="rubro" value="hogar/deco" required>
+    </div>
+    <div class="col-12">
+      <div class="alert alert-warning mb-3">Esto solo registra la fuente, politica inicial, conector borrador y extractor deshabilitado. No hace scraping.</div>
+      <button class="btn btn-primary">Preparar fuente</button>
+      <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_fuentes' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

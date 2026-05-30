@@ -133,8 +133,8 @@ class ProcesamientoPreviewTests(TestCase):
             call_command("preparar_fuente_generica", "--nombre", "GangaHome", stdout=salida)
 
     def test_preparar_fuente_generica_no_duplica(self):
-        call_command("preparar_fuente_generica", "--nombre", "GangaHome", "--url-base", "https://ganga.example")
-        call_command("preparar_fuente_generica", "--nombre", "GangaHome", "--url-base", "https://ganga.example")
+        call_command("preparar_fuente_generica", "--nombre", "GangaHome", "--url-base", "https://ganga.example", "--rubro", "hogar/deco")
+        call_command("preparar_fuente_generica", "--nombre", "GangaHome", "--url-base", "https://ganga.example", "--rubro", "hogar/deco")
 
         self.assertEqual(FuenteWeb.objects.filter(nombre="GangaHome").count(), 1)
 

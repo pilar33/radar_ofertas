@@ -1,4 +1,7 @@
+import hashlib
+
 from django.utils import timezone
+from django.utils.text import slugify
 
 from oportunidades.models import (
     DetalleEjecucionConector,
@@ -59,6 +62,25 @@ def _buscar_existente_por_preview(fuente, resultado):
     return None
 
 
+def _identificador_preview(resultado):
+    base = "|".join(
+        [
+            str(resultado.ejecucion.conector.fuente_web_id),
+            normalizar_texto_producto(resultado.titulo),
+            str(resultado.precio_oportunidad_decimal or resultado.precio_decimal or ""),
+            str(resultado.fuente_url or ""),
+        ]
+    )
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()[:12]
+
+
+def _url_producto_preview(fuente, resultado):
+    if resultado.url_producto:
+        return resultado.url_producto
+    slug = slugify(resultado.titulo or "producto")[:60] or "producto"
+    return f"{fuente.url_base.rstrip('/')}/radar-preview/{slug}-{_identificador_preview(resultado)}"
+
+
 def procesar_resultado_preview(resultado, forzar_precio=False):
     validacion = validar_resultado_procesable(resultado)
     if not validacion["valido"]:
@@ -79,7 +101,8 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
         "cuotas_texto": resultado.cuotas_texto,
         "precio_oportunidad": resultado.precio_oportunidad_decimal,
         "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
-        "url_producto": resultado.url_producto or resultado.fuente_url or fuente.url_base,
+        "codigo_externo": f"preview-{_identificador_preview(resultado)}" if not resultado.url_producto else None,
+        "url_producto": _url_producto_preview(fuente, resultado),
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,
         "condicion": Producto.CONDICION_DESCONOCIDO,

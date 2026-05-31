@@ -82,6 +82,29 @@ class ProcesamientoPreviewTests(TestCase):
 
         self.assertEqual(ProductoFuente.objects.count(), 1)
 
+    def test_procesar_resultados_sin_url_no_colapsa_en_mismo_producto(self):
+        _, _, ejecucion, _ = self._base()
+        primero = ResultadoExtraccionWeb.objects.create(
+            ejecucion=ejecucion,
+            titulo="Set Salero y Pimentero Bambu",
+            precio_decimal=Decimal("35700.00"),
+            fuente_url="https://example.com/cocina/",
+        )
+        segundo = ResultadoExtraccionWeb.objects.create(
+            ejecucion=ejecucion,
+            titulo="Rallador Bambu C/Mango",
+            precio_decimal=Decimal("21144.00"),
+            fuente_url="https://example.com/cocina/",
+        )
+
+        procesar_resultado_preview(primero)
+        procesar_resultado_preview(segundo)
+
+        self.assertEqual(ProductoFuente.objects.count(), 2)
+        self.assertEqual(primero.producto_fuente.titulo_original, "Set Salero y Pimentero Bambu")
+        self.assertEqual(segundo.producto_fuente.titulo_original, "Rallador Bambu C/Mango")
+        self.assertNotEqual(primero.producto_fuente.url_producto, segundo.producto_fuente.url_producto)
+
     def test_procesar_resultado_preview_crea_precio_si_cambia(self):
         _, _, _, resultado = self._base()
 

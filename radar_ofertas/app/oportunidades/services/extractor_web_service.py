@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import time
@@ -7,6 +8,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from django.utils.text import slugify
 
 from oportunidades.models import (
     ConfiguracionExtractorWeb,
@@ -206,7 +208,7 @@ def obtener_preset_selectores_tiendanube():
         "product_card_selector": ".js-item-product, .item-product",
         "title_selector": ".js-item-name, .item-name, [title], [aria-label]",
         "price_selector": ".js-item-price-container, .item-price-container, .price-container, .payment-discount-price-product-container, .ts-custom-discount, .js-max-installments-container",
-        "url_selector": "a.js-product-item-image-link-private[href*='/productos/'], a[href*='/productos/']",
+        "url_selector": "a.js-product-item-image-link-private[href*='/productos/'], a.js-product-item-image-link-private[href*='/producto/'], a[href*='/productos/'], a[href*='/producto/']",
         "image_selector": "img.js-product-item-image-private, img.item-image-featured, img[data-src], img[data-original], img[src], img[srcset], img[data-srcset]",
         "description_selector": "",
         "mensaje": "Preset Tienda Nube aplicado automaticamente.",
@@ -569,7 +571,7 @@ def extraer_url_producto(card, url_base):
     path = urlparse(absoluta).path.lower()
     if any(invalida in path for invalida in URLS_INVALIDAS):
         return None
-    if "/productos/" in path or "/produto/" in path or re.search(r"/p/|/product", path):
+    if "/productos/" in path or "/producto/" in path or "/produto/" in path or re.search(r"/p/|/product", path):
         return absoluta
     return absoluta if link else None
 
@@ -637,8 +639,29 @@ def parsear_precio_web(texto):
         return Decimal("0.00"), "Precio invalido"
 
 
+def _url_producto_preview(fuente, resultado):
+    if resultado.url_producto:
+        return resultado.url_producto
+    base = "|".join(
+        [
+            str(fuente.pk),
+            _sin_acentos(resultado.titulo),
+            str(resultado.precio_oportunidad_decimal or resultado.precio_decimal or ""),
+            str(resultado.fuente_url or ""),
+        ]
+    )
+    digest = hashlib.sha1(base.encode("utf-8")).hexdigest()[:12]
+    slug = slugify(resultado.titulo or "producto")[:60] or "producto"
+    return f"{fuente.url_base.rstrip('/')}/radar-preview/{slug}-{digest}"
+
+
 def procesar_resultado_a_producto(resultado, conector):
+    fuente = conector.fuente_web
     categoria = obtener_o_crear_categoria_desde_texto(None, None)
+    codigo_preview = None
+    if not resultado.url_producto:
+        codigo_base = f"{fuente.pk}|{_sin_acentos(resultado.titulo)}|{resultado.precio_decimal}|{resultado.fuente_url or ''}"
+        codigo_preview = f"preview-{hashlib.sha1(codigo_base.encode('utf-8')).hexdigest()[:12]}"
     row = {
         "titulo": resultado.titulo,
         "precio": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
@@ -648,15 +671,16 @@ def procesar_resultado_a_producto(resultado, conector):
         "cuotas_texto": resultado.cuotas_texto,
         "precio_oportunidad": resultado.precio_oportunidad_decimal,
         "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
-        "url_producto": resultado.url_producto or conector.fuente_web.url_base,
+        "codigo_externo": codigo_preview,
+        "url_producto": _url_producto_preview(fuente, resultado),
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,
         "condicion": Producto.CONDICION_DESCONOCIDO,
-        "moneda": conector.fuente_web.moneda_principal,
+        "moneda": fuente.moneda_principal,
         "origen_dato": PrecioFuente.ORIGEN_SCRAPING,
     }
     canonico, _ = obtener_o_crear_producto_canonico(row, categoria)
-    producto_fuente, _, _ = crear_o_actualizar_producto_fuente(row, conector.fuente_web, categoria, canonico, actualizar=True)
+    producto_fuente, _, _ = crear_o_actualizar_producto_fuente(row, fuente, categoria, canonico, actualizar=True)
     precio, _ = crear_precio_fuente(producto_fuente, row)
     calcular_comparacion_producto(canonico)
     evaluar_producto_multifuente(canonico)

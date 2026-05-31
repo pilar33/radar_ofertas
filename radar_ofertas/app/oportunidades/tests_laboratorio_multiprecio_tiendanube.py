@@ -84,6 +84,14 @@ class LaboratorioMultiprecioTiendaNubeTests(TestCase):
 
         self.assertEqual(extraer_url_producto(card, "https://ganga.example/categoria"), "https://ganga.example/productos/alfombra-demo")
 
+    def test_extraer_url_producto_tiendanube_producto_singular(self):
+        from bs4 import BeautifulSoup
+
+        html = '<div class="js-item-product"><a href="/producto/rallador-bambu" title="Rallador Bambu"></a><span>$ 1.200</span></div>'
+        card = BeautifulSoup(html, "lxml").select_one(".js-item-product")
+
+        self.assertEqual(extraer_url_producto(card, "https://ganga.example/categoria"), "https://ganga.example/producto/rallador-bambu")
+
     def test_extraer_titulo_desde_title_link_tiendanube(self):
         from bs4 import BeautifulSoup
 

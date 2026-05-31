@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva fuente rapida{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-1">Nueva fuente rapida</h1>
+    <p class="text-muted mb-0">Crea fuente, politica, conector y extractor en modo preview en un solo paso.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_fuentes' %}">Volver</a>
+</div>
+
+<form method="post" class="bg-white border rounded p-3">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">{{ form.nombre.label }}</label>
+      {{ form.nombre }}
+      {% for error in form.nombre.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">{{ form.rubro_principal.label }}</label>
+      {{ form.rubro_principal }}
+      {% for error in form.rubro_principal.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">{{ form.url_base.label }}</label>
+      {{ form.url_base }}
+      {% for error in form.url_base.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">{{ form.url_categoria.label }}</label>
+      {{ form.url_categoria }}
+      {% for error in form.url_categoria.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">{{ form.plataforma.label }}</label>
+      {{ form.plataforma }}
+      {% for error in form.plataforma.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+      <div>
+        <div class="form-check mb-2">
+          {{ form.revisar_como_preview }}
+          <label class="form-check-label">{{ form.revisar_como_preview.label }}</label>
+        </div>
+        <div class="form-check">
+          {{ form.confirmar_revision_manual }}
+          <label class="form-check-label">{{ form.confirmar_revision_manual.label }}</label>
+        </div>
+        {% for error in form.confirmar_revision_manual.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning mt-3 mb-0">
+    Esto habilita solo preview controlado: 1 pagina, 10 productos, sin procesamiento automatico.
+  </div>
+
+  <button class="btn btn-primary mt-3">Crear fuente y extractor preview</button>
+</form>
+{% endblock %}

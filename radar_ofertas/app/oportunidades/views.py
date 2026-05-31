@@ -14,6 +14,7 @@ from .forms import (
     CargaProductoURLForm,
     ConfiguracionExtractorWebForm,
     ConectorCatalogoForm,
+    FuenteRapidaPreviewForm,
     FuenteWizardForm,
     ImportacionProductosForm,
     LaboratorioMapeoForm,
@@ -105,7 +106,7 @@ from .services.procesamiento_preview_service import (
 from .services.estado_fuente_service import evaluar_estado_operativo_fuente
 from .services.headless_diagnostic_service import comparar_html_requests_vs_headless, diagnosticar_requiere_headless
 from .services.ranking_preview_service import rankear_resultados_ejecucion
-from .services.wizard_fuentes_service import crear_fuente_wizard, preparar_fuente_generica
+from .services.wizard_fuentes_service import crear_fuente_preview_rapida, crear_fuente_wizard, preparar_fuente_generica
 from .services.storage_service import diagnosticar_storage_config
 from .services.mercado_libre_service import (
     buscar_productos,
@@ -514,6 +515,18 @@ def laboratorio_mapeo_web(request, fuente_id=None):
         "oportunidades/laboratorio_mapeo_web.html",
         {"form": form, "sesion": sesion, "resultado": resultado},
     )
+
+
+def nueva_fuente_rapida(request):
+    form = FuenteRapidaPreviewForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        fuente, conector, extractor, creada, _, plataforma = crear_fuente_preview_rapida(form.cleaned_data)
+        messages.success(
+            request,
+            f"Fuente {'creada' if creada else 'actualizada'} y extractor preview habilitado. Plataforma: {plataforma}.",
+        )
+        return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
+    return render(request, "oportunidades/nueva_fuente_rapida.html", {"form": form})
 
 
 def laboratorio_decohome(request):

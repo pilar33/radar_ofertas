@@ -282,6 +282,60 @@ class FuenteWizardForm(forms.Form):
     moneda_principal = forms.CharField(initial="ARS", max_length=10, widget=forms.TextInput(attrs={"class": "form-control"}))
 
 
+class FuenteRapidaPreviewForm(forms.Form):
+    PLATAFORMA_AUTO = "auto"
+    PLATAFORMA_TIENDANUBE = "tiendanube"
+    PLATAFORMA_SHOPIFY = "shopify"
+    PLATAFORMA_WOOCOMMERCE = "woocommerce"
+    PLATAFORMA_MANUAL = "manual"
+    PLATAFORMA_CHOICES = [
+        (PLATAFORMA_AUTO, "Detectar automaticamente"),
+        (PLATAFORMA_TIENDANUBE, "Tienda Nube"),
+        (PLATAFORMA_SHOPIFY, "Shopify"),
+        (PLATAFORMA_WOOCOMMERCE, "WooCommerce"),
+        (PLATAFORMA_MANUAL, "Manual / sin preset"),
+    ]
+
+    nombre = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Ganga Home"}),
+    )
+    url_base = forms.URLField(
+        label="URL base de la tienda",
+        widget=forms.URLInput(attrs={"class": "form-control", "placeholder": "https://www.gangahome.com.ar/"}),
+    )
+    url_categoria = forms.URLField(
+        label="URL de categoria o prueba",
+        widget=forms.URLInput(attrs={"class": "form-control", "placeholder": "https://www.gangahome.com.ar/cocina/"}),
+    )
+    rubro_principal = forms.CharField(
+        required=False,
+        initial="hogar/deco",
+        max_length=150,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    plataforma = forms.ChoiceField(choices=PLATAFORMA_CHOICES, initial=PLATAFORMA_AUTO, widget=forms.Select(attrs={"class": "form-select"}))
+    revisar_como_preview = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Habilitar solo preview controlado",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+    confirmar_revision_manual = forms.BooleanField(
+        required=True,
+        label="Confirmo que revise robots/terminos de forma manual o acepto usar solo preview controlado",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        url_base = cleaned_data.get("url_base")
+        url_categoria = cleaned_data.get("url_categoria")
+        if url_base and url_categoria and urlparse(url_base).netloc != urlparse(url_categoria).netloc:
+            raise forms.ValidationError("La URL de categoria debe pertenecer al mismo dominio que la URL base.")
+        return cleaned_data
+
+
 class ConfiguracionExtractorWebForm(forms.ModelForm):
     class Meta:
         model = ConfiguracionExtractorWeb

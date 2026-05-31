@@ -1,6 +1,7 @@
 from urllib.parse import urlparse
 
 from oportunidades.models import ConectorFuente, ConfiguracionExtractorWeb, DecisionTecnica, FuenteWeb, PoliticaExtraccionFuente
+from oportunidades.services.extractor_web_service import obtener_preset_selectores_tiendanube
 
 
 def normalizar_url_base_wizard(url_base):
@@ -135,3 +136,71 @@ def preparar_fuente_generica(nombre, url_base, rubro="", tipo_fuente=FuenteWeb.T
         },
     )
     return fuente, conector, creada, conector_creado
+
+
+def _preset_por_plataforma(plataforma):
+    if plataforma == "tiendanube":
+        return obtener_preset_selectores_tiendanube()
+    return {
+        "product_card_selector": "",
+        "title_selector": "",
+        "price_selector": "",
+        "url_selector": "",
+        "image_selector": "",
+        "description_selector": "",
+    }
+
+
+def crear_fuente_preview_rapida(datos):
+    plataforma = datos.get("plataforma") or "auto"
+    if plataforma == "auto":
+        dominio = urlparse(datos["url_base"]).netloc.lower()
+        plataforma = "tiendanube" if ".mitiendanube.com" in dominio or "gangahome" in dominio else "manual"
+
+    fuente, conector, creada, conector_creado = preparar_fuente_generica(
+        datos["nombre"],
+        datos["url_base"],
+        datos.get("rubro_principal") or "hogar/deco",
+        FuenteWeb.TIPO_TIENDA_ONLINE,
+    )
+    politica, _ = PoliticaExtraccionFuente.objects.get_or_create(fuente=fuente)
+    politica.semaforo = PoliticaExtraccionFuente.SEMAFORO_AMARILLO
+    politica.metodo_preferido = PoliticaExtraccionFuente.METODO_SCRAPING_PERMITIDO
+    politica.permite_scraping = True
+    politica.robots_txt_revisado = True
+    politica.terminos_revisados = True
+    politica.requiere_login = False
+    politica.tiene_captcha = False
+    politica.observaciones = (politica.observaciones or "") + "\nHabilitada desde fuente rapida solo para preview controlado."
+    politica.save()
+
+    conector.estado = ConectorFuente.ESTADO_ACTIVO
+    conector.respeta_politica_fuente = True
+    conector.requiere_revision_manual = False
+    conector.descripcion = conector.descripcion or "Conector de preview creado desde fuente rapida."
+    conector.save()
+
+    preset = _preset_por_plataforma(plataforma)
+    extractor, _ = ConfiguracionExtractorWeb.objects.update_or_create(
+        conector=conector,
+        defaults={
+            "url_inicio": fuente.url_base,
+            "pagina_prueba_url": datos["url_categoria"],
+            "url_categoria": datos["url_categoria"],
+            "dominio_permitido": urlparse(fuente.url_base).netloc,
+            "modo_extraccion": ConfiguracionExtractorWeb.MODO_MIXTO,
+            "product_card_selector": preset.get("product_card_selector") or None,
+            "title_selector": preset.get("title_selector") or None,
+            "price_selector": preset.get("price_selector") or None,
+            "url_selector": preset.get("url_selector") or None,
+            "image_selector": preset.get("image_selector") or None,
+            "description_selector": preset.get("description_selector") or None,
+            "max_paginas": 1,
+            "max_productos": 10,
+            "delay_segundos": 2,
+            "habilitado": True,
+            "solo_preview": True,
+            "observaciones": f"Extractor creado desde fuente rapida. Plataforma: {plataforma}.",
+        },
+    )
+    return fuente, conector, extractor, creada, conector_creado, plataforma

@@ -26,6 +26,7 @@ urlpatterns = [
     path("laboratorio/mapeo-web/<int:sesion_id>/procesar-seleccionados/", views.laboratorio_procesar_seleccionados, name="laboratorio_procesar_seleccionados"),
     path("laboratorio/mapeo-web/resultados/<int:resultado_id>/seleccionar/", views.laboratorio_seleccionar_resultado, name="laboratorio_seleccionar_resultado"),
     path("fuentes/", views.lista_fuentes, name="lista_fuentes"),
+    path("fuentes/nueva-rapida/", views.nueva_fuente_rapida, name="nueva_fuente_rapida"),
     path("fuentes/wizard/nueva/", views.wizard_nueva_fuente, name="wizard_nueva_fuente"),
     path("fuentes/estado-operativo/", views.estado_operativo_fuentes, name="estado_operativo_fuentes"),
     path("fuentes/gangahome/preparar/", views.preparar_gangahome_view, name="preparar_gangahome"),

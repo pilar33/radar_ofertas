@@ -205,7 +205,7 @@ def obtener_preset_selectores_tiendanube():
     return {
         "product_card_selector": ".js-item-product, .item-product",
         "title_selector": ".js-item-name, .item-name, [title], [aria-label]",
-        "price_selector": ".js-price-display, .price, [class*='price'], [class*='precio'], [class*='payment'], [class*='discount']",
+        "price_selector": ".js-item-price-container, .item-price-container, .price-container, .payment-discount-price-product-container, .ts-custom-discount, .js-max-installments-container",
         "url_selector": "a.js-product-item-image-link-private[href*='/productos/'], a[href*='/productos/']",
         "image_selector": "img.js-product-item-image-private, img.item-image-featured, img[data-src], img[data-original], img[src], img[srcset], img[data-srcset]",
         "description_selector": "",
@@ -351,15 +351,165 @@ def extraer_precios_multiples_desde_texto(texto):
     return resultado
 
 
+SELECTORES_TRANSFERENCIA_TIENDANUBE = (
+    ".payment-discount-price-product",
+    ".payment-discount-price-product-container",
+    ".ts-custom-discount",
+    "[class*='payment-discount']",
+    "[class*='discount-price']",
+)
+SELECTORES_PRECIO_LISTA_TIENDANUBE = (
+    ".js-price-display",
+    ".price",
+    ".item-price",
+    "[class*='price']",
+)
+SELECTORES_CUOTAS_TIENDANUBE = (
+    ".js-max-installments-container",
+    "[class*='installment']",
+    "[class*='cuota']",
+)
+
+
+def _resultado_precios_vacio(texto=""):
+    return {
+        "precio_lista_texto": None,
+        "precio_lista_decimal": Decimal("0.00"),
+        "precio_transferencia_texto": None,
+        "precio_transferencia_decimal": Decimal("0.00"),
+        "precio_tarjeta_texto": None,
+        "precio_tarjeta_decimal": Decimal("0.00"),
+        "cuotas_texto": None,
+        "precio_oportunidad_decimal": Decimal("0.00"),
+        "tipo_precio_oportunidad": PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
+        "texto_precios_detectado": (texto or "")[:1000] or None,
+    }
+
+
+def _selectores(*selectores):
+    return ", ".join(selectores)
+
+
+def _esta_en_bloque_transferencia(elemento):
+    if not elemento:
+        return False
+    selector = _selectores(*SELECTORES_TRANSFERENCIA_TIENDANUBE)
+    return bool(elemento.select_one(selector) or elemento.find_parent(class_=re.compile(r"(payment-discount|discount-price|ts-custom-discount)")))
+
+
+def _texto_bloque_cercano(elemento):
+    if not elemento:
+        return ""
+    contenedor = elemento
+    for ancestro in [elemento, *elemento.find_parents()[:3]]:
+        texto = ancestro.get_text(" ", strip=True)
+        if "transferencia" in _sin_acentos(texto):
+            contenedor = ancestro
+            break
+    return contenedor.get_text(" ", strip=True)
+
+
+def _primer_precio_desde_texto(texto):
+    patron = re.compile(
+        r"(?:ARS\s*)?\$\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?"
+        r"|(?:ARS\s*)?\$\s*\d+(?:,\d{2})?"
+        r"|\b\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?\b"
+        r"|\b\d{4,}(?:,\d{2})?\b",
+        flags=re.IGNORECASE,
+    )
+    candidatos = [match.group(0) for match in patron.finditer(str(texto or ""))]
+    valor = candidatos[-1] if "cuota" in _sin_acentos(texto) and candidatos else (candidatos[0] if candidatos else texto)
+    precio, _ = parsear_precio_web(valor)
+    return precio
+
+
+def extraer_precios_multiples_desde_card(card):
+    texto_card = card.get_text(" ", strip=True)
+    resultado = _resultado_precios_vacio(texto_card)
+
+    for bloque in card.select(_selectores(*SELECTORES_TRANSFERENCIA_TIENDANUBE)):
+        texto_bloque = _texto_bloque_cercano(bloque)
+        if "transferencia" not in _sin_acentos(texto_bloque):
+            continue
+        precio_el = bloque.select_one(".payment-discount-price-product") or bloque
+        precio_texto = precio_el.get_text(" ", strip=True) or texto_bloque
+        precio = _primer_precio_desde_texto(precio_texto)
+        if precio <= 0:
+            precio = _primer_precio_desde_texto(texto_bloque)
+        if precio > 0:
+            resultado["precio_transferencia_texto"] = texto_bloque[:150]
+            resultado["precio_transferencia_decimal"] = precio
+            break
+
+    for precio_el in card.select(_selectores(*SELECTORES_PRECIO_LISTA_TIENDANUBE)):
+        if _esta_en_bloque_transferencia(precio_el):
+            continue
+        texto_precio = precio_el.get_text(" ", strip=True)
+        if not texto_precio or "cuota" in _sin_acentos(texto_precio):
+            continue
+        precio = _primer_precio_desde_texto(texto_precio)
+        if precio > 0:
+            resultado["precio_lista_texto"] = texto_precio[:100]
+            resultado["precio_lista_decimal"] = precio
+            break
+
+    texto_cuotas = ""
+    for cuotas_el in card.select(_selectores(*SELECTORES_CUOTAS_TIENDANUBE)):
+        candidato = cuotas_el.get_text(" ", strip=True)
+        if "cuota" in _sin_acentos(candidato):
+            texto_cuotas = candidato
+            break
+    if not texto_cuotas:
+        match = re.search(r"\d+\s+cuotas?.{0,80}?\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?", texto_card, flags=re.IGNORECASE)
+        texto_cuotas = match.group(0).strip() if match else ""
+    if texto_cuotas:
+        resultado["cuotas_texto"] = texto_cuotas[:200]
+        resultado["precio_tarjeta_texto"] = texto_cuotas[:150]
+        resultado["precio_tarjeta_decimal"] = _primer_precio_desde_texto(texto_cuotas)
+
+    if not resultado["precio_lista_decimal"] and not resultado["precio_transferencia_decimal"]:
+        fallback = extraer_precios_multiples_desde_texto(texto_card)
+        for campo, valor in fallback.items():
+            if campo.startswith("precio_") and campo.endswith("_decimal"):
+                if not resultado[campo] and valor:
+                    resultado[campo] = valor
+            elif not resultado.get(campo) and valor:
+                resultado[campo] = valor
+
+    if resultado["precio_transferencia_decimal"] > 0:
+        resultado["precio_oportunidad_decimal"] = resultado["precio_transferencia_decimal"]
+        resultado["tipo_precio_oportunidad"] = PrecioFuente.TIPO_PRECIO_TRANSFERENCIA
+    else:
+        candidatos = []
+        if resultado["precio_lista_decimal"] > 0:
+            candidatos.append((PrecioFuente.TIPO_PRECIO_LISTA, resultado["precio_lista_decimal"]))
+        if resultado["precio_tarjeta_decimal"] > 0 and not resultado["cuotas_texto"]:
+            candidatos.append((PrecioFuente.TIPO_PRECIO_TARJETA, resultado["precio_tarjeta_decimal"]))
+        if candidatos:
+            tipo, precio = min(candidatos, key=lambda item: item[1])
+            resultado["precio_oportunidad_decimal"] = precio
+            resultado["tipo_precio_oportunidad"] = tipo
+        elif resultado["precio_tarjeta_decimal"] > 0:
+            resultado["precio_oportunidad_decimal"] = resultado["precio_tarjeta_decimal"]
+            resultado["tipo_precio_oportunidad"] = PrecioFuente.TIPO_PRECIO_TARJETA
+    return resultado
+
+
 def enriquecer_item_con_precios(item):
-    datos = extraer_precios_multiples_desde_texto(
-        " ".join(
-            filter(
-                None,
-                [item.get("precio_texto"), item.get("texto_precios_detectado"), item.get("descripcion")],
+    if item.get("precio_oportunidad_decimal") or item.get("precio_transferencia_decimal") or item.get("precio_lista_decimal"):
+        oportunidad = item.get("precio_oportunidad_decimal") or Decimal("0.00")
+        item["precio_decimal"] = oportunidad if oportunidad > 0 else parsear_precio_web(item.get("precio_texto"))[0]
+        return item
+    datos = item.pop("_precios_dom", None)
+    if not datos:
+        datos = extraer_precios_multiples_desde_texto(
+            " ".join(
+                filter(
+                    None,
+                    [item.get("precio_texto"), item.get("texto_precios_detectado"), item.get("descripcion")],
+                )
             )
         )
-    )
     item.update(datos)
     oportunidad = datos["precio_oportunidad_decimal"]
     item["precio_decimal"] = oportunidad if oportunidad > 0 else parsear_precio_web(item.get("precio_texto"))[0]
@@ -452,11 +602,13 @@ def extraer_css_productos(html, url_base, config):
         texto_precios = card.get_text(" ", strip=True)
         if not titulo and not precio:
             continue
+        datos_precios = extraer_precios_multiples_desde_card(card)
         productos.append(
             enriquecer_item_con_precios(
                 {
                     "titulo": titulo,
                     "precio_texto": precio,
+                    "_precios_dom": datos_precios,
                     "texto_precios_detectado": texto_precios,
                     "url_producto": extraer_url_producto(card, url_base)
                     or normalizar_url_absoluta(url_base, url_el.get("href") if url_el else "", config.dominio_permitido),

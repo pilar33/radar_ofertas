@@ -9,12 +9,13 @@ from oportunidades.services.extractor_web_service import (
     detectar_plataforma_ecommerce,
     extraer_css_productos,
     extraer_imagen_producto,
+    extraer_precios_multiples_desde_card,
     extraer_precios_multiples_desde_texto,
     extraer_titulo_producto,
     extraer_url_producto,
     obtener_preset_selectores_tiendanube,
 )
-from oportunidades.services.laboratorio_mapeo_service import analizar_url_laboratorio
+from oportunidades.services.laboratorio_mapeo_service import analizar_url_laboratorio, crear_sesion_laboratorio
 
 
 class LaboratorioMultiprecioTiendaNubeTests(TestCase):
@@ -39,6 +40,29 @@ class LaboratorioMultiprecioTiendaNubeTests(TestCase):
               <div class="js-price-display">$ 25.000</div>
               <div class="js-payment-discount">Precio transferencia $ 21.500</div>
               <div>3 cuotas sin interes de $ 8.333</div>
+            </div>
+          </body>
+        </html>
+        """
+
+    def _gangahome_html(self):
+        return """
+        <html>
+          <body>
+            <div class="js-item-product item-product">
+              <a class="js-product-item-image-link-private" href="/productos/mantel-cuadrille-gh-0243" title="Mantel Cuadrille 150x200 GH-0243">
+                <img class="js-product-item-image-private" src="//dcdn.mitiendanube.com/stores/1/products/mantel.webp">
+              </a>
+              <div class="js-item-name">Mantel Cuadrille 150x200 GH-0243</div>
+              <div class="js-item-price-container item-price-container">
+                <span class="js-price-display item-price">$29.986,00</span>
+              </div>
+              <div class="ts-custom-discount payment-discount-price-product-container mt-2 font-smallest">
+                <span class="payment-discount-price-product font-small">$ 20.990,20</span>
+                <span>con</span>
+                <span>Transferencia</span>
+              </div>
+              <div class="js-max-installments-container">6 cuotas sin interes de $4.997,67</div>
             </div>
           </body>
         </html>
@@ -103,6 +127,41 @@ class LaboratorioMultiprecioTiendaNubeTests(TestCase):
         self.assertEqual(datos["precio_oportunidad_decimal"], Decimal("21500.00"))
         self.assertEqual(datos["tipo_precio_oportunidad"], PrecioFuente.TIPO_PRECIO_TRANSFERENCIA)
 
+    def test_tiendanube_detecta_precio_transferencia_por_clase(self):
+        from bs4 import BeautifulSoup
+
+        card = BeautifulSoup(self._gangahome_html(), "lxml").select_one(".js-item-product")
+        datos = extraer_precios_multiples_desde_card(card)
+
+        self.assertEqual(datos["precio_transferencia_decimal"], Decimal("20990.20"))
+
+    def test_tiendanube_no_confunde_lista_con_transferencia(self):
+        from bs4 import BeautifulSoup
+
+        card = BeautifulSoup(self._gangahome_html(), "lxml").select_one(".js-item-product")
+        datos = extraer_precios_multiples_desde_card(card)
+
+        self.assertEqual(datos["precio_lista_decimal"], Decimal("29986.00"))
+        self.assertEqual(datos["precio_transferencia_decimal"], Decimal("20990.20"))
+
+    def test_tiendanube_precio_oportunidad_es_transferencia(self):
+        from bs4 import BeautifulSoup
+
+        card = BeautifulSoup(self._gangahome_html(), "lxml").select_one(".js-item-product")
+        datos = extraer_precios_multiples_desde_card(card)
+
+        self.assertEqual(datos["precio_oportunidad_decimal"], Decimal("20990.20"))
+        self.assertEqual(datos["tipo_precio_oportunidad"], PrecioFuente.TIPO_PRECIO_TRANSFERENCIA)
+
+    def test_tiendanube_cuota_no_reemplaza_oportunidad(self):
+        from bs4 import BeautifulSoup
+
+        card = BeautifulSoup(self._gangahome_html(), "lxml").select_one(".js-item-product")
+        datos = extraer_precios_multiples_desde_card(card)
+
+        self.assertEqual(datos["precio_tarjeta_decimal"], Decimal("4997.67"))
+        self.assertEqual(datos["precio_oportunidad_decimal"], Decimal("20990.20"))
+
     def test_extraer_precios_multiples_lista_y_transferencia(self):
         datos = extraer_precios_multiples_desde_texto("Lista $ 30.000 Transferencia $ 24.000")
 
@@ -146,3 +205,17 @@ class LaboratorioMultiprecioTiendaNubeTests(TestCase):
         self.assertEqual(producto["precio_transferencia_decimal"], Decimal("21500.00"))
         self.assertEqual(producto["precio_oportunidad_decimal"], Decimal("21500.00"))
         self.assertTrue(producto["imagen_url"])
+
+    @patch("oportunidades.services.laboratorio_mapeo_service.requests.get")
+    def test_laboratorio_gangahome_mock_muestra_multiprecio_correcto(self, get_mock):
+        get_mock.return_value = self._response(self._gangahome_html())
+
+        resultado = analizar_url_laboratorio("https://gangahome.com.ar/categoria", preset="tiendanube")
+        sesion = crear_sesion_laboratorio(resultado)
+        item = sesion.resultados.get()
+
+        self.assertEqual(item.precio_lista_decimal, Decimal("29986.00"))
+        self.assertEqual(item.precio_transferencia_decimal, Decimal("20990.20"))
+        self.assertEqual(item.precio_tarjeta_decimal, Decimal("4997.67"))
+        self.assertEqual(item.precio_oportunidad_decimal, Decimal("20990.20"))
+        self.assertEqual(item.tipo_precio_oportunidad, PrecioFuente.TIPO_PRECIO_TRANSFERENCIA)

@@ -27,6 +27,7 @@ from oportunidades.services.extractor_web_service import (
     enriquecer_item_con_precios,
     extraer_css_productos,
     extraer_imagen_producto,
+    extraer_precios_multiples_desde_card,
     extraer_json_ld_productos,
     extraer_titulo_producto,
     extraer_url_producto,
@@ -201,6 +202,7 @@ def _extraer_css_heuristico(html, url, limite=30):
         item = {
             "titulo": titulo[:255],
             "precio_texto": precio_texto,
+            "_precios_dom": extraer_precios_multiples_desde_card(tarjeta),
             "texto_precios_detectado": tarjeta.get_text(" ", strip=True),
             "url_producto": extraer_url_producto(tarjeta, url) or "",
             "imagen_url": extraer_imagen_producto(tarjeta, url),

@@ -173,6 +173,7 @@ def crear_fuente_preview_rapida(datos):
     politica.tiene_captcha = False
     politica.observaciones = (politica.observaciones or "") + "\nHabilitada desde fuente rapida solo para preview controlado."
     politica.save()
+    fuente._state.fields_cache.pop("politica_extraccion", None)
 
     conector.estado = ConectorFuente.ESTADO_ACTIVO
     conector.respeta_politica_fuente = True

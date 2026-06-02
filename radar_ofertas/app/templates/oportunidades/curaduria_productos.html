@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>Curaduria de productos</h1>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:curaduria_previews' %}">Previews</a>
+</div>
+
+<form class="row g-2 mb-3">
+  <div class="col-md-3"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar titulo"></div>
+  <div class="col-md-2">
+    <select class="form-select" name="fuente">
+      <option value="">Todas las fuentes</option>
+      {% for fuente in fuentes %}<option value="{{ fuente.id }}" {% if request.GET.fuente == fuente.id|stringformat:"s" %}selected{% endif %}>{{ fuente.nombre }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="revision">
+      <option value="">Revision</option>
+      <option value="pendiente" {% if request.GET.revision == "pendiente" %}selected{% endif %}>Pendiente</option>
+      <option value="revisado" {% if request.GET.revision == "revisado" %}selected{% endif %}>Revisado</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="url">
+      <option value="">URL</option>
+      <option value="real" {% if request.GET.url == "real" %}selected{% endif %}>Real</option>
+      <option value="tecnica" {% if request.GET.url == "tecnica" %}selected{% endif %}>Tecnica</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="imagen">
+      <option value="">Imagen</option>
+      <option value="con" {% if request.GET.imagen == "con" %}selected{% endif %}>Con imagen</option>
+      <option value="sin" {% if request.GET.imagen == "sin" %}selected{% endif %}>Sin imagen</option>
+    </select>
+  </div>
+  <div class="col-md-1"><button class="btn btn-primary w-100">Filtrar</button></div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>ID</th><th>Imagen</th><th>Producto</th><th>Canonico</th><th>Fuente</th><th>Oportunidad</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Calidad</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for producto in productos %}
+        {% with precio=producto.precios_fuente.first %}
+        <tr>
+          <td>{{ producto.id }}</td>
+          <td>{% if producto.imagen_url %}<img src="{{ producto.imagen_url }}" style="width:48px;height:48px;object-fit:cover">{% else %}-{% endif %}</td>
+          <td>{{ producto.titulo_original }}<br><small>{% if producto.url_tecnica_generada %}URL tecnica{% elif producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">URL real</a>{% else %}Sin URL{% endif %}</small></td>
+          <td>{{ producto.producto_canonico|default:"-" }}</td>
+          <td>{{ producto.fuente_web }}</td>
+          <td>{% if precio %}{{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
+          <td>{% if precio %}{{ precio.precio_lista }}{% else %}-{% endif %}</td>
+          <td>{% if precio %}{{ precio.precio_transferencia }}{% else %}-{% endif %}</td>
+          <td>{% if precio %}{{ precio.precio_tarjeta }}{% else %}-{% endif %}</td>
+          <td>
+            {% if producto.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% endif %}
+            {% if producto.revisado %}<span class="badge text-bg-success">revisado</span>{% endif %}
+          </td>
+          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td>
+        </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="11">Sin productos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

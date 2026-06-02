@@ -2,7 +2,7 @@ import json
 from urllib.parse import urlparse
 
 from django.contrib import messages
-from django.db.models import Count, Max, Prefetch
+from django.db.models import Count, Max, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -35,6 +35,7 @@ from .models import (
     ImportacionProductos,
     MercadoLibreToken,
     Oportunidad,
+    OperacionCuraduria,
     PrecioFuente,
     ProductoCanonico,
     ProductoFuente,
@@ -108,6 +109,22 @@ from .services.headless_diagnostic_service import comparar_html_requests_vs_head
 from .services.ranking_preview_service import rankear_resultados_ejecucion
 from .services.wizard_fuentes_service import crear_fuente_preview_rapida, crear_fuente_wizard, preparar_fuente_generica
 from .services.storage_service import diagnosticar_storage_config
+from .services.backup_service import exportar_snapshot_json, snapshot_resumen_json
+from .services.curaduria_service import (
+    crear_producto_canonico_desde_fuente,
+    detectar_producto_fuente_duplicados,
+    marcar_requiere_revision,
+    marcar_revisado,
+    reasignar_producto_canonico,
+)
+from .services.dataset_export_service import (
+    exportar_dataset_completo_zip,
+    exportar_dataset_productos_csv,
+    exportar_historial_precios_csv,
+    exportar_resultados_preview_csv,
+)
+from .services.entorno_service import obtener_advertencia_persistencia
+from .services.ranking_comercial_service import calcular_score_comercial_producto_fuente, recalcular_ranking_comercial
 from .services.mercado_libre_service import (
     buscar_productos,
     diagnosticar_endpoints_meli,
@@ -954,7 +971,11 @@ def lista_productos_multifuente(request):
         .annotate(cantidad_apariciones=Count("apariciones", distinct=True))
         .all()
     )
-    return render(request, "oportunidades/lista_productos_multifuente.html", {"productos": productos})
+    return render(
+        request,
+        "oportunidades/lista_productos_multifuente.html",
+        {"productos": productos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+    )
 
 
 def detalle_producto_multifuente(request, pk):
@@ -967,7 +988,199 @@ def detalle_producto_multifuente(request, pk):
         ),
         pk=pk,
     )
-    return render(request, "oportunidades/detalle_producto_multifuente.html", {"producto": producto})
+    return render(
+        request,
+        "oportunidades/detalle_producto_multifuente.html",
+        {"producto": producto, "advertencia_persistencia": obtener_advertencia_persistencia()},
+    )
+
+
+def _ultimo_precio_producto(producto_fuente):
+    return producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+
+
+def curaduria_productos(request):
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
+    fuente_id = request.GET.get("fuente")
+    revision = request.GET.get("revision")
+    url = request.GET.get("url")
+    imagen = request.GET.get("imagen")
+    q = request.GET.get("q")
+    if fuente_id:
+        productos = productos.filter(fuente_web_id=fuente_id)
+    if revision == "pendiente":
+        productos = productos.filter(requiere_revision=True)
+    elif revision == "revisado":
+        productos = productos.filter(revisado=True)
+    if url == "tecnica":
+        productos = productos.filter(url_tecnica_generada=True)
+    elif url == "real":
+        productos = productos.filter(url_tecnica_generada=False)
+    if imagen == "sin":
+        productos = productos.filter(Q(imagen_url__isnull=True) | Q(imagen_url=""))
+    elif imagen == "con":
+        productos = productos.exclude(Q(imagen_url__isnull=True) | Q(imagen_url=""))
+    if q:
+        productos = productos.filter(Q(titulo_original__icontains=q) | Q(producto_canonico__nombre_normalizado__icontains=q))
+    productos = productos.order_by("-requiere_revision", "-fecha_actualizacion")[:300]
+    return render(
+        request,
+        "oportunidades/curaduria_productos.html",
+        {
+            "productos": productos,
+            "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
+    )
+
+
+def detalle_curaduria_producto(request, pk):
+    producto = get_object_or_404(
+        ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente"),
+        pk=pk,
+    )
+    duplicados = detectar_producto_fuente_duplicados(producto)
+    previews = ResultadoExtraccionWeb.objects.filter(producto_fuente=producto).order_by("-fecha_creacion")[:50]
+    operaciones = OperacionCuraduria.objects.filter(producto_fuente=producto)[:50]
+    return render(
+        request,
+        "oportunidades/detalle_curaduria_producto.html",
+        {
+            "producto": producto,
+            "ultimo_precio": _ultimo_precio_producto(producto),
+            "duplicados": duplicados,
+            "previews": previews,
+            "operaciones": operaciones,
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
+    )
+
+
+@require_POST
+def marcar_revision_producto(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    marcar_requiere_revision(producto, request.POST.get("motivo") or "Marcado manualmente para revision.")
+    messages.success(request, "Producto marcado para revision.")
+    return redirect("oportunidades:detalle_curaduria_producto", pk=pk)
+
+
+@require_POST
+def marcar_revisado_producto(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    marcar_revisado(producto)
+    messages.success(request, "Producto marcado como revisado.")
+    return redirect("oportunidades:detalle_curaduria_producto", pk=pk)
+
+
+def reasignar_canonico_producto(request, pk):
+    producto = get_object_or_404(ProductoFuente.objects.select_related("producto_canonico"), pk=pk)
+    if request.method == "POST":
+        accion = request.POST.get("accion")
+        if accion == "desvincular":
+            canonico = None
+        elif accion == "crear":
+            canonico = crear_producto_canonico_desde_fuente(producto)
+        else:
+            canonico_id = request.POST.get("producto_canonico")
+            canonico = get_object_or_404(ProductoCanonico, pk=canonico_id) if canonico_id else None
+        reasignar_producto_canonico(producto, canonico)
+        messages.success(request, "Producto canonico actualizado.")
+        return redirect("oportunidades:detalle_curaduria_producto", pk=producto.pk)
+    return render(
+        request,
+        "oportunidades/reasignar_canonico_producto.html",
+        {"producto": producto, "canonicos": ProductoCanonico.objects.order_by("nombre_normalizado")[:500]},
+    )
+
+
+def curaduria_previews(request):
+    resultados = ResultadoExtraccionWeb.objects.select_related("ejecucion__conector__fuente_web", "producto_fuente")
+    estado = request.GET.get("estado")
+    fuente_id = request.GET.get("fuente")
+    if estado == "procesados":
+        resultados = resultados.filter(producto_fuente__isnull=False)
+    elif estado == "pendientes":
+        resultados = resultados.filter(producto_fuente__isnull=True)
+    elif estado == "sin_url":
+        resultados = resultados.filter(Q(url_producto__isnull=True) | Q(url_producto=""))
+    elif estado == "sin_imagen":
+        resultados = resultados.filter(Q(imagen_url__isnull=True) | Q(imagen_url=""))
+    if fuente_id:
+        resultados = resultados.filter(ejecucion__conector__fuente_web_id=fuente_id)
+    return render(
+        request,
+        "oportunidades/curaduria_previews.html",
+        {
+            "resultados": resultados.order_by("-fecha_creacion")[:300],
+            "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
+    )
+
+
+@require_POST
+def reprocesar_preview(request, pk):
+    resultado = get_object_or_404(ResultadoExtraccionWeb, pk=pk)
+    resultado.estado = ResultadoExtraccionWeb.ESTADO_DETECTADO
+    resultado.producto_fuente = None
+    resultado.procesable = True
+    resultado.seleccionado = True
+    resultado.save(update_fields=["estado", "producto_fuente", "procesable", "seleccionado"])
+    resumen = procesar_resultados_seleccionados(resultado.ejecucion, limite=1)
+    messages.success(request, f"Reprocesado: {resumen['procesados']} procesado(s), {resumen['errores']} error(es).")
+    return redirect("oportunidades:curaduria_previews")
+
+
+def dataset_exportar(request):
+    tipo = request.GET.get("tipo")
+    if tipo == "productos":
+        response = HttpResponse(exportar_dataset_productos_csv().getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="productos_dataset.csv"'
+        return response
+    if tipo == "historial":
+        response = HttpResponse(exportar_historial_precios_csv().getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="historial_precios.csv"'
+        return response
+    if tipo == "previews":
+        response = HttpResponse(exportar_resultados_preview_csv().getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="resultados_preview.csv"'
+        return response
+    if tipo == "zip":
+        response = HttpResponse(exportar_dataset_completo_zip().getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="radar_dataset.zip"'
+        return response
+    return render(request, "oportunidades/dataset_exportar.html", {"advertencia_persistencia": obtener_advertencia_persistencia()})
+
+
+def dataset_backup(request):
+    if request.GET.get("exportar") == "snapshot":
+        response = HttpResponse(exportar_snapshot_json(), content_type="application/json; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="snapshot_radar.json"'
+        return response
+    return render(
+        request,
+        "oportunidades/dataset_backup.html",
+        {
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+            "resumen": snapshot_resumen_json(),
+        },
+    )
+
+
+def ranking_oportunidades(request):
+    if request.GET.get("recalcular") == "1":
+        recalcular_ranking_comercial()
+        messages.success(request, "Ranking comercial recalculado.")
+        return redirect("oportunidades:ranking_oportunidades")
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente").order_by("-score_comercial", "-fecha_actualizacion")[:300]
+    for producto in productos:
+        if not producto.score_comercial:
+            calcular_score_comercial_producto_fuente(producto)
+    return render(
+        request,
+        "oportunidades/ranking_oportunidades.html",
+        {"productos": productos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+    )
 
 
 def diagnostico_storage(request):

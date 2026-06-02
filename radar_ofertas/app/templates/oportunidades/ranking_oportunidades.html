@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>Ranking comercial</h1>
+  <a class="btn btn-outline-primary" href="?recalcular=1">Recalcular</a>
+</div>
+<table class="table table-sm align-middle">
+  <thead><tr><th>Producto</th><th>Fuente</th><th>Precio oportunidad</th><th>Score</th><th>Motivo</th><th>Revision</th><th></th></tr></thead>
+  <tbody>
+    {% for producto in productos %}
+      {% with precio=producto.precios_fuente.first %}
+      <tr>
+        <td>{{ producto.titulo_original }}</td>
+        <td>{{ producto.fuente_web }}</td>
+        <td>{% if precio %}{{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
+        <td><span class="badge text-bg-info">{{ producto.score_comercial }}</span></td>
+        <td>{{ producto.motivo_score_comercial }}</td>
+        <td>{% if producto.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% else %}-{% endif %}</td>
+        <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td>
+      </tr>
+      {% endwith %}
+    {% empty %}<tr><td colspan="7">Sin productos.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

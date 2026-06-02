@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<h1>Curaduria de previews</h1>
+<form class="row g-2 mb-3">
+  <div class="col-md-3">
+    <select class="form-select" name="estado">
+      <option value="">Todos</option>
+      <option value="procesados" {% if request.GET.estado == "procesados" %}selected{% endif %}>Procesados</option>
+      <option value="pendientes" {% if request.GET.estado == "pendientes" %}selected{% endif %}>Pendientes</option>
+      <option value="sin_url" {% if request.GET.estado == "sin_url" %}selected{% endif %}>Sin URL</option>
+      <option value="sin_imagen" {% if request.GET.estado == "sin_imagen" %}selected{% endif %}>Sin imagen</option>
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="fuente">
+      <option value="">Todas las fuentes</option>
+      {% for fuente in fuentes %}<option value="{{ fuente.id }}">{{ fuente.nombre }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2"><button class="btn btn-primary">Filtrar</button></div>
+</form>
+
+<table class="table table-sm align-middle">
+  <thead><tr><th>Fecha</th><th>Fuente</th><th>Titulo</th><th>Oportunidad</th><th>URL</th><th>Imagen</th><th>Estado</th><th>Producto</th><th></th></tr></thead>
+  <tbody>
+    {% for resultado in resultados %}
+      <tr>
+        <td>{{ resultado.fecha_creacion }}</td>
+        <td>{{ resultado.ejecucion.conector.fuente_web }}</td>
+        <td>{{ resultado.titulo }}</td>
+        <td>{{ resultado.precio_oportunidad_decimal }}</td>
+        <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank">URL</a>{% else %}-{% endif %}</td>
+        <td>{% if resultado.imagen_url %}<img src="{{ resultado.imagen_url }}" style="width:42px;height:42px;object-fit:cover">{% else %}-{% endif %}</td>
+        <td>{{ resultado.estado }}</td>
+        <td>{{ resultado.producto_fuente|default:"-" }}</td>
+        <td>
+          <form method="post" action="{% url 'oportunidades:reprocesar_preview' resultado.id %}">{% csrf_token %}
+            <button class="btn btn-sm btn-outline-primary">Reprocesar</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}<tr><td colspan="9">Sin previews.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<a href="{% url 'oportunidades:curaduria_productos' %}">Volver</a>
+<h1>{{ producto.titulo_original }}</h1>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    {% if producto.imagen_url %}<img class="img-fluid rounded border" src="{{ producto.imagen_url }}">{% endif %}
+  </div>
+  <div class="col-md-8">
+    <table class="table">
+      <tr><th>Fuente</th><td>{{ producto.fuente_web }}</td></tr>
+      <tr><th>Canonico</th><td>{{ producto.producto_canonico|default:"-" }}</td></tr>
+      <tr><th>URL</th><td>{% if producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">{{ producto.url_producto }}</a>{% else %}-{% endif %}</td></tr>
+      <tr><th>URL tecnica</th><td>{{ producto.url_tecnica_generada|yesno:"Si,No" }}</td></tr>
+      <tr><th>Revision</th><td>{{ producto.requiere_revision|yesno:"Pendiente,No" }} {{ producto.motivo_revision|default:"" }}</td></tr>
+      <tr><th>Score comercial</th><td>{{ producto.score_comercial }} {{ producto.motivo_score_comercial|default:"" }}</td></tr>
+    </table>
+    <form method="post" action="{% url 'oportunidades:marcar_revision_producto' producto.id %}" class="d-inline">{% csrf_token %}
+      <input type="hidden" name="motivo" value="Marcado manualmente desde curaduria.">
+      <button class="btn btn-warning">Marcar revisar</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:marcar_revisado_producto' producto.id %}" class="d-inline">{% csrf_token %}
+      <button class="btn btn-success">Marcar revisado</button>
+    </form>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:reasignar_canonico_producto' producto.id %}">Reasignar canonico</a>
+  </div>
+</div>
+
+<h2 class="mt-4">Historial de precios</h2>
+<table class="table table-sm">
+  <thead><tr><th>Fecha</th><th>Precio</th><th>Lista</th><th>Transferencia</th><th>Tarjeta</th><th>Oportunidad</th><th>Tipo</th></tr></thead>
+  <tbody>
+    {% for precio in producto.precios_fuente.all %}
+      <tr><td>{{ precio.fecha_relevamiento }}</td><td>{{ precio.precio }}</td><td>{{ precio.precio_lista }}</td><td>{{ precio.precio_transferencia }}</td><td>{{ precio.precio_tarjeta }}</td><td>{{ precio.precio_oportunidad }}</td><td>{{ precio.tipo_precio_oportunidad }}</td></tr>
+    {% empty %}<tr><td colspan="7">Sin precios.</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+<h2>Posibles duplicados</h2>
+<table class="table table-sm">
+  <thead><tr><th>Producto</th><th>Score</th><th></th></tr></thead>
+  <tbody>
+    {% for item in duplicados %}
+      <tr><td>{{ item.producto }}</td><td>{{ item.score }}</td><td><a href="{% url 'oportunidades:detalle_curaduria_producto' item.producto.id %}">Ver</a></td></tr>
+    {% empty %}<tr><td colspan="3">Sin duplicados sospechosos.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

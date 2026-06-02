@@ -92,6 +92,14 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
     conector = resultado.ejecucion.conector
     fuente = conector.fuente_web
     categoria = obtener_o_crear_categoria_desde_texto(None, None)
+    url_real = bool(resultado.url_producto)
+    motivos_revision = []
+    if not url_real:
+        motivos_revision.append("Producto procesado sin URL real. Se genero URL tecnica unica para evitar colapso de productos.")
+    if not (resultado.precio_oportunidad_decimal and resultado.precio_oportunidad_decimal > 0):
+        motivos_revision.append("Precio oportunidad no detectado.")
+    if not resultado.imagen_url:
+        motivos_revision.append("Imagen no detectada.")
     row = {
         "titulo": resultado.titulo,
         "precio": resultado.precio_oportunidad_decimal or resultado.precio_decimal,
@@ -101,13 +109,17 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
         "cuotas_texto": resultado.cuotas_texto,
         "precio_oportunidad": resultado.precio_oportunidad_decimal,
         "tipo_precio_oportunidad": resultado.tipo_precio_oportunidad,
-        "codigo_externo": f"preview-{_identificador_preview(resultado)}" if not resultado.url_producto else None,
+        "codigo_externo": f"preview-{_identificador_preview(resultado)}" if not url_real else None,
         "url_producto": _url_producto_preview(fuente, resultado),
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,
         "condicion": Producto.CONDICION_DESCONOCIDO,
         "moneda": fuente.moneda_principal,
         "origen_dato": PrecioFuente.ORIGEN_SCRAPING,
+        "requiere_revision": bool(motivos_revision),
+        "motivo_revision": " ".join(motivos_revision) or None,
+        "url_tecnica_generada": not url_real,
+        "hash_origen": _identificador_preview(resultado),
     }
     existente = _buscar_existente_por_preview(fuente, resultado)
     canonico, _ = obtener_o_crear_producto_canonico(row, categoria)

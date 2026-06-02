@@ -231,6 +231,17 @@ def crear_o_actualizar_producto_fuente(row, fuente_web, categoria, producto_cano
         "stock_texto": _valor_texto(row.get("stock")) or None,
         "raw_data": json.dumps({k: _valor_texto(v) for k, v in dict(row).items()}, ensure_ascii=True),
     }
+    for campo in [
+        "requiere_revision",
+        "revisado",
+        "motivo_revision",
+        "url_tecnica_generada",
+        "hash_origen",
+        "score_comercial",
+        "motivo_score_comercial",
+    ]:
+        if campo in row:
+            datos[campo] = row.get(campo)
     if creado:
         producto = ProductoFuente.objects.create(**datos)
         return producto, True, False

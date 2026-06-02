@@ -301,6 +301,14 @@ class ProductoFuente(models.Model):
     disponible = models.BooleanField(default=True)
     stock_texto = models.CharField(max_length=150, blank=True, null=True)
     raw_data = models.TextField(blank=True, null=True)
+    requiere_revision = models.BooleanField(default=False)
+    revisado = models.BooleanField(default=False)
+    motivo_revision = models.TextField(blank=True, null=True)
+    url_tecnica_generada = models.BooleanField(default=False)
+    hash_origen = models.CharField(max_length=100, blank=True, null=True)
+    fecha_revision = models.DateTimeField(blank=True, null=True)
+    score_comercial = models.PositiveIntegerField(default=0)
+    motivo_score_comercial = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -311,6 +319,46 @@ class ProductoFuente(models.Model):
 
     def __str__(self):
         return self.titulo_original
+
+
+class OperacionCuraduria(models.Model):
+    TIPO_REVISAR = "revisar"
+    TIPO_CORREGIR = "corregir"
+    TIPO_FUSIONAR = "fusionar"
+    TIPO_DESVINCULAR = "desvincular"
+    TIPO_REASIGNAR = "reasignar"
+    TIPO_RECALCULAR = "recalcular"
+    TIPO_ELIMINAR = "eliminar"
+    TIPO_IMPORTAR = "importar"
+    TIPO_EXPORTAR = "exportar"
+    TIPO_CHOICES = [
+        (TIPO_REVISAR, "Revisar"),
+        (TIPO_CORREGIR, "Corregir"),
+        (TIPO_FUSIONAR, "Fusionar"),
+        (TIPO_DESVINCULAR, "Desvincular"),
+        (TIPO_REASIGNAR, "Reasignar"),
+        (TIPO_RECALCULAR, "Recalcular"),
+        (TIPO_ELIMINAR, "Eliminar"),
+        (TIPO_IMPORTAR, "Importar"),
+        (TIPO_EXPORTAR, "Exportar"),
+    ]
+
+    tipo_operacion = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True)
+    descripcion = models.TextField()
+    datos_antes = models.TextField(blank=True, null=True)
+    datos_despues = models.TextField(blank=True, null=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+    usuario_texto = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+        verbose_name = "operacion de curaduria"
+        verbose_name_plural = "operaciones de curaduria"
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"{self.tipo_operacion} - {self.fecha:%Y-%m-%d %H:%M}"
 
 
 class PrecioFuente(models.Model):

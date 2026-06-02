@@ -798,3 +798,36 @@ https://radar-ofertas.onrender.com/mercadolibre/oauth/callback/
 - El entorno local sigue funcionando con Docker + SQL Server + `mssql-django`.
 - Para produccion real se debe definir una base externa persistente.
 - No se usa OpenAI, no se usa scraping y no se automatizan compras ni publicaciones.
+
+## Etapa 3.12 - Curaduria y dataset comercial
+
+Esta etapa agrega herramientas para revisar y limpiar productos procesados, exportar datasets y respaldar datos de prueba.
+
+URLs nuevas:
+
+```text
+http://localhost:8000/curaduria/productos/
+http://localhost:8000/curaduria/previews/
+http://localhost:8000/dataset/exportar/
+http://localhost:8000/dataset/backup/
+http://localhost:8000/oportunidades/ranking/
+```
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py exportar_dataset_productos --output data/exports/productos_dataset.csv
+docker compose exec web python manage.py exportar_historial_precios --output data/exports/historial_precios.csv
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset.zip
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_radar.json
+docker compose exec web python manage.py importar_snapshot --input data/backups/snapshot_radar.json --dry-run
+```
+
+Persistencia:
+
+- SQL Server local con Docker sigue siendo la base principal actual.
+- Render con SQLite es solo staging/demo.
+- Los datos cargados en Render pueden perderse tras redeploy.
+- Exportar dataset o snapshot antes de cargar datos valiosos o hacer pruebas largas.
+
+Esta etapa no integra OpenAI ni machine learning. Primero se prioriza tener datos limpios, historicos y curados.

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Reasignar producto canonico</h1>
+<p>{{ producto.titulo_original }}</p>
+<form method="post" class="card card-body">
+  {% csrf_token %}
+  <label class="form-label">Producto canonico existente</label>
+  <select class="form-select mb-3" name="producto_canonico">
+    <option value="">Sin canonico</option>
+    {% for canonico in canonicos %}
+      <option value="{{ canonico.id }}" {% if producto.producto_canonico_id == canonico.id %}selected{% endif %}>{{ canonico.nombre_normalizado }}</option>
+    {% endfor %}
+  </select>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" name="accion" value="asignar">Asignar</button>
+    <button class="btn btn-outline-primary" name="accion" value="crear">Crear canonico desde titulo</button>
+    <button class="btn btn-outline-danger" name="accion" value="desvincular">Desvincular</button>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

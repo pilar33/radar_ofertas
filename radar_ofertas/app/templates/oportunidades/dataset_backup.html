@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<h1>Backup / snapshot</h1>
+<a class="btn btn-primary" href="?exportar=snapshot">Exportar snapshot JSON</a>
+<h2 class="mt-4">Resumen</h2>
+<pre class="bg-light border p-3">{{ resumen }}</pre>
+<p class="text-muted">La importacion de snapshot se hace por comando para evitar operaciones riesgosas desde web.</p>
+{% endblock %}

@@ -3,6 +3,7 @@
 {% block title %}Productos multifuente{% endblock %}
 
 {% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">Productos multifuente</h1>
   <div class="d-flex gap-2">
@@ -21,6 +22,7 @@
         <th>Fuentes</th>
         <th>Precio min.</th>
         <th>Promedio</th>
+        <th>Revision</th>
         <th>Indice</th>
         <th>Tipo</th>
         <th>Acciones</th>
@@ -36,13 +38,14 @@
             <td>{{ comparacion.cantidad_fuentes|default:producto.cantidad_apariciones }}</td>
             <td>{% if comparacion %}${{ comparacion.precio_minimo }}{% else %}-{% endif %}</td>
             <td>{% if comparacion %}${{ comparacion.precio_promedio }}{% else %}-{% endif %}</td>
+            <td>{% if producto.apariciones.first.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% else %}-{% endif %}</td>
             <td>{{ evaluacion.indice_oportunidad|default:"-" }}</td>
             <td>{{ evaluacion.get_tipo_display|default:"-" }}</td>
             <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_producto_multifuente' producto.pk %}">Ver</a></td>
           </tr>
         {% endwith %}
       {% empty %}
-        <tr><td colspan="9" class="text-center text-muted py-4">Todavia no hay productos multifuente.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted py-4">Todavia no hay productos multifuente.</td></tr>
       {% endfor %}
     </tbody>
   </table>

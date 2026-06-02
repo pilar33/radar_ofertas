@@ -19,6 +19,7 @@ from .models import (
     ImportacionProductos,
     MercadoLibreToken,
     Oportunidad,
+    OperacionCuraduria,
     PoliticaExtraccionFuente,
     PrecioProducto,
     PrecioFuente,
@@ -165,8 +166,19 @@ class ProductoCanonicoAdmin(admin.ModelAdmin):
 
 @admin.register(ProductoFuente)
 class ProductoFuenteAdmin(admin.ModelAdmin):
-    list_display = ("titulo_original", "fuente_web", "categoria_fuente", "disponible", "condicion", "fecha_actualizacion")
-    list_filter = ("fuente_web", "categoria_fuente", "disponible", "condicion")
+    list_display = (
+        "titulo_original",
+        "fuente_web",
+        "categoria_fuente",
+        "disponible",
+        "condicion",
+        "requiere_revision",
+        "revisado",
+        "url_tecnica_generada",
+        "score_comercial",
+        "fecha_actualizacion",
+    )
+    list_filter = ("fuente_web", "categoria_fuente", "disponible", "condicion", "requiere_revision", "revisado", "url_tecnica_generada")
     search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada")
 
 
@@ -186,6 +198,13 @@ class PrecioFuenteAdmin(admin.ModelAdmin):
     )
     list_filter = ("moneda", "origen_dato", "tipo_precio_oportunidad", "fecha_relevamiento")
     search_fields = ("producto_fuente__titulo_original",)
+
+
+@admin.register(OperacionCuraduria)
+class OperacionCuraduriaAdmin(admin.ModelAdmin):
+    list_display = ("tipo_operacion", "producto_fuente", "producto_canonico", "fecha", "usuario_texto")
+    list_filter = ("tipo_operacion", "fecha")
+    search_fields = ("descripcion", "producto_fuente__titulo_original", "producto_canonico__nombre_normalizado")
 
 
 @admin.register(ComparacionPrecio)

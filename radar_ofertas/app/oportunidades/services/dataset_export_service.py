@@ -1,0 +1,133 @@
+import csv
+import io
+import zipfile
+
+from oportunidades.models import PrecioFuente, ProductoFuente, ResultadoExtraccionWeb
+
+
+def _ultimo_precio(producto_fuente):
+    return producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+
+
+def exportar_dataset_productos_csv(output=None, delimiter=","):
+    buffer = output or io.StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(
+        [
+            "producto_canonico_id",
+            "nombre_normalizado",
+            "categoria",
+            "producto_fuente_id",
+            "titulo_original",
+            "fuente",
+            "url_producto",
+            "imagen_url",
+            "precio_lista",
+            "precio_transferencia",
+            "precio_tarjeta",
+            "cuotas_texto",
+            "precio_oportunidad",
+            "tipo_precio_oportunidad",
+            "fecha_precio",
+            "score_comercial",
+            "requiere_revision",
+            "revisado",
+        ]
+    )
+    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web").prefetch_related("precios_fuente")
+    for producto in productos:
+        precio = _ultimo_precio(producto)
+        canonico = producto.producto_canonico
+        writer.writerow(
+            [
+                canonico.pk if canonico else "",
+                canonico.nombre_normalizado if canonico else "",
+                canonico.categoria.nombre if canonico and canonico.categoria_id else "",
+                producto.pk,
+                producto.titulo_original,
+                producto.fuente_web.nombre,
+                producto.url_producto,
+                producto.imagen_url or "",
+                precio.precio_lista if precio else "",
+                precio.precio_transferencia if precio else "",
+                precio.precio_tarjeta if precio else "",
+                precio.cuotas_texto if precio else "",
+                precio.precio_oportunidad if precio else "",
+                precio.tipo_precio_oportunidad if precio else "",
+                precio.fecha_relevamiento.isoformat() if precio else "",
+                producto.score_comercial,
+                producto.requiere_revision,
+                producto.revisado,
+            ]
+        )
+    return buffer
+
+
+def exportar_historial_precios_csv(output=None, delimiter=","):
+    buffer = output or io.StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(
+        [
+            "producto_fuente_id",
+            "fuente",
+            "titulo",
+            "fecha",
+            "precio",
+            "precio_lista",
+            "precio_transferencia",
+            "precio_tarjeta",
+            "precio_oportunidad",
+            "tipo_precio_oportunidad",
+        ]
+    )
+    precios = PrecioFuente.objects.select_related("producto_fuente__fuente_web").order_by("producto_fuente_id", "fecha_relevamiento")
+    for precio in precios:
+        writer.writerow(
+            [
+                precio.producto_fuente_id,
+                precio.producto_fuente.fuente_web.nombre,
+                precio.producto_fuente.titulo_original,
+                precio.fecha_relevamiento.isoformat(),
+                precio.precio,
+                precio.precio_lista,
+                precio.precio_transferencia,
+                precio.precio_tarjeta,
+                precio.precio_oportunidad,
+                precio.tipo_precio_oportunidad,
+            ]
+        )
+    return buffer
+
+
+def exportar_resultados_preview_csv(output=None, delimiter=","):
+    buffer = output or io.StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(["id", "fuente", "titulo", "precio_oportunidad", "url_producto", "imagen_url", "estado", "producto_fuente_id"])
+    resultados = ResultadoExtraccionWeb.objects.select_related("ejecucion__conector__fuente_web", "producto_fuente")
+    for resultado in resultados:
+        writer.writerow(
+            [
+                resultado.pk,
+                resultado.ejecucion.conector.fuente_web.nombre,
+                resultado.titulo or "",
+                resultado.precio_oportunidad_decimal,
+                resultado.url_producto or "",
+                resultado.imagen_url or "",
+                resultado.estado,
+                resultado.producto_fuente_id or "",
+            ]
+        )
+    return buffer
+
+
+def exportar_dataset_completo_zip():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archivo_zip:
+        productos = exportar_dataset_productos_csv().getvalue()
+        precios = exportar_historial_precios_csv().getvalue()
+        previews = exportar_resultados_preview_csv().getvalue()
+        archivo_zip.writestr("productos_dataset.csv", productos)
+        archivo_zip.writestr("historial_precios.csv", precios)
+        archivo_zip.writestr("resultados_preview.csv", previews)
+    buffer.seek(0)
+    return buffer

@@ -3,6 +3,7 @@
 {% block title %}Producto multifuente{% endblock %}
 
 {% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">{{ producto.nombre_normalizado }}</h1>
   <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_productos_multifuente' %}">Volver</a>
@@ -58,18 +59,25 @@
   <h2 class="h5">Apariciones por fuente</h2>
   <div class="table-responsive">
     <table class="table table-sm align-middle">
-      <thead><tr><th>Fuente</th><th>Titulo</th><th>Disponible</th><th>Ultimo precio</th><th>URL</th></tr></thead>
+      <thead><tr><th>Imagen</th><th>Fuente</th><th>Titulo</th><th>Disponible</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Oportunidad</th><th>Revision</th><th>URL</th></tr></thead>
       <tbody>
         {% for aparicion in producto.apariciones.all %}
+          {% with precio=aparicion.precios_fuente.first %}
           <tr>
+            <td>{% if aparicion.imagen_url %}<img src="{{ aparicion.imagen_url }}" style="width:46px;height:46px;object-fit:cover">{% else %}-{% endif %}</td>
             <td>{{ aparicion.fuente_web.nombre }}</td>
             <td>{{ aparicion.titulo_original }}</td>
             <td>{{ aparicion.disponible|yesno:"Si,No" }}</td>
-            <td>{% if aparicion.precios_fuente.first %}${{ aparicion.precios_fuente.first.precio }}{% else %}-{% endif %}</td>
+            <td>{% if precio %}${{ precio.precio_lista }}{% else %}-{% endif %}</td>
+            <td>{% if precio %}${{ precio.precio_transferencia }}{% else %}-{% endif %}</td>
+            <td>{% if precio %}${{ precio.precio_tarjeta }}{% else %}-{% endif %}</td>
+            <td>{% if precio %}${{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
+            <td>{% if aparicion.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% else %}-{% endif %}</td>
             <td><a href="{{ aparicion.url_producto }}" target="_blank" rel="noopener">Abrir</a></td>
           </tr>
+          {% endwith %}
         {% empty %}
-          <tr><td colspan="5" class="text-muted">Sin apariciones.</td></tr>
+          <tr><td colspan="10" class="text-muted">Sin apariciones.</td></tr>
         {% endfor %}
       </tbody>
     </table>

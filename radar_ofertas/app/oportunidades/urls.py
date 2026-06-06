@@ -93,6 +93,7 @@ urlpatterns = [
     path("curaduria/previews/<int:pk>/desvincular/", views.desvincular_preview_view, name="desvincular_preview"),
     path("dataset/exportar/", views.dataset_exportar, name="dataset_exportar"),
     path("dataset/backup/", views.dataset_backup, name="dataset_backup"),
+    path("sistema/base-datos/", views.diagnostico_base_datos, name="diagnostico_base_datos"),
     path("oportunidades/ranking/", views.ranking_oportunidades, name="ranking_oportunidades"),
     path("oportunidades/ranking/<int:pk>/candidato/", views.marcar_candidato_compra, name="marcar_candidato_compra"),
     path("oportunidades/ranking/<int:pk>/descartar/", views.descartar_candidato_compra, name="descartar_candidato_compra"),

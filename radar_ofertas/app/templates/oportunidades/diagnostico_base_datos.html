@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1>Base de datos activa</h1>
+    <p class="text-muted mb-0">Diagnostico del motor actual sin exponer passwords ni secretos.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:dataset_backup' %}">Backup / snapshot</a>
+</div>
+
+{% if diagnostico.advertencia %}
+  <div class="alert alert-warning">{{ diagnostico.advertencia }}</div>
+{% else %}
+  <div class="alert alert-success">La configuracion actual no reporta advertencias de persistencia.</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="h5">Configuracion</h2>
+        <table class="table table-sm">
+          <tbody>
+            <tr><th>Engine</th><td>{{ diagnostico.engine }}</td></tr>
+            <tr><th>Vendor</th><td>{{ diagnostico.vendor }}</td></tr>
+            <tr><th>Base</th><td>{{ diagnostico.name }}</td></tr>
+            <tr><th>Host</th><td>{{ diagnostico.host|default:"-" }}</td></tr>
+            <tr><th>Puerto</th><td>{{ diagnostico.port|default:"-" }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="h5">Estado</h2>
+        <table class="table table-sm">
+          <tbody>
+            {% for etiqueta, valor in diagnostico.resumen.items %}
+              <tr><th>{{ etiqueta }}</th><td>{{ valor }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="mb-0">{{ diagnostico.recomendacion }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-body">
+    <h2 class="h5">Conteos principales</h2>
+    <table class="table table-sm table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Modelo</th>
+          <th>Cantidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for modelo, cantidad in diagnostico.conteos.items %}
+          <tr>
+            <td>{{ modelo }}</td>
+            <td>{{ cantidad|default:"No disponible" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-body">
+    <h2 class="h5">Comandos utiles</h2>
+    <pre class="bg-light border p-3 mb-0">docker compose exec web python manage.py diagnosticar_base_datos
+docker compose exec web python manage.py backup_rapido_dataset
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_radar.json
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset.zip</pre>
+  </div>
+</div>
+{% endblock %}

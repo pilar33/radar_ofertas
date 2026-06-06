@@ -3,8 +3,21 @@
 {% block content %}
 {% include "oportunidades/_advertencia_persistencia.html" %}
 <h1>Backup / snapshot</h1>
+{% if diagnostico_base.advertencia %}
+  <div class="alert alert-warning">{{ diagnostico_base.advertencia }}</div>
+{% endif %}
 <a class="btn btn-primary" href="?exportar=snapshot">Exportar snapshot JSON</a>
+<a class="btn btn-outline-secondary" href="{% url 'oportunidades:diagnostico_base_datos' %}">Ver base de datos activa</a>
 <h2 class="mt-4">Resumen</h2>
 <pre class="bg-light border p-3">{{ resumen }}</pre>
-<p class="text-muted">La importacion de snapshot se hace por comando para evitar operaciones riesgosas desde web.</p>
+<div class="card mt-4">
+  <div class="card-body">
+    <h2 class="h5">Comandos recomendados</h2>
+    <p class="text-muted mb-2">La importacion de snapshot se hace por comando para evitar operaciones riesgosas desde web.</p>
+    <pre class="bg-light border p-3 mb-0">docker compose exec web python manage.py backup_rapido_dataset
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_radar.json
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset.zip
+docker compose exec web python manage.py importar_snapshot --input data/backups/snapshot_radar.json --dry-run</pre>
+  </div>
+</div>
 {% endblock %}

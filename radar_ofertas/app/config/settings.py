@@ -87,8 +87,8 @@ else:
             "HOST": os.getenv("DB_HOST", "db"),
             "PORT": os.getenv("DB_PORT", "1433"),
             "OPTIONS": {
-                "driver": "ODBC Driver 18 for SQL Server",
-                "extra_params": "TrustServerCertificate=yes",
+                "driver": os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server"),
+                "extra_params": f"TrustServerCertificate={os.getenv('DB_TRUST_SERVER_CERTIFICATE', 'yes')}",
             },
         }
     }

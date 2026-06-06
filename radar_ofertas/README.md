@@ -856,3 +856,48 @@ Manual operativo:
 ```text
 docs/manual_operativo_radar.md
 ```
+
+## Etapa 3.14 - SQL Server como base principal
+
+SQL Server local con Docker queda consolidado como la base principal de trabajo del radar. Render puede seguir usando SQLite solo como staging/demo temporal.
+
+Comandos base:
+
+```bash
+docker compose up -d
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py diagnosticar_base_datos
+```
+
+Backups y exports recomendados:
+
+```bash
+docker compose exec web python manage.py backup_rapido_dataset
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_radar.json
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset.zip
+docker compose exec web python manage.py importar_snapshot --input data/backups/snapshot_radar.json --dry-run
+```
+
+URLs:
+
+- http://localhost:8000/sistema/base-datos/
+- http://localhost:8000/dataset/backup/
+- http://localhost:8000/dataset/exportar/
+- http://localhost:8000/laboratorio/mapeo-web/
+- http://localhost:8000/curaduria/dashboard/
+- http://localhost:8000/oportunidades/ranking/
+
+En Render:
+
+- https://radar-ofertas.onrender.com/sistema/base-datos/
+- https://radar-ofertas.onrender.com/dataset/backup/
+- https://radar-ofertas.onrender.com/dataset/exportar/
+- https://radar-ofertas.onrender.com/laboratorio/mapeo-web/
+- https://radar-ofertas.onrender.com/curaduria/dashboard/
+- https://radar-ofertas.onrender.com/oportunidades/ranking/
+
+Advertencia importante: no ejecutar `docker compose down -v` si se quieren conservar los datos locales. Ese comando elimina el volumen `sqlserver_data`.
+
+Documentacion:
+
+- `docs/base_datos_principal_sqlserver.md`

@@ -115,6 +115,7 @@ from .services.ranking_preview_service import rankear_resultados_ejecucion
 from .services.wizard_fuentes_service import crear_fuente_preview_rapida, crear_fuente_wizard, preparar_fuente_generica
 from .services.storage_service import diagnosticar_storage_config
 from .services.backup_service import exportar_snapshot_json, snapshot_resumen_json
+from .services.base_datos_service import obtener_diagnostico_base_datos
 from .services.curaduria_service import (
     actualizar_producto_desde_preview,
     crear_producto_canonico_desde_fuente,
@@ -1387,8 +1388,17 @@ def dataset_backup(request):
         "oportunidades/dataset_backup.html",
         {
             "advertencia_persistencia": obtener_advertencia_persistencia(),
+            "diagnostico_base": obtener_diagnostico_base_datos(),
             "resumen": snapshot_resumen_json(),
         },
+    )
+
+
+def diagnostico_base_datos(request):
+    return render(
+        request,
+        "oportunidades/diagnostico_base_datos.html",
+        {"diagnostico": obtener_diagnostico_base_datos()},
     )
 
 

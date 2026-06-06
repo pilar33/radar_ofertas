@@ -37,6 +37,7 @@
     <div class="col-md-4"><strong>Precio</strong><br><code>{{ extractor.price_selector|default:"-" }}</code></div>
   </div>
   <div class="d-flex gap-2 mt-3">
+    <form method="post" action="{% url 'oportunidades:habilitar_preview_controlado_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-success btn-sm">Habilitar para preview controlado</button></form>
     <form method="post" action="{% url 'oportunidades:preview_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-primary btn-sm">Ejecutar preview</button></form>
     <form method="post" action="{% url 'oportunidades:probar_selectores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Probar selectores</button></form>
     <form method="post" action="{% url 'oportunidades:seleccionar_mejores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-success btn-sm">Seleccionar mejores</button></form>

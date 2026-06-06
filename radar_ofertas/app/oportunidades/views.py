@@ -109,6 +109,7 @@ from .services.procesamiento_preview_service import (
     procesar_resultados_seleccionados,
     validar_resultado_procesable,
 )
+from .services.preview_controlado_service import habilitar_extractor_preview_controlado
 from .services.estado_fuente_service import evaluar_estado_operativo_fuente
 from .services.headless_diagnostic_service import comparar_html_requests_vs_headless, diagnosticar_requiere_headless
 from .services.ranking_preview_service import rankear_resultados_ejecucion
@@ -681,6 +682,24 @@ def editar_extractor(request, pk):
         messages.success(request, "Configuracion de extractor actualizada.")
         return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
     return render(request, "oportunidades/editar_extractor.html", {"form": form, "extractor": extractor})
+
+
+@require_POST
+def habilitar_preview_controlado_extractor(request, pk):
+    extractor = get_object_or_404(
+        ConfiguracionExtractorWeb.objects.select_related(
+            "conector",
+            "conector__fuente_web",
+            "conector__fuente_web__politica_extraccion",
+        ),
+        pk=pk,
+    )
+    habilitar_extractor_preview_controlado(extractor)
+    messages.success(
+        request,
+        "Extractor habilitado para preview controlado. Revisar resultados antes de procesar productos.",
+    )
+    return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
 
 
 def selectores_extractor(request, pk):

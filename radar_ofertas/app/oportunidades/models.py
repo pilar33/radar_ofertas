@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from oportunidades.services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
+
 
 class FuenteProducto(models.Model):
     TIPO_MARKETPLACE = "marketplace"
@@ -950,9 +952,10 @@ class ConfiguracionExtractorWeb(models.Model):
         if self.delay_segundos is not None and self.delay_segundos < Decimal("1.50"):
             errores["delay_segundos"] = "El delay minimo permitido es 1.5 segundos."
         if self.dominio_permitido:
+            self.dominio_permitido = normalizar_dominio(self.dominio_permitido)
             for campo in ["pagina_prueba_url", "url_inicio", "url_categoria"]:
                 valor = getattr(self, campo)
-                if valor and urlparse(valor).netloc != self.dominio_permitido:
+                if valor and not url_pertenece_a_dominio(valor, self.dominio_permitido):
                     errores[campo] = "La URL debe pertenecer al dominio permitido."
                 if valor and valor.strip().lower().startswith(("javascript:", "data:", "mailto:")):
                     errores[campo] = "La URL no puede usar esquemas javascript, data o mailto."

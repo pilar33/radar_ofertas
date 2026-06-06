@@ -41,6 +41,7 @@ from oportunidades.services.importacion_service import (
     obtener_o_crear_categoria_desde_texto,
     obtener_o_crear_producto_canonico,
 )
+from oportunidades.services.dominios_service import normalizar_dominio
 
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -77,7 +78,7 @@ def _config_temporal(url, modo="mixto"):
         "css_selectors": ConfiguracionExtractorWeb.MODO_CSS_SELECTORS,
     }
     return SimpleNamespace(
-        dominio_permitido=parsed.netloc,
+        dominio_permitido=normalizar_dominio(parsed.netloc),
         modo_extraccion=modo_map.get(modo, ConfiguracionExtractorWeb.MODO_MIXTO),
         product_card_selector=None,
         title_selector=None,
@@ -368,16 +369,20 @@ def _politica_habilita(politica):
 def guardar_laboratorio_como_extractor(sesion, fuente_web=None, nombre_fuente="", rubro="", selectores=None, modo="auto"):
     url = sesion.url
     parsed = urlparse(url)
+    url_base_real = f"{parsed.scheme}://{parsed.netloc}/"
     if not fuente_web:
         fuente_web, _ = FuenteWeb.objects.get_or_create(
             nombre=nombre_fuente or parsed.netloc,
             defaults={
-                "url_base": f"{parsed.scheme}://{parsed.netloc}/",
+                "url_base": url_base_real,
                 "tipo_fuente": FuenteWeb.TIPO_TIENDA_ONLINE,
                 "rubro_principal": rubro or None,
                 "activa": True,
             },
         )
+    if not fuente_web.url_base or "gangahome.example" in fuente_web.url_base:
+        fuente_web.url_base = url_base_real
+        fuente_web.save(update_fields=["url_base", "fecha_actualizacion"])
     politica, _ = PoliticaExtraccionFuente.objects.get_or_create(fuente=fuente_web)
     habilitado = _politica_habilita(politica)
     conector, _ = ConectorFuente.objects.get_or_create(
@@ -399,7 +404,7 @@ def guardar_laboratorio_como_extractor(sesion, fuente_web=None, nombre_fuente=""
             "url_inicio": fuente_web.url_base,
             "pagina_prueba_url": url,
             "url_categoria": url,
-            "dominio_permitido": parsed.netloc,
+            "dominio_permitido": normalizar_dominio(parsed.netloc),
             "modo_extraccion": modo_config,
             "product_card_selector": sugeridos.get("product_card_selector") or None,
             "title_selector": sugeridos.get("title_selector") or None,

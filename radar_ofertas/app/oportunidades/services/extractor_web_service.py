@@ -28,6 +28,7 @@ from oportunidades.services.importacion_service import (
     obtener_o_crear_categoria_desde_texto,
     obtener_o_crear_producto_canonico,
 )
+from oportunidades.services.dominios_service import url_pertenece_a_dominio
 
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -83,7 +84,7 @@ def validar_ejecucion_extractor(conector):
     for url in [config.pagina_prueba_url, config.url_inicio, config.url_categoria]:
         if url:
             parsed = urlparse(url)
-            if parsed.netloc != config.dominio_permitido:
+            if not url_pertenece_a_dominio(url, config.dominio_permitido):
                 return {"valido": False, "mensaje": "URL fuera del dominio permitido.", "nivel": "bloqueado"}
     return {"valido": True, "mensaje": "Extractor habilitado para ejecucion controlada.", "nivel": "ok"}
 
@@ -135,7 +136,7 @@ def normalizar_url_absoluta(url_base, url, dominio_permitido=None):
         return None
     absoluta = urljoin(url_base, url)
     parsed = urlparse(absoluta)
-    if dominio_permitido and parsed.netloc != dominio_permitido:
+    if dominio_permitido and not url_pertenece_a_dominio(absoluta, dominio_permitido):
         return None
     return absoluta
 

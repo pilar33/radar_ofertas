@@ -56,6 +56,11 @@ urlpatterns = [
     path("extractores/resultados-pendientes/", views.resultados_pendientes_extractores, name="resultados_pendientes_extractores"),
     path("extractores/<int:pk>/", views.detalle_extractor, name="detalle_extractor"),
     path("extractores/<int:pk>/editar/", views.editar_extractor, name="editar_extractor"),
+    path(
+        "extractores/<int:pk>/habilitar-preview-controlado/",
+        views.habilitar_preview_controlado_extractor,
+        name="habilitar_preview_controlado_extractor",
+    ),
     path("extractores/<int:pk>/selectores/", views.selectores_extractor, name="selectores_extractor"),
     path("extractores/<int:pk>/probar-selectores/", views.probar_selectores_extractor, name="probar_selectores_extractor"),
     path("extractores/<int:pk>/resultados/", views.resultados_extractor, name="resultados_extractor"),

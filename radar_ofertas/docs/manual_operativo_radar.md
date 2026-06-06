@@ -89,3 +89,41 @@ docker compose exec web python manage.py exportar_snapshot --output data/backups
 El dataset sirve para analisis externo. El snapshot sirve para resguardar datos de prueba antes de seguir trabajando.
 
 No ejecutar `docker compose down -v` si se quieren conservar los datos del volumen `sqlserver_data`.
+
+## Habilitar extractor guardado para preview controlado
+
+Si un extractor queda guardado pero bloqueado por politica, usar primero el boton en:
+
+```text
+/extractores/<id>/
+Habilitar para preview controlado
+```
+
+La accion configura solo modo preview:
+
+- semaforo amarillo si estaba desconocido;
+- `permite_scraping=True`;
+- `robots_txt_revisado=True`;
+- `terminos_revisados=True`;
+- `requiere_login=False`;
+- `tiene_captcha=False`;
+- conector activo;
+- extractor habilitado;
+- `solo_preview=True`;
+- `max_paginas=1`;
+- `max_productos=10`;
+- `delay_segundos=2`.
+
+No procesa productos automaticamente. Despues de ejecutar preview, revisar resultados antes de seleccionar y procesar.
+
+Para Ganga Home se puede reparar rapido desde comando:
+
+```bash
+docker compose exec web python manage.py reparar_extractor_gangahome
+```
+
+Si se edita desde admin manualmente, verificar:
+
+- Fuente / Politica: semaforo amarillo, scraping permitido, robots y terminos revisados, sin login ni captcha.
+- Conector: activo, respeta politica, sin revision manual pendiente.
+- Extractor: dominio `gangahome.com.ar`, pagina prueba `https://www.gangahome.com.ar/cocina/`, habilitado y solo preview.

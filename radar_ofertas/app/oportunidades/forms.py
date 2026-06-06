@@ -14,6 +14,7 @@ from .models import (
     ProductoFuente,
     RevisionManualFuente,
 )
+from .services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
 
 
 class OportunidadFiltroForm(forms.Form):
@@ -474,8 +475,10 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
                 continue
             if url.strip().lower().startswith(("javascript:", "data:", "mailto:")):
                 raise forms.ValidationError("No se aceptan URLs javascript:, data: ni mailto:.")
-            if dominio and urlparse(url).netloc != dominio:
+            if dominio and not url_pertenece_a_dominio(url, dominio):
                 raise forms.ValidationError("Las URLs del extractor deben pertenecer al dominio permitido.")
+        if dominio:
+            cleaned_data["dominio_permitido"] = normalizar_dominio(dominio)
         if modo == ConfiguracionExtractorWeb.MODO_CSS_SELECTORS:
             for field in ["product_card_selector", "title_selector", "price_selector"]:
                 if not cleaned_data.get(field):

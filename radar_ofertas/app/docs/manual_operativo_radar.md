@@ -40,3 +40,15 @@ Flujo:
 5. Curar datos.
 6. Validar dataset piloto.
 7. Exportar dataset y snapshot.
+
+## Habilitar extractor guardado para preview controlado
+
+Desde `/extractores/<id>/` usar el boton `Habilitar para preview controlado`.
+
+Tambien se puede ejecutar:
+
+```bash
+docker compose exec web python manage.py reparar_extractor_gangahome
+```
+
+La accion deja el extractor en `solo_preview=True`, con `max_paginas=1`, `max_productos=10` y `delay_segundos=2`. No procesa productos automaticamente.

@@ -136,6 +136,7 @@ from .services.dataset_export_service import (
 )
 from .services.entorno_service import obtener_advertencia_persistencia
 from .services.ranking_comercial_service import calcular_score_comercial_producto_fuente, recalcular_ranking_comercial
+from .services.validacion_dataset_service import validar_dataset_piloto
 from .services.mercado_libre_service import (
     buscar_productos,
     diagnosticar_endpoints_meli,
@@ -1390,6 +1391,17 @@ def dataset_backup(request):
             "advertencia_persistencia": obtener_advertencia_persistencia(),
             "diagnostico_base": obtener_diagnostico_base_datos(),
             "resumen": snapshot_resumen_json(),
+        },
+    )
+
+
+def dataset_validacion_piloto(request):
+    return render(
+        request,
+        "oportunidades/dataset_validacion_piloto.html",
+        {
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+            "resumen": validar_dataset_piloto(),
         },
     )
 

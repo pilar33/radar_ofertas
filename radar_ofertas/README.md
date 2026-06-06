@@ -901,3 +901,50 @@ Advertencia importante: no ejecutar `docker compose down -v` si se quieren conse
 Documentacion:
 
 - `docs/base_datos_principal_sqlserver.md`
+
+## Etapa 3.15 - Carga piloto real y validacion comercial inicial
+
+Esta etapa valida una carga real, limitada y controlada en SQL Server local. Render con SQLite sigue siendo solo demo/staging.
+
+Diagnostico inicial:
+
+```bash
+docker compose exec web python manage.py diagnosticar_base_datos
+```
+
+Flujo piloto Ganga Home:
+
+```bash
+docker compose exec web python manage.py flujo_piloto_fuente --fuente "Ganga Home" --limite 20
+```
+
+Validacion, ranking y respaldo:
+
+```bash
+docker compose exec web python manage.py validar_dataset_piloto
+docker compose exec web python manage.py recalcular_ranking_comercial
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset_piloto.zip
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_piloto_sqlserver.json
+```
+
+URLs locales:
+
+- http://localhost:8000/sistema/base-datos/
+- http://localhost:8000/laboratorio/mapeo-web/
+- http://localhost:8000/dataset/validacion-piloto/
+- http://localhost:8000/curaduria/dashboard/
+- http://localhost:8000/curaduria/productos/
+- http://localhost:8000/curaduria/duplicados/
+- http://localhost:8000/oportunidades/ranking/
+- http://localhost:8000/dataset/exportar/
+- http://localhost:8000/dataset/backup/
+
+Render solo demo:
+
+- https://radar-ofertas.onrender.com/sistema/base-datos/
+- https://radar-ofertas.onrender.com/laboratorio/mapeo-web/
+- https://radar-ofertas.onrender.com/curaduria/dashboard/
+
+Documentacion:
+
+- `docs/flujo_piloto_datos_reales.md`

@@ -8,6 +8,7 @@ env/
 db.sqlite3
 staticfiles/
 app/media/
+app/data/
 .pytest_cache/
 .mypy_cache/
 .coverage

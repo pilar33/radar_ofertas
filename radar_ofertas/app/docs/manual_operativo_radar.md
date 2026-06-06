@@ -15,3 +15,28 @@ Flujo:
 9. Exportar dataset o snapshot.
 
 Render con SQLite es solo staging/demo.
+
+## Carga piloto real en SQL Server
+
+La carga piloto real debe hacerse en SQL Server local con Docker. No usar Render SQLite como dataset real.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py diagnosticar_base_datos
+docker compose exec web python manage.py flujo_piloto_fuente --fuente "Ganga Home" --limite 20
+docker compose exec web python manage.py validar_dataset_piloto
+docker compose exec web python manage.py recalcular_ranking_comercial
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset_piloto.zip
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_piloto_sqlserver.json
+```
+
+Flujo:
+
+1. Abrir laboratorio.
+2. Mapear Ganga Home.
+3. Verificar precios, imagen y URL.
+4. Procesar seleccionados.
+5. Curar datos.
+6. Validar dataset piloto.
+7. Exportar dataset y snapshot.

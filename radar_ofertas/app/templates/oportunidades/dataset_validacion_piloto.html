@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1>Validacion dataset piloto</h1>
+    <p class="text-muted mb-0">Control rapido de calidad para productos reales cargados en SQL Server local.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:diagnostico_base_datos' %}">Base datos</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:dataset_exportar' %}">Exportar dataset</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:dataset_backup' %}">Backup</a>
+  </div>
+</div>
+
+{% if resumen.dataset_apto %}
+  <div class="alert alert-success">Dataset apto para analisis inicial: Si.</div>
+{% else %}
+  <div class="alert alert-warning">Dataset apto para analisis inicial: No. Revisar los puntos marcados abajo.</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card card-body"><strong>Total productos procesados</strong><span class="fs-3">{{ resumen.total_productos }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Productos canonicos</strong><span class="fs-3">{{ resumen.total_canonicos }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Precios registrados</strong><span class="fs-3">{{ resumen.total_precios }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Fuentes</strong><span class="fs-3">{{ resumen.total_fuentes }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Con transferencia</strong><span class="fs-3">{{ resumen.con_transferencia }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Con imagen</strong><span class="fs-3">{{ resumen.con_imagen }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Con URL real</strong><span class="fs-3">{{ resumen.con_url_real }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Con precio oportunidad</strong><span class="fs-3">{{ resumen.con_precio_oportunidad }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Requieren revision</strong><span class="fs-3">{{ resumen.requieren_revision }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Duplicados probables</strong><span class="fs-3">{{ resumen.duplicados_probables }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Sin imagen</strong><span class="fs-3">{{ resumen.sin_imagen }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Sin precio oportunidad</strong><span class="fs-3">{{ resumen.sin_precio_oportunidad }}</span></div></div>
+</div>
+
+{% if resumen.problemas %}
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5">Problemas detectados</h2>
+      <ul class="mb-0">
+        {% for problema in resumen.problemas %}
+          <li>{{ problema }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <h2 class="h5">Muestras sin imagen</h2>
+    <table class="table table-sm">
+      {% for producto in resumen.muestras.sin_imagen %}
+        <tr><td>{{ producto.titulo_original }}</td><td>{{ producto.fuente_web }}</td><td><a href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td></tr>
+      {% empty %}<tr><td>Sin casos.</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="col-lg-6">
+    <h2 class="h5">Muestras sin precio oportunidad</h2>
+    <table class="table table-sm">
+      {% for producto in resumen.muestras.sin_precio_oportunidad %}
+        <tr><td>{{ producto.titulo_original }}</td><td>{{ producto.fuente_web }}</td><td><a href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td></tr>
+      {% empty %}<tr><td>Sin casos.</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+    <h2 class="h5">Comandos posteriores a la carga piloto</h2>
+    <pre class="bg-light border p-3 mb-0">docker compose exec web python manage.py validar_dataset_piloto
+docker compose exec web python manage.py recalcular_ranking_comercial
+docker compose exec web python manage.py exportar_dataset_completo --output data/exports/radar_dataset_piloto.zip
+docker compose exec web python manage.py exportar_snapshot --output data/backups/snapshot_piloto_sqlserver.json</pre>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Fusionar duplicados</h1>
+<div class="row g-3">
+  <div class="col-md-6"><div class="card card-body"><h2>A</h2><p>{{ producto_a.titulo_original }}</p>{% if producto_a.imagen_url %}<img class="img-fluid" src="{{ producto_a.imagen_url }}">{% endif %}</div></div>
+  <div class="col-md-6"><div class="card card-body"><h2>B</h2><p>{{ producto_b.titulo_original }}</p>{% if producto_b.imagen_url %}<img class="img-fluid" src="{{ producto_b.imagen_url }}">{% endif %}</div></div>
+</div>
+<form method="post" class="card card-body mt-3">
+  {% csrf_token %}
+  <label class="form-label">Destino</label>
+  <select class="form-select mb-2" name="destino">
+    <option value="{{ producto_a.id }}">Conservar A</option>
+    <option value="{{ producto_b.id }}">Conservar B</option>
+  </select>
+  <div class="row g-2">
+    <div class="col-md-3"><label>Titulo</label><select class="form-select" name="titulo"><option value="destino">Destino</option><option value="origen">Origen</option></select></div>
+    <div class="col-md-3"><label>Imagen</label><select class="form-select" name="imagen"><option value="destino">Destino</option><option value="origen">Origen</option></select></div>
+    <div class="col-md-3"><label>URL</label><select class="form-select" name="url"><option value="destino">Destino</option><option value="origen">Origen</option></select></div>
+    <div class="col-md-3"><label>Canonico</label><select class="form-select" name="canonico"><option value="destino">Destino</option><option value="origen">Origen</option></select></div>
+  </div>
+  <div class="alert alert-warning mt-3">No se borra historial: se mueve al destino y el origen queda marcado como fusionado/descartado.</div>
+  <button class="btn btn-danger">Confirmar fusion</button>
+</form>
+{% endblock %}

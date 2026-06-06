@@ -831,3 +831,28 @@ Persistencia:
 - Exportar dataset o snapshot antes de cargar datos valiosos o hacer pruebas largas.
 
 Esta etapa no integra OpenAI ni machine learning. Primero se prioriza tener datos limpios, historicos y curados.
+
+## Etapa 3.13 - Curaduria visual y ranking comercial
+
+Nuevas URLs:
+
+```text
+http://localhost:8000/curaduria/dashboard/
+http://localhost:8000/curaduria/productos/
+http://localhost:8000/curaduria/duplicados/
+http://localhost:8000/curaduria/previews/
+http://localhost:8000/oportunidades/ranking/
+http://localhost:8000/oportunidades/candidatos-compra/
+```
+
+Comando:
+
+```bash
+docker compose exec web python manage.py recalcular_ranking_comercial
+```
+
+Manual operativo:
+
+```text
+docs/manual_operativo_radar.md
+```

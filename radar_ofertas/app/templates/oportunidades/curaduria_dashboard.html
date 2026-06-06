@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<h1>Dashboard de curaduria</h1>
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card card-body"><strong>Total productos fuente</strong><span class="fs-3">{{ total_producto_fuente }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Productos canonicos</strong><span class="fs-3">{{ total_producto_canonico }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Requieren revision</strong><span class="fs-3">{{ requieren_revision }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Revisados</strong><span class="fs-3">{{ revisados }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Sin URL real</strong><span class="fs-3">{{ sin_url_real }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Sin imagen</strong><span class="fs-3">{{ sin_imagen }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Sin precio oportunidad</strong><span class="fs-3">{{ sin_precio_oportunidad }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Con transferencia</strong><span class="fs-3">{{ con_transferencia }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Posibles duplicados</strong><span class="fs-3">{{ posibles_duplicados }}</span></div></div>
+  <div class="col-md-3"><div class="card card-body"><strong>Score alto</strong><span class="fs-3">{{ score_alto }}</span></div></div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+  <a class="btn btn-primary" href="{% url 'oportunidades:curaduria_productos' %}">Productos</a>
+  <a class="btn btn-primary" href="{% url 'oportunidades:curaduria_previews' %}">Previews</a>
+  <a class="btn btn-primary" href="{% url 'oportunidades:curaduria_duplicados' %}">Duplicados</a>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:lista_productos_multifuente' %}">Productos multifuente</a>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:ranking_oportunidades' %}">Ranking</a>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:dataset_exportar' %}">Dataset</a>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:dataset_backup' %}">Backup</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <h2>Ultimos productos</h2>
+    <table class="table table-sm">
+      {% for producto in ultimos_productos %}
+        <tr><td>{{ producto.titulo_original }}</td><td>{{ producto.fuente_web }}</td><td><a href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td></tr>
+      {% empty %}<tr><td>Sin productos.</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="col-lg-6">
+    <h2>Ultimos previews</h2>
+    <table class="table table-sm">
+      {% for preview in ultimos_previews %}
+        <tr><td>{{ preview.titulo }}</td><td>{{ preview.estado }}</td><td>{{ preview.ejecucion.conector.fuente_web }}</td></tr>
+      {% empty %}<tr><td>Sin previews.</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

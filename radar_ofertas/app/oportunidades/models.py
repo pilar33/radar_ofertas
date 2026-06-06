@@ -308,7 +308,31 @@ class ProductoFuente(models.Model):
     hash_origen = models.CharField(max_length=100, blank=True, null=True)
     fecha_revision = models.DateTimeField(blank=True, null=True)
     score_comercial = models.PositiveIntegerField(default=0)
+    NIVEL_ALTO = "alto"
+    NIVEL_MEDIO = "medio"
+    NIVEL_BAJO = "bajo"
+    NIVEL_REVISAR = "revisar"
+    NIVEL_DESCONOCIDO = "desconocido"
+    NIVEL_CHOICES = [
+        (NIVEL_ALTO, "Alto"),
+        (NIVEL_MEDIO, "Medio"),
+        (NIVEL_BAJO, "Bajo"),
+        (NIVEL_REVISAR, "Revisar"),
+        (NIVEL_DESCONOCIDO, "Desconocido"),
+    ]
+    nivel_oportunidad = models.CharField(max_length=20, choices=NIVEL_CHOICES, default=NIVEL_DESCONOCIDO)
     motivo_score_comercial = models.TextField(blank=True, null=True)
+    fecha_score_comercial = models.DateTimeField(blank=True, null=True)
+    nota_curaduria = models.TextField(blank=True, null=True)
+    fecha_ultima_curaduria = models.DateTimeField(blank=True, null=True)
+    fusionado_en = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_fusionados",
+    )
+    descartado_curaduria = models.BooleanField(default=False)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -359,6 +383,54 @@ class OperacionCuraduria(models.Model):
 
     def __str__(self):
         return f"{self.tipo_operacion} - {self.fecha:%Y-%m-%d %H:%M}"
+
+
+class DuplicadoIgnorado(models.Model):
+    producto_a = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="duplicados_ignorados_a")
+    producto_b = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="duplicados_ignorados_b")
+    motivo = models.TextField(blank=True, null=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "duplicado ignorado"
+        verbose_name_plural = "duplicados ignorados"
+        unique_together = ("producto_a", "producto_b")
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"Ignorado #{self.producto_a_id} / #{self.producto_b_id}"
+
+
+class CandidatoCompra(models.Model):
+    ESTADO_OBSERVADO = "observado"
+    ESTADO_CANDIDATO = "candidato"
+    ESTADO_COMPRADO = "comprado"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_CHOICES = [
+        (ESTADO_OBSERVADO, "Observado"),
+        (ESTADO_CANDIDATO, "Candidato"),
+        (ESTADO_COMPRADO, "Comprado"),
+        (ESTADO_DESCARTADO, "Descartado"),
+    ]
+
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="candidaturas_compra")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_CANDIDATO)
+    precio_compra_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_reventa_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margen_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    porcentaje_margen_estimado = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    motivo = models.TextField(blank=True, null=True)
+    notas = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "candidato de compra"
+        verbose_name_plural = "candidatos de compra"
+        ordering = ["-fecha_actualizacion"]
+
+    def __str__(self):
+        return f"{self.producto_fuente} - {self.estado}"
 
 
 class PrecioFuente(models.Model):

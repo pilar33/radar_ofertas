@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AuditoriaFuenteWeb,
+    CandidatoCompra,
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
@@ -10,6 +11,7 @@ from .models import (
     ContenidoSugerido,
     ConsultaMercadoLibre,
     DecisionTecnica,
+    DuplicadoIgnorado,
     DetalleImportacionProducto,
     DetalleEjecucionConector,
     EjecucionConector,
@@ -176,9 +178,20 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
         "revisado",
         "url_tecnica_generada",
         "score_comercial",
+        "nivel_oportunidad",
         "fecha_actualizacion",
     )
-    list_filter = ("fuente_web", "categoria_fuente", "disponible", "condicion", "requiere_revision", "revisado", "url_tecnica_generada")
+    list_filter = (
+        "fuente_web",
+        "categoria_fuente",
+        "disponible",
+        "condicion",
+        "requiere_revision",
+        "revisado",
+        "url_tecnica_generada",
+        "nivel_oportunidad",
+        "descartado_curaduria",
+    )
     search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada")
 
 
@@ -205,6 +218,27 @@ class OperacionCuraduriaAdmin(admin.ModelAdmin):
     list_display = ("tipo_operacion", "producto_fuente", "producto_canonico", "fecha", "usuario_texto")
     list_filter = ("tipo_operacion", "fecha")
     search_fields = ("descripcion", "producto_fuente__titulo_original", "producto_canonico__nombre_normalizado")
+
+
+@admin.register(DuplicadoIgnorado)
+class DuplicadoIgnoradoAdmin(admin.ModelAdmin):
+    list_display = ("producto_a", "producto_b", "fecha")
+    search_fields = ("producto_a__titulo_original", "producto_b__titulo_original", "motivo")
+
+
+@admin.register(CandidatoCompra)
+class CandidatoCompraAdmin(admin.ModelAdmin):
+    list_display = (
+        "producto_fuente",
+        "estado",
+        "precio_compra_estimado",
+        "precio_reventa_estimado",
+        "margen_estimado",
+        "porcentaje_margen_estimado",
+        "fecha_actualizacion",
+    )
+    list_filter = ("estado", "fecha_actualizacion")
+    search_fields = ("producto_fuente__titulo_original", "motivo", "notas")
 
 
 @admin.register(ComparacionPrecio)

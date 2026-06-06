@@ -25,6 +25,8 @@
     <form method="post" action="{% url 'oportunidades:marcar_revisado_producto' producto.id %}" class="d-inline">{% csrf_token %}
       <button class="btn btn-success">Marcar revisado</button>
     </form>
+    <a class="btn btn-primary" href="{% url 'oportunidades:editar_curaduria_producto' producto.id %}">Editar producto</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:editar_precio_curaduria_producto' producto.id %}">Editar precio reciente</a>
     <a class="btn btn-outline-primary" href="{% url 'oportunidades:reasignar_canonico_producto' producto.id %}">Reasignar canonico</a>
   </div>
 </div>
@@ -44,7 +46,14 @@
   <thead><tr><th>Producto</th><th>Score</th><th></th></tr></thead>
   <tbody>
     {% for item in duplicados %}
-      <tr><td>{{ item.producto }}</td><td>{{ item.score }}</td><td><a href="{% url 'oportunidades:detalle_curaduria_producto' item.producto.id %}">Ver</a></td></tr>
+      <tr>
+        <td>{{ item.producto }}</td>
+        <td>{{ item.score }}</td>
+        <td class="d-flex gap-2">
+          <a href="{% url 'oportunidades:detalle_curaduria_producto' item.producto.id %}">Ver</a>
+          <a href="{% url 'oportunidades:fusionar_duplicados' producto.id item.producto.id %}">Fusionar</a>
+        </td>
+      </tr>
     {% empty %}<tr><td colspan="3">Sin duplicados sospechosos.</td></tr>{% endfor %}
   </tbody>
 </table>

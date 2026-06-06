@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Editar precio reciente</h1>
+<p>{{ producto.titulo_original }}</p>
+<form method="post" class="card card-body">
+  {% csrf_token %}
+  <div class="row g-3">
+    {% for field in form %}
+      <div class="col-md-6">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="mt-3 d-flex gap-2">
+    <button class="btn btn-primary">Guardar precio</button>
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

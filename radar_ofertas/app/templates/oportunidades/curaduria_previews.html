@@ -35,10 +35,18 @@
         <td>{% if resultado.imagen_url %}<img src="{{ resultado.imagen_url }}" style="width:42px;height:42px;object-fit:cover">{% else %}-{% endif %}</td>
         <td>{{ resultado.estado }}</td>
         <td>{{ resultado.producto_fuente|default:"-" }}</td>
-        <td>
+        <td class="d-flex gap-2">
           <form method="post" action="{% url 'oportunidades:reprocesar_preview' resultado.id %}">{% csrf_token %}
             <button class="btn btn-sm btn-outline-primary">Reprocesar</button>
           </form>
+          {% if resultado.producto_fuente %}
+            <form method="post" action="{% url 'oportunidades:actualizar_producto_desde_preview' resultado.id %}">{% csrf_token %}
+              <button class="btn btn-sm btn-outline-success">Actualizar producto</button>
+            </form>
+            <form method="post" action="{% url 'oportunidades:desvincular_preview' resultado.id %}">{% csrf_token %}
+              <button class="btn btn-sm btn-outline-danger">Desvincular</button>
+            </form>
+          {% endif %}
         </td>
       </tr>
     {% empty %}<tr><td colspan="9">Sin previews.</td></tr>{% endfor %}

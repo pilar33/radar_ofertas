@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "oportunidades/_advertencia_persistencia.html" %}
+<h1>Duplicados sospechosos</h1>
+<form class="row g-2 mb-3">
+  <div class="col-md-4">
+    <select class="form-select" name="fuente">
+      <option value="">Todas las fuentes</option>
+      {% for fuente in fuentes %}<option value="{{ fuente.id }}">{{ fuente.nombre }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2"><button class="btn btn-primary">Filtrar</button></div>
+</form>
+
+<table class="table table-sm align-middle">
+  <thead><tr><th>A</th><th>B</th><th>Score</th><th>Motivo</th><th>Acciones</th></tr></thead>
+  <tbody>
+    {% for grupo in grupos %}
+      <tr>
+        <td>{% if grupo.producto_a.imagen_url %}<img src="{{ grupo.producto_a.imagen_url }}" style="width:44px;height:44px;object-fit:cover">{% endif %} {{ grupo.producto_a.titulo_original }}</td>
+        <td>{% if grupo.producto_b.imagen_url %}<img src="{{ grupo.producto_b.imagen_url }}" style="width:44px;height:44px;object-fit:cover">{% endif %} {{ grupo.producto_b.titulo_original }}</td>
+        <td><span class="badge text-bg-info">{{ grupo.score }}</span></td>
+        <td>{{ grupo.motivo }}</td>
+        <td class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:fusionar_duplicados' grupo.producto_a.id grupo.producto_b.id %}">Fusionar</a>
+          <form method="post" action="{% url 'oportunidades:ignorar_duplicado' grupo.producto_a.id grupo.producto_b.id %}">{% csrf_token %}
+            <button class="btn btn-sm btn-outline-secondary">Ignorar</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}<tr><td colspan="5">Sin duplicados sospechosos.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

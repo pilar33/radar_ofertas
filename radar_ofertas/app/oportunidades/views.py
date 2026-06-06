@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.db.models import Count, Max, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -21,15 +22,19 @@ from .forms import (
     LaboratorioSelectoresForm,
     MercadoLibreBusquedaForm,
     OportunidadFiltroForm,
+    PrecioFuenteCuraduriaForm,
+    ProductoFuenteCuraduriaForm,
     RevisionManualFuenteForm,
 )
 from .models import (
     AuditoriaFuenteWeb,
+    CandidatoCompra,
     CategoriaInteres,
     ConfiguracionExtractorWeb,
     ConsultaMercadoLibre,
     DecisionTecnica,
     DetalleImportacionProducto,
+    DuplicadoIgnorado,
     EvaluacionOportunidadMultifuente,
     FuenteWeb,
     ImportacionProductos,
@@ -111,8 +116,13 @@ from .services.wizard_fuentes_service import crear_fuente_preview_rapida, crear_
 from .services.storage_service import diagnosticar_storage_config
 from .services.backup_service import exportar_snapshot_json, snapshot_resumen_json
 from .services.curaduria_service import (
+    actualizar_producto_desde_preview,
     crear_producto_canonico_desde_fuente,
     detectar_producto_fuente_duplicados,
+    desvincular_preview,
+    fusionar_producto_fuente,
+    generar_grupos_duplicados,
+    ignorar_duplicado,
     marcar_requiere_revision,
     marcar_revisado,
     reasignar_producto_canonico,
@@ -999,12 +1009,39 @@ def _ultimo_precio_producto(producto_fuente):
     return producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
 
 
+def curaduria_dashboard(request):
+    productos = ProductoFuente.objects.all()
+    sin_precio_oportunidad = productos.filter(
+        Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_oportunidad=0)
+    ).distinct()
+    duplicados = generar_grupos_duplicados(limite=20)
+    contexto = {
+        "total_producto_fuente": productos.count(),
+        "total_producto_canonico": ProductoCanonico.objects.count(),
+        "requieren_revision": productos.filter(requiere_revision=True).count(),
+        "revisados": productos.filter(revisado=True).count(),
+        "sin_url_real": productos.filter(url_tecnica_generada=True).count(),
+        "sin_imagen": productos.filter(Q(imagen_url__isnull=True) | Q(imagen_url="")).count(),
+        "sin_precio_oportunidad": sin_precio_oportunidad.count(),
+        "con_transferencia": productos.filter(precios_fuente__precio_transferencia__gt=0).distinct().count(),
+        "posibles_duplicados": len(duplicados),
+        "score_alto": productos.filter(score_comercial__gte=75).count(),
+        "ultimos_productos": productos.select_related("fuente_web").order_by("-fecha_actualizacion")[:10],
+        "ultimos_previews": ResultadoExtraccionWeb.objects.select_related("ejecucion__conector__fuente_web").order_by("-fecha_creacion")[:10],
+        "advertencia_persistencia": obtener_advertencia_persistencia(),
+    }
+    return render(request, "oportunidades/curaduria_dashboard.html", contexto)
+
+
 def curaduria_productos(request):
     productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
     fuente_id = request.GET.get("fuente")
     revision = request.GET.get("revision")
     url = request.GET.get("url")
     imagen = request.GET.get("imagen")
+    precio = request.GET.get("precio")
+    score = request.GET.get("score")
+    duplicado = request.GET.get("duplicado")
     q = request.GET.get("q")
     if fuente_id:
         productos = productos.filter(fuente_web_id=fuente_id)
@@ -1020,6 +1057,16 @@ def curaduria_productos(request):
         productos = productos.filter(Q(imagen_url__isnull=True) | Q(imagen_url=""))
     elif imagen == "con":
         productos = productos.exclude(Q(imagen_url__isnull=True) | Q(imagen_url=""))
+    if precio == "sin_oportunidad":
+        productos = productos.filter(Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_oportunidad=0)).distinct()
+    elif precio == "transferencia":
+        productos = productos.filter(precios_fuente__precio_transferencia__gt=0).distinct()
+    if score == "alto":
+        productos = productos.filter(score_comercial__gte=75)
+    if duplicado == "probable":
+        ids = {grupo["producto_a"].pk for grupo in generar_grupos_duplicados(limite=100)}
+        ids.update({grupo["producto_b"].pk for grupo in generar_grupos_duplicados(limite=100)})
+        productos = productos.filter(pk__in=ids)
     if q:
         productos = productos.filter(Q(titulo_original__icontains=q) | Q(producto_canonico__nombre_normalizado__icontains=q))
     productos = productos.order_by("-requiere_revision", "-fecha_actualizacion")[:300]
@@ -1054,6 +1101,71 @@ def detalle_curaduria_producto(request, pk):
             "advertencia_persistencia": obtener_advertencia_persistencia(),
         },
     )
+
+
+def editar_curaduria_producto(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    datos_antes = json.dumps(
+        {
+            "titulo": producto.titulo_original,
+            "url": producto.url_producto,
+            "imagen": producto.imagen_url,
+            "canonico": producto.producto_canonico_id,
+        },
+        ensure_ascii=True,
+    )
+    form = ProductoFuenteCuraduriaForm(request.POST or None, instance=producto)
+    if request.method == "POST" and form.is_valid():
+        producto = form.save(commit=False)
+        producto.fecha_ultima_curaduria = timezone.now()
+        producto.save()
+        calcular_score_comercial_producto_fuente(producto)
+        OperacionCuraduria.objects.create(
+            tipo_operacion=OperacionCuraduria.TIPO_CORREGIR,
+            producto_fuente=producto,
+            producto_canonico=producto.producto_canonico,
+            descripcion="ProductoFuente editado desde curaduria.",
+            datos_antes=datos_antes,
+            datos_despues=json.dumps({"titulo": producto.titulo_original, "url": producto.url_producto, "imagen": producto.imagen_url}, ensure_ascii=True),
+        )
+        messages.success(request, "Producto actualizado.")
+        return redirect("oportunidades:detalle_curaduria_producto", pk=producto.pk)
+    return render(request, "oportunidades/editar_curaduria_producto.html", {"producto": producto, "form": form})
+
+
+def editar_precio_curaduria_producto(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    precio = producto.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+    if not precio:
+        messages.error(request, "El producto no tiene precios para editar.")
+        return redirect("oportunidades:detalle_curaduria_producto", pk=producto.pk)
+    datos_antes = json.dumps(
+        {
+            "precio_lista": str(precio.precio_lista),
+            "precio_transferencia": str(precio.precio_transferencia),
+            "precio_tarjeta": str(precio.precio_tarjeta),
+            "precio_oportunidad": str(precio.precio_oportunidad),
+        },
+        ensure_ascii=True,
+    )
+    form = PrecioFuenteCuraduriaForm(request.POST or None, instance=precio)
+    if request.method == "POST" and form.is_valid():
+        precio = form.save()
+        if producto.producto_canonico:
+            calcular_comparacion_producto(producto.producto_canonico)
+            evaluar_producto_multifuente(producto.producto_canonico)
+        calcular_score_comercial_producto_fuente(producto)
+        OperacionCuraduria.objects.create(
+            tipo_operacion=OperacionCuraduria.TIPO_CORREGIR,
+            producto_fuente=producto,
+            producto_canonico=producto.producto_canonico,
+            descripcion="Precio reciente editado desde curaduria.",
+            datos_antes=datos_antes,
+            datos_despues=json.dumps({"precio_oportunidad": str(precio.precio_oportunidad)}, ensure_ascii=True),
+        )
+        messages.success(request, "Precio actualizado.")
+        return redirect("oportunidades:detalle_curaduria_producto", pk=producto.pk)
+    return render(request, "oportunidades/editar_precio_curaduria_producto.html", {"producto": producto, "precio": precio, "form": form})
 
 
 @require_POST
@@ -1131,6 +1243,119 @@ def reprocesar_preview(request, pk):
     return redirect("oportunidades:curaduria_previews")
 
 
+@require_POST
+def actualizar_producto_desde_preview_view(request, pk):
+    resultado = get_object_or_404(ResultadoExtraccionWeb.objects.select_related("producto_fuente"), pk=pk)
+    producto = actualizar_producto_desde_preview(resultado)
+    if producto:
+        calcular_score_comercial_producto_fuente(producto)
+        messages.success(request, "Producto actualizado desde preview.")
+    else:
+        messages.error(request, "El preview no tiene ProductoFuente asociado.")
+    return redirect("oportunidades:curaduria_previews")
+
+
+@require_POST
+def desvincular_preview_view(request, pk):
+    resultado = get_object_or_404(ResultadoExtraccionWeb, pk=pk)
+    desvincular_preview(resultado)
+    messages.success(request, "Preview desvinculado sin borrar el producto.")
+    return redirect("oportunidades:curaduria_previews")
+
+
+def curaduria_duplicados(request):
+    fuente_id = request.GET.get("fuente")
+    grupos = generar_grupos_duplicados(fuente_id=fuente_id, limite=100)
+    return render(
+        request,
+        "oportunidades/curaduria_duplicados.html",
+        {
+            "grupos": grupos,
+            "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
+    )
+
+
+def fusionar_duplicados_view(request, producto_a_id, producto_b_id):
+    producto_a = get_object_or_404(ProductoFuente, pk=producto_a_id)
+    producto_b = get_object_or_404(ProductoFuente, pk=producto_b_id)
+    if request.method == "POST":
+        destino_id = int(request.POST.get("destino"))
+        origen_id = producto_b.pk if destino_id == producto_a.pk else producto_a.pk
+        destino = fusionar_producto_fuente(
+            origen_id,
+            destino_id,
+            opciones={
+                "titulo": request.POST.get("titulo"),
+                "imagen": request.POST.get("imagen"),
+                "url": request.POST.get("url"),
+                "canonico": request.POST.get("canonico"),
+            },
+        )
+        calcular_score_comercial_producto_fuente(destino)
+        messages.success(request, "Productos fusionados sin borrar historial.")
+        return redirect("oportunidades:detalle_curaduria_producto", pk=destino.pk)
+    return render(
+        request,
+        "oportunidades/fusionar_duplicados.html",
+        {
+            "producto_a": producto_a,
+            "producto_b": producto_b,
+            "score": detectar_producto_fuente_duplicados(producto_a),
+        },
+    )
+
+
+@require_POST
+def ignorar_duplicado_view(request, producto_a_id, producto_b_id):
+    producto_a = get_object_or_404(ProductoFuente, pk=producto_a_id)
+    producto_b = get_object_or_404(ProductoFuente, pk=producto_b_id)
+    ignorar_duplicado(producto_a, producto_b, request.POST.get("motivo") or "Ignorado desde UI.")
+    messages.success(request, "Duplicado ignorado y productos marcados como revisados.")
+    return redirect("oportunidades:curaduria_duplicados")
+
+
+@require_POST
+def marcar_candidato_compra(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    precio = _ultimo_precio_producto(producto)
+    candidato, _ = CandidatoCompra.objects.get_or_create(
+        producto_fuente=producto,
+        defaults={
+            "estado": CandidatoCompra.ESTADO_CANDIDATO,
+            "precio_compra_estimado": precio.precio_oportunidad if precio else 0,
+            "motivo": "Marcado desde ranking comercial.",
+        },
+    )
+    if precio:
+        candidato.precio_compra_estimado = precio.precio_oportunidad
+    candidato.estado = CandidatoCompra.ESTADO_CANDIDATO
+    candidato.save()
+    messages.success(request, "Producto marcado como candidato de compra.")
+    return redirect("oportunidades:ranking_oportunidades")
+
+
+@require_POST
+def descartar_candidato_compra(request, pk):
+    producto = get_object_or_404(ProductoFuente, pk=pk)
+    candidato, _ = CandidatoCompra.objects.get_or_create(producto_fuente=producto)
+    candidato.estado = CandidatoCompra.ESTADO_DESCARTADO
+    candidato.motivo = request.POST.get("motivo") or "Descartado desde ranking comercial."
+    candidato.save()
+    messages.success(request, "Producto descartado para compra.")
+    return redirect("oportunidades:ranking_oportunidades")
+
+
+def candidatos_compra(request):
+    candidatos = CandidatoCompra.objects.select_related("producto_fuente__fuente_web").order_by("-fecha_actualizacion")
+    return render(
+        request,
+        "oportunidades/candidatos_compra.html",
+        {"candidatos": candidatos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+    )
+
+
 def dataset_exportar(request):
     tipo = request.GET.get("tipo")
     if tipo == "productos":
@@ -1172,14 +1397,32 @@ def ranking_oportunidades(request):
         recalcular_ranking_comercial()
         messages.success(request, "Ranking comercial recalculado.")
         return redirect("oportunidades:ranking_oportunidades")
-    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente").order_by("-score_comercial", "-fecha_actualizacion")[:300]
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
+    if request.GET.get("nivel"):
+        productos = productos.filter(nivel_oportunidad=request.GET["nivel"])
+    if request.GET.get("fuente"):
+        productos = productos.filter(fuente_web_id=request.GET["fuente"])
+    if request.GET.get("transferencia") == "1":
+        productos = productos.filter(precios_fuente__precio_transferencia__gt=0).distinct()
+    if request.GET.get("historial") == "1":
+        productos = productos.annotate(cantidad_precios=Count("precios_fuente")).filter(cantidad_precios__gte=2)
+    if request.GET.get("no_revision") == "1":
+        productos = productos.filter(requiere_revision=False)
+    if request.GET.get("score_min"):
+        productos = productos.filter(score_comercial__gte=request.GET["score_min"])
+    productos = productos.order_by("-score_comercial", "-fecha_actualizacion")[:300]
     for producto in productos:
         if not producto.score_comercial:
             calcular_score_comercial_producto_fuente(producto)
     return render(
         request,
         "oportunidades/ranking_oportunidades.html",
-        {"productos": productos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+        {
+            "productos": productos,
+            "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "niveles": ProductoFuente.NIVEL_CHOICES,
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
     )
 
 

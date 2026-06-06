@@ -11,6 +11,7 @@ from .models import (
     Oportunidad,
     PoliticaExtraccionFuente,
     PrecioFuente,
+    ProductoFuente,
     RevisionManualFuente,
 )
 
@@ -34,6 +35,78 @@ class OportunidadFiltroForm(forms.Form):
         ]
         for field in self.fields.values():
             field.widget.attrs.update({"class": "form-select"})
+
+
+class ProductoFuenteCuraduriaForm(forms.ModelForm):
+    class Meta:
+        model = ProductoFuente
+        fields = [
+            "titulo_original",
+            "producto_canonico",
+            "url_producto",
+            "imagen_url",
+            "marca_detectada",
+            "descripcion_original",
+            "vendedor",
+            "condicion",
+            "disponible",
+            "stock_texto",
+            "requiere_revision",
+            "revisado",
+            "motivo_revision",
+            "url_tecnica_generada",
+            "nota_curaduria",
+            "descartado_curaduria",
+        ]
+        widgets = {
+            "titulo_original": forms.TextInput(attrs={"class": "form-control"}),
+            "producto_canonico": forms.Select(attrs={"class": "form-select"}),
+            "url_producto": forms.URLInput(attrs={"class": "form-control"}),
+            "imagen_url": forms.URLInput(attrs={"class": "form-control"}),
+            "marca_detectada": forms.TextInput(attrs={"class": "form-control"}),
+            "descripcion_original": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "vendedor": forms.TextInput(attrs={"class": "form-control"}),
+            "condicion": forms.Select(attrs={"class": "form-select"}),
+            "stock_texto": forms.TextInput(attrs={"class": "form-control"}),
+            "motivo_revision": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "nota_curaduria": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "disponible": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "requiere_revision": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "revisado": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "url_tecnica_generada": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "descartado_curaduria": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class PrecioFuenteCuraduriaForm(forms.ModelForm):
+    class Meta:
+        model = PrecioFuente
+        fields = [
+            "precio_lista",
+            "precio_transferencia",
+            "precio_tarjeta",
+            "cuotas_texto",
+            "precio_oportunidad",
+            "tipo_precio_oportunidad",
+            "observaciones",
+        ]
+        widgets = {
+            "precio_lista": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "precio_transferencia": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "precio_tarjeta": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "precio_oportunidad": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "cuotas_texto": forms.TextInput(attrs={"class": "form-control"}),
+            "tipo_precio_oportunidad": forms.Select(attrs={"class": "form-select"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def save(self, commit=True):
+        precio = super().save(commit=False)
+        if precio.precio_oportunidad:
+            precio.precio = precio.precio_oportunidad
+        if commit:
+            precio.save()
+        return precio
 
 
 class MercadoLibreBusquedaForm(forms.Form):

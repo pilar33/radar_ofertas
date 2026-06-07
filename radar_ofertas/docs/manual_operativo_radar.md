@@ -127,3 +127,28 @@ Si se edita desde admin manualmente, verificar:
 - Fuente / Politica: semaforo amarillo, scraping permitido, robots y terminos revisados, sin login ni captcha.
 - Conector: activo, respeta politica, sin revision manual pendiente.
 - Extractor: dominio `gangahome.com.ar`, pagina prueba `https://www.gangahome.com.ar/cocina/`, habilitado y solo preview.
+
+## Habilitar manualmente un extractor guardado
+
+Checklist manual si no se usa el boton automatico:
+
+1. Editar `PoliticaExtraccionFuente`:
+   - semaforo amarillo o verde;
+   - `permite_scraping=True`;
+   - `robots_txt_revisado=True`;
+   - `terminos_revisados=True`;
+   - `requiere_login=False`;
+   - `tiene_captcha=False`.
+2. Editar `ConectorFuente`:
+   - `estado=activo`;
+   - `respeta_politica_fuente=True`;
+   - `requiere_revision_manual=False`.
+3. Editar `ConfiguracionExtractorWeb`:
+   - `habilitado=True`;
+   - `solo_preview=True`;
+   - `max_paginas=1`;
+   - `max_productos=10`;
+   - `delay_segundos=2`.
+4. Ejecutar preview.
+5. Revisar resultados antes de procesar: imagen, URL, precio lista, transferencia, tarjeta/cuotas y precio oportunidad.
+6. Procesar pocos productos primero.

@@ -624,6 +624,60 @@ def extraer_css_productos(html, url_base, config):
     return productos
 
 
+def aplicar_preset_tiendanube_si_corresponde(html, config):
+    if detectar_plataforma_ecommerce(html) != "tiendanube":
+        return config
+    preset = obtener_preset_selectores_tiendanube()
+    for campo in [
+        "product_card_selector",
+        "title_selector",
+        "price_selector",
+        "url_selector",
+        "image_selector",
+        "description_selector",
+    ]:
+        if not getattr(config, campo, None) and preset.get(campo):
+            setattr(config, campo, preset[campo])
+    return config
+
+
+def actualizar_calidad_resultado_preview(resultado):
+    motivos = []
+    score = 0
+    if resultado.titulo:
+        score += 15
+    if resultado.precio_oportunidad_decimal and resultado.precio_oportunidad_decimal > 0:
+        score += 30
+        motivos.append("precio oportunidad")
+    elif resultado.precio_decimal and resultado.precio_decimal > 0:
+        score += 20
+        motivos.append("precio valido")
+    else:
+        resultado.procesable = False
+        resultado.motivo_no_procesable = "Falta precio oportunidad."
+        motivos.append("sin precio oportunidad")
+    if resultado.precio_transferencia_decimal and resultado.precio_transferencia_decimal > 0:
+        score += 10
+        motivos.append("transferencia")
+    if resultado.url_producto:
+        score += 15
+    else:
+        motivos.append("sin URL real")
+        if resultado.procesable:
+            resultado.motivo_no_procesable = "Requiere revision: falta URL real."
+    if resultado.imagen_url:
+        score += 10
+    else:
+        motivos.append("sin imagen")
+        if resultado.procesable:
+            base = resultado.motivo_no_procesable or "Requiere revision:"
+            resultado.motivo_no_procesable = f"{base} falta imagen."
+    resultado.score_preview = max(0, min(100, score))
+    resultado.motivo_score = ", ".join(motivos)
+    resultado.save(update_fields=["procesable", "motivo_no_procesable", "score_preview", "motivo_score"])
+    return resultado
+
+
 def parsear_precio_web(texto):
     texto = re.sub(r"[^0-9,.\-]", "", str(texto or ""))
     if not texto:
@@ -713,6 +767,7 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
         if detectar_bloqueos_html(resp["text"]):
             errores += 1
             break
+        config = aplicar_preset_tiendanube_si_corresponde(resp["text"], config)
         productos = []
         if config.modo_extraccion in {ConfiguracionExtractorWeb.MODO_JSON_LD, ConfiguracionExtractorWeb.MODO_MIXTO}:
             productos.extend(extraer_json_ld_productos(resp["text"], url, config))
@@ -722,7 +777,7 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
             productos = []
         for item in productos[: max(0, limite_productos - detectados)]:
             item = enriquecer_item_con_precios(item)
-            precio = item.get("precio_decimal") or Decimal("0.00")
+            precio = item.get("precio_oportunidad_decimal") or item.get("precio_decimal") or Decimal("0.00")
             mensaje = ""
             resultado = ResultadoExtraccionWeb.objects.create(
                 ejecucion=ejecucion,
@@ -746,6 +801,7 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
                 mensaje=mensaje,
                 raw_data=json.dumps(item, ensure_ascii=True, default=str),
             )
+            actualizar_calidad_resultado_preview(resultado)
             detectados += 1
             if procesar:
                 procesar_resultado_a_producto(resultado, conector)

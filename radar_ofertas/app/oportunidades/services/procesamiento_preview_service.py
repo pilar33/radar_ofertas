@@ -35,8 +35,9 @@ def validar_resultado_procesable(resultado):
         return {"valido": False, "mensaje": resultado.motivo_no_procesable or "Resultado marcado como no procesable.", "nivel": "bloqueado"}
     if not resultado.titulo:
         return {"valido": False, "mensaje": "Falta titulo.", "nivel": "bloqueado"}
-    if not resultado.precio_decimal or resultado.precio_decimal <= 0:
-        return {"valido": False, "mensaje": "Falta precio valido.", "nivel": "bloqueado"}
+    precio_principal = resultado.precio_oportunidad_decimal or resultado.precio_decimal
+    if not precio_principal or precio_principal <= 0:
+        return {"valido": False, "mensaje": "Falta precio oportunidad.", "nivel": "bloqueado"}
     if not (resultado.url_producto or resultado.fuente_url):
         return {"valido": False, "mensaje": "Falta URL de producto o fuente.", "nivel": "bloqueado"}
     if resultado.estado not in {ResultadoExtraccionWeb.ESTADO_DETECTADO, ResultadoExtraccionWeb.ESTADO_OMITIDO}:
@@ -47,6 +48,13 @@ def validar_resultado_procesable(resultado):
     validacion = validar_ejecucion_extractor(conector)
     if not validacion["valido"]:
         return validacion
+    advertencias = []
+    if not resultado.url_producto:
+        advertencias.append("sin URL real")
+    if not resultado.imagen_url:
+        advertencias.append("sin imagen")
+    if advertencias:
+        return {"valido": True, "mensaje": "Procesable con advertencia: " + ", ".join(advertencias), "nivel": "advertencia"}
     return {"valido": True, "mensaje": "Resultado procesable.", "nivel": "ok"}
 
 

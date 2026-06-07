@@ -52,3 +52,12 @@ docker compose exec web python manage.py reparar_extractor_gangahome
 ```
 
 La accion deja el extractor en `solo_preview=True`, con `max_paginas=1`, `max_productos=10` y `delay_segundos=2`. No procesa productos automaticamente.
+
+## Habilitar manualmente un extractor guardado
+
+1. Politica: semaforo amarillo o verde, scraping permitido, robots y terminos revisados, sin login ni captcha.
+2. Conector: activo, respeta politica y sin revision manual pendiente.
+3. Extractor: habilitado, solo preview, max_paginas 1, max_productos 10 y delay 2.
+4. Ejecutar preview.
+5. Revisar imagen, URL, precio lista, transferencia, tarjeta/cuotas y precio oportunidad antes de procesar.
+6. Procesar pocos productos primero.

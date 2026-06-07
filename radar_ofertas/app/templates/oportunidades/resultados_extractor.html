@@ -18,7 +18,24 @@
 
 <div class="bg-white border rounded p-3">
   <table class="table table-sm align-middle mb-0">
-    <thead><tr><th></th><th>Titulo</th><th>Precio</th><th>Score</th><th>Duplicado</th><th>URL</th><th>Estado</th><th>Procesable</th><th>Producto</th></tr></thead>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Imagen</th>
+        <th>Titulo</th>
+        <th>Lista</th>
+        <th>Transferencia</th>
+        <th>Tarjeta/cuotas</th>
+        <th>Oportunidad</th>
+        <th>Tipo</th>
+        <th>URL</th>
+        <th>Score</th>
+        <th>Duplicado</th>
+        <th>Estado</th>
+        <th>Procesable</th>
+        <th>Producto</th>
+      </tr>
+    </thead>
     <tbody>
       {% for resultado, validacion in validaciones %}
         <tr>
@@ -29,17 +46,41 @@
               <button class="btn btn-sm {% if resultado.seleccionado %}btn-primary{% else %}btn-outline-primary{% endif %}">{% if resultado.seleccionado %}Sel{% else %}Elegir{% endif %}</button>
             </form>
           </td>
+          <td>
+            {% if resultado.imagen_url %}
+              <img src="{{ resultado.imagen_url }}" alt="{{ resultado.titulo|default:'Producto' }}" style="width:56px;height:56px;object-fit:cover" class="rounded border">
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
           <td>{{ resultado.titulo|default:"-" }}</td>
-          <td>{{ resultado.precio_decimal }}</td>
+          <td>{{ resultado.precio_lista_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.precio_lista_texto|default:"" }}</small></td>
+          <td>{{ resultado.precio_transferencia_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.precio_transferencia_texto|default:"" }}</small></td>
+          <td>{{ resultado.precio_tarjeta_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.cuotas_texto|default:resultado.precio_tarjeta_texto|default:"" }}</small></td>
+          <td><strong>{{ resultado.precio_oportunidad_decimal|default:resultado.precio_decimal }}</strong></td>
+          <td>{{ resultado.get_tipo_precio_oportunidad_display }}</td>
+          <td>
+            {% if resultado.url_producto %}
+              {% if "/radar-preview/" in resultado.url_producto %}
+                <span class="badge text-bg-warning">URL tecnica</span>
+              {% else %}
+                <a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
           <td><span class="badge text-bg-info">{{ resultado.score_preview }}</span><br><small>{{ resultado.motivo_score|default:"" }}</small></td>
           <td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td>
-          <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
           <td>{{ resultado.get_estado_display }}</td>
-          <td><span class="badge text-bg-{% if validacion.valido %}success{% else %}secondary{% endif %}">{{ validacion.mensaje }}</span></td>
+          <td>
+            <span class="badge text-bg-{% if validacion.nivel == 'advertencia' %}warning{% elif validacion.valido %}success{% else %}secondary{% endif %}">{{ validacion.mensaje }}</span>
+            {% if resultado.motivo_no_procesable %}<br><small class="text-muted">{{ resultado.motivo_no_procesable }}</small>{% endif %}
+          </td>
           <td>{{ resultado.producto_fuente|default:"-" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="9" class="text-muted">Sin resultados.</td></tr>
+        <tr><td colspan="14" class="text-muted">Sin resultados.</td></tr>
       {% endfor %}
     </tbody>
   </table>

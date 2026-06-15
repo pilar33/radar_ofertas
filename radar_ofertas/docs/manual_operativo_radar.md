@@ -152,3 +152,13 @@ Checklist manual si no se usa el boton automatico:
 4. Ejecutar preview.
 5. Revisar resultados antes de procesar: imagen, URL, precio lista, transferencia, tarjeta/cuotas y precio oportunidad.
 6. Procesar pocos productos primero.
+# Comparar productos entre fuentes
+
+1. Procesar productos confirmados de al menos dos fuentes.
+2. Ejecutar `docker compose exec web python manage.py generar_sugerencias_matching --limite 200 --min-score 60`.
+3. Abrir `/matching/productos/` y revisar primero nivel alto.
+4. Comparar titulo, atributos, imagen, URL e historial.
+5. Aceptar para vincular ambos productos al mismo `ProductoCanonico`, o rechazar para que el par no vuelva a generarse.
+6. Revisar el resultado en `/productos-multifuente/` y recalcular ranking cuando corresponda.
+
+El proceso siempre requiere confirmacion humana. No realiza scraping ni procesamiento automatico.

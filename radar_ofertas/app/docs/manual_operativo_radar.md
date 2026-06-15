@@ -61,3 +61,6 @@ La accion deja el extractor en `solo_preview=True`, con `max_paginas=1`, `max_pr
 4. Ejecutar preview.
 5. Revisar imagen, URL, precio lista, transferencia, tarjeta/cuotas y precio oportunidad antes de procesar.
 6. Procesar pocos productos primero.
+# Comparar productos entre fuentes
+
+Generar sugerencias con `docker compose exec web python manage.py generar_sugerencias_matching --limite 200 --min-score 60`. Revisarlas en `/matching/productos/`; aceptar vincula los `ProductoFuente` al mismo `ProductoCanonico`, mientras que rechazar conserva la decision para no recrear el par.

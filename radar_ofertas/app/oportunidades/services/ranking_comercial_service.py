@@ -41,21 +41,25 @@ def _promedio_historico(precios):
 def _comparacion_fuentes(producto_fuente, precio_actual):
     canonico = producto_fuente.producto_canonico
     if not canonico or not precio_actual:
-        return {"cantidad": 0, "es_mejor": False, "diferencia_promedio": Decimal("0.00")}
+        return {"cantidad": 0, "es_mejor": False, "diferencia_promedio": Decimal("0.00"), "diferencia_peor": Decimal("0.00")}
     precios_actuales = []
     for aparicion in canonico.apariciones.prefetch_related("precios_fuente"):
         precio = _ultimo_precio(aparicion)
         if precio and precio.precio_oportunidad > 0:
             precios_actuales.append((aparicion, precio.precio_oportunidad))
     if not precios_actuales:
-        return {"cantidad": 0, "es_mejor": False, "diferencia_promedio": Decimal("0.00")}
+        return {"cantidad": 0, "es_mejor": False, "diferencia_promedio": Decimal("0.00"), "diferencia_peor": Decimal("0.00")}
     minimo = min(valor for _, valor in precios_actuales)
     promedio = (sum(valor for _, valor in precios_actuales) / len(precios_actuales)).quantize(Decimal("0.01"))
     actual = precio_actual.precio_oportunidad or precio_actual.precio
     diferencia = Decimal("0.00")
+    diferencia_peor = Decimal("0.00")
     if promedio > 0:
         diferencia = ((promedio - actual) / promedio * Decimal("100")).quantize(Decimal("0.01"))
-    return {"cantidad": len(precios_actuales), "es_mejor": actual == minimo, "diferencia_promedio": diferencia}
+    maximo = max(valor for _, valor in precios_actuales)
+    if maximo > 0:
+        diferencia_peor = ((maximo - actual) / maximo * Decimal("100")).quantize(Decimal("0.01"))
+    return {"cantidad": len(precios_actuales), "es_mejor": actual == minimo, "diferencia_promedio": diferencia, "diferencia_peor": diferencia_peor}
 
 
 def calcular_score_comercial_producto_fuente(producto_fuente, guardar=True):
@@ -108,10 +112,13 @@ def calcular_score_comercial_producto_fuente(producto_fuente, guardar=True):
         score += 8
         if comparacion["es_mejor"]:
             score += 12
-            motivos.append("Es la mejor fuente para el canonico.")
-        if comparacion["diferencia_promedio"] > 0:
-            score += min(10, int(comparacion["diferencia_promedio"]))
-            motivos.append("Precio favorable contra promedio de fuentes.")
+            motivos.append(f"Mejor precio entre {comparacion['cantidad']} fuentes.")
+        if comparacion["diferencia_promedio"] > 15:
+            score += 10
+            motivos.append(f"{comparacion['diferencia_promedio']}% menor al promedio.")
+        if comparacion["diferencia_peor"] > 25:
+            score += 8
+            motivos.append(f"{comparacion['diferencia_peor']}% menor que la fuente mas cara.")
 
     if producto_fuente.imagen_url:
         score += 8

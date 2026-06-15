@@ -15,8 +15,8 @@ def calcular_indice_oportunidad(producto_canonico, producto_fuente):
     if not ultimo_precio:
         return 0
 
-    precio = ultimo_precio.precio
-    promedio = comparacion.precio_promedio if comparacion else Decimal("0")
+    precio = ultimo_precio.precio_oportunidad or ultimo_precio.precio
+    promedio = (comparacion.precio_promedio_oportunidad or comparacion.precio_promedio) if comparacion else Decimal("0")
     resultado = calcular_resultado_comercial(precio, precio_reventa_estimado=promedio or None)
     politica = getattr(producto_fuente.fuente_web, "politica_extraccion", None)
     descuento = ultimo_precio.descuento_porcentaje
@@ -56,14 +56,18 @@ def evaluar_producto_multifuente(producto_canonico):
     mejor_precio = None
     for producto_fuente in producto_canonico.apariciones.prefetch_related("precios_fuente"):
         ultimo_precio = producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
-        if ultimo_precio and (mejor_precio is None or ultimo_precio.precio < mejor_precio.precio):
+        valor = (ultimo_precio.precio_oportunidad or ultimo_precio.precio) if ultimo_precio else Decimal("0")
+        mejor_valor = (mejor_precio.precio_oportunidad or mejor_precio.precio) if mejor_precio else None
+        if ultimo_precio and valor > 0 and (mejor_valor is None or valor < mejor_valor):
             mejor_precio = ultimo_precio
             mejor_aparicion = producto_fuente
 
     if not mejor_aparicion or not mejor_precio:
         return None
 
-    resultado = calcular_resultado_comercial(mejor_precio.precio, comparacion.precio_promedio or None)
+    precio_compra = mejor_precio.precio_oportunidad or mejor_precio.precio
+    precio_promedio = comparacion.precio_promedio_oportunidad or comparacion.precio_promedio
+    resultado = calcular_resultado_comercial(precio_compra, precio_promedio or None)
     indice = calcular_indice_oportunidad(producto_canonico, mejor_aparicion)
     tipo = EvaluacionOportunidadMultifuente.TIPO_OBSERVAR
     riesgo = "medio"
@@ -77,8 +81,8 @@ def evaluar_producto_multifuente(producto_canonico):
     return EvaluacionOportunidadMultifuente.objects.create(
         producto_canonico=producto_canonico,
         producto_fuente_origen=mejor_aparicion,
-        precio_compra=mejor_precio.precio,
-        precio_promedio_mercado=comparacion.precio_promedio,
+        precio_compra=precio_compra,
+        precio_promedio_mercado=precio_promedio,
         precio_reventa_estimado=resultado["precio_reventa_estimado"],
         margen_estimado=resultado["margen_estimado"],
         porcentaje_margen=resultado["porcentaje_margen"],

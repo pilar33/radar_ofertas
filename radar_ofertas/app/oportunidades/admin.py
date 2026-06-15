@@ -34,6 +34,7 @@ from .models import (
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
+    SugerenciaMatchingProducto,
 )
 
 
@@ -246,6 +247,13 @@ class ComparacionPrecioAdmin(admin.ModelAdmin):
     list_display = ("producto_canonico", "precio_minimo", "precio_promedio", "precio_maximo", "cantidad_fuentes", "fecha_calculo")
     list_filter = ("fecha_calculo", "fuente_mas_barata")
     search_fields = ("producto_canonico__nombre_normalizado",)
+
+
+@admin.register(SugerenciaMatchingProducto)
+class SugerenciaMatchingProductoAdmin(admin.ModelAdmin):
+    list_display = ("producto_a", "producto_b", "score", "nivel", "estado", "fecha_creacion")
+    list_filter = ("nivel", "estado")
+    search_fields = ("producto_a__titulo_original", "producto_b__titulo_original")
 
 
 @admin.register(EvaluacionOportunidadMultifuente)

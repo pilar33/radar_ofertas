@@ -505,6 +505,19 @@ class ComparacionPrecio(models.Model):
         related_name="comparaciones_mas_barata",
     )
     diferencia_porcentual_min_promedio = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    producto_fuente_mas_barato = models.ForeignKey(
+        ProductoFuente,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="comparaciones_como_mas_barato",
+    )
+    precio_minimo_oportunidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_maximo_oportunidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_promedio_oportunidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    diferencia_pct_min_promedio = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    diferencia_pct_min_max = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    cantidad_productos_fuente = models.PositiveIntegerField(default=0)
     fecha_calculo = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -514,6 +527,63 @@ class ComparacionPrecio(models.Model):
 
     def __str__(self):
         return f"{self.producto_canonico} - {self.fecha_calculo:%Y-%m-%d}"
+
+
+class SugerenciaMatchingProducto(models.Model):
+    NIVEL_ALTO = "alto"
+    NIVEL_MEDIO = "medio"
+    NIVEL_BAJO = "bajo"
+    NIVEL_DESCARTAR = "descartar"
+    NIVEL_CHOICES = [
+        (NIVEL_ALTO, "Alto"),
+        (NIVEL_MEDIO, "Medio"),
+        (NIVEL_BAJO, "Bajo"),
+        (NIVEL_DESCARTAR, "Descartar"),
+    ]
+    ESTADO_PENDIENTE = "pendiente"
+    ESTADO_ACEPTADA = "aceptada"
+    ESTADO_RECHAZADA = "rechazada"
+    ESTADO_IGNORADA = "ignorada"
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, "Pendiente"),
+        (ESTADO_ACEPTADA, "Aceptada"),
+        (ESTADO_RECHAZADA, "Rechazada"),
+        (ESTADO_IGNORADA, "Ignorada"),
+    ]
+
+    producto_a = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="sugerencias_matching_a")
+    producto_b = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="sugerencias_matching_b")
+    score = models.PositiveIntegerField(default=0)
+    nivel = models.CharField(max_length=20, choices=NIVEL_CHOICES, default=NIVEL_DESCARTAR)
+    motivos = models.TextField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_PENDIENTE)
+    producto_canonico_sugerido = models.ForeignKey(
+        ProductoCanonico,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sugerencias_matching",
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_revision = models.DateTimeField(null=True, blank=True)
+    nota_revision = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "sugerencia de matching de producto"
+        verbose_name_plural = "sugerencias de matching de productos"
+        ordering = ["-score", "-fecha_creacion"]
+        unique_together = ("producto_a", "producto_b")
+
+    def save(self, *args, **kwargs):
+        if self.producto_a_id and self.producto_b_id:
+            if self.producto_a_id == self.producto_b_id:
+                raise ValueError("Un producto no puede compararse consigo mismo.")
+            if self.producto_a_id > self.producto_b_id:
+                self.producto_a_id, self.producto_b_id = self.producto_b_id, self.producto_a_id
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"#{self.producto_a_id} / #{self.producto_b_id} - {self.score}"
 
 
 class EvaluacionOportunidadMultifuente(models.Model):

@@ -1,8 +1,10 @@
 import json
+from datetime import timedelta
+from decimal import Decimal
 from urllib.parse import urlparse
 
 from django.contrib import messages
-from django.db.models import Count, Max, Prefetch, Q
+from django.db.models import Count, F, Max, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -48,6 +50,7 @@ from .models import (
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
+    SugerenciaMatchingProducto,
 )
 from .serializers import (
     CargaProductoURLSerializer,
@@ -82,6 +85,11 @@ from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
 from .services.comparacion_service import calcular_comparacion_producto
 from .services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from .services.matching_productos_service import (
+    aceptar_sugerencia_matching,
+    calcular_score_similitud_producto,
+    revisar_sugerencia_matching,
+)
 from .services.importacion_service import (
     crear_producto_desde_carga_url,
     detectar_tipo_archivo,
@@ -998,14 +1006,54 @@ def cargar_producto_url(request):
 def lista_productos_multifuente(request):
     productos = (
         ProductoCanonico.objects.select_related("categoria")
-        .prefetch_related("comparaciones", "evaluaciones_multifuente", "apariciones")
-        .annotate(cantidad_apariciones=Count("apariciones", distinct=True))
+        .prefetch_related("comparaciones__fuente_mas_barata", "evaluaciones_multifuente", "apariciones__fuente_web", "apariciones__precios_fuente")
+        .annotate(
+            cantidad_apariciones=Count("apariciones", distinct=True),
+            cantidad_fuentes_anotada=Count("apariciones__fuente_web", distinct=True),
+        )
         .all()
     )
+    if request.GET.get("multiples") == "1":
+        productos = productos.filter(cantidad_fuentes_anotada__gte=2)
+    if request.GET.get("con_transferencia") == "1":
+        productos = productos.filter(apariciones__precios_fuente__precio_transferencia__gt=0).distinct()
+    if request.GET.get("sin_revisar") == "1":
+        productos = productos.exclude(apariciones__requiere_revision=True)
+    if request.GET.get("matching_reciente") == "1":
+        productos = productos.filter(
+            sugerencias_matching__estado=SugerenciaMatchingProducto.ESTADO_ACEPTADA,
+            sugerencias_matching__fecha_revision__gte=timezone.now() - timedelta(days=30),
+        ).distinct()
+    filas = []
+    for producto in productos:
+        comparacion = producto.comparaciones.order_by("-fecha_calculo", "-id").first()
+        if request.GET.get("fuente_mas_barata") and (
+            not comparacion or str(comparacion.fuente_mas_barata_id) != request.GET["fuente_mas_barata"]
+        ):
+            continue
+        diferencia_minima = request.GET.get("diferencia_minima")
+        if diferencia_minima:
+            try:
+                if not comparacion or comparacion.diferencia_pct_min_max < Decimal(diferencia_minima):
+                    continue
+            except (ValueError, ArithmeticError):
+                pass
+        apariciones = list(producto.apariciones.all())
+        filas.append({
+            "producto": producto,
+            "comparacion": comparacion,
+            "fuentes": ", ".join(sorted({aparicion.fuente_web.nombre for aparicion in apariciones})),
+            "requiere_revision": any(aparicion.requiere_revision for aparicion in apariciones),
+            "score_maximo": max([aparicion.score_comercial for aparicion in apariciones] or [0]),
+        })
     return render(
         request,
         "oportunidades/lista_productos_multifuente.html",
-        {"productos": productos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+        {
+            "filas": filas,
+            "fuentes_disponibles": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
     )
 
 
@@ -1019,11 +1067,109 @@ def detalle_producto_multifuente(request, pk):
         ),
         pk=pk,
     )
+    apariciones = []
+    for aparicion in producto.apariciones.all():
+        aparicion.precio_actual = _ultimo_precio_producto(aparicion)
+        apariciones.append(aparicion)
     return render(
         request,
         "oportunidades/detalle_producto_multifuente.html",
-        {"producto": producto, "advertencia_persistencia": obtener_advertencia_persistencia()},
+        {
+            "producto": producto,
+            "apariciones": apariciones,
+            "comparacion": producto.comparaciones.order_by("-fecha_calculo", "-id").first(),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
     )
+
+
+def matching_productos(request):
+    sugerencias = SugerenciaMatchingProducto.objects.select_related(
+        "producto_a__fuente_web", "producto_b__fuente_web", "producto_canonico_sugerido"
+    ).prefetch_related("producto_a__precios_fuente", "producto_b__precios_fuente")
+    estado = request.GET.get("estado", SugerenciaMatchingProducto.ESTADO_PENDIENTE)
+    if estado:
+        sugerencias = sugerencias.filter(estado=estado)
+    if request.GET.get("nivel"):
+        sugerencias = sugerencias.filter(nivel=request.GET["nivel"])
+    if request.GET.get("fuente_a"):
+        sugerencias = sugerencias.filter(producto_a__fuente_web_id=request.GET["fuente_a"])
+    if request.GET.get("fuente_b"):
+        sugerencias = sugerencias.filter(producto_b__fuente_web_id=request.GET["fuente_b"])
+    if request.GET.get("score_minimo"):
+        sugerencias = sugerencias.filter(score__gte=request.GET["score_minimo"])
+    if request.GET.get("tipo") == "distintas":
+        sugerencias = sugerencias.exclude(producto_a__fuente_web_id=F("producto_b__fuente_web_id"))
+    elif request.GET.get("tipo") == "misma":
+        sugerencias = sugerencias.filter(producto_a__fuente_web_id=F("producto_b__fuente_web_id"))
+    filas = []
+    for sugerencia in sugerencias[:500]:
+        sugerencia.precio_a = _ultimo_precio_producto(sugerencia.producto_a)
+        sugerencia.precio_b = _ultimo_precio_producto(sugerencia.producto_b)
+        try:
+            sugerencia.motivos_lista = json.loads(sugerencia.motivos or "[]")
+        except json.JSONDecodeError:
+            sugerencia.motivos_lista = [sugerencia.motivos] if sugerencia.motivos else []
+        filas.append(sugerencia)
+    return render(request, "oportunidades/matching_productos.html", {"sugerencias": filas, "fuentes": FuenteWeb.objects.order_by("nombre")})
+
+
+def matching_producto_detalle(request, pk):
+    sugerencia = get_object_or_404(
+        SugerenciaMatchingProducto.objects.select_related(
+            "producto_a__fuente_web", "producto_a__producto_canonico", "producto_b__fuente_web", "producto_b__producto_canonico"
+        ).prefetch_related("producto_a__precios_fuente", "producto_b__precios_fuente"),
+        pk=pk,
+    )
+    similitud = calcular_score_similitud_producto(sugerencia.producto_a, sugerencia.producto_b)
+    return render(request, "oportunidades/matching_producto_detalle.html", {
+        "sugerencia": sugerencia,
+        "similitud": similitud,
+        "precio_a": _ultimo_precio_producto(sugerencia.producto_a),
+        "precio_b": _ultimo_precio_producto(sugerencia.producto_b),
+        "canonicos": ProductoCanonico.objects.order_by("nombre_normalizado")[:500],
+    })
+
+
+@require_POST
+def matching_producto_aceptar(request, pk):
+    sugerencia = get_object_or_404(SugerenciaMatchingProducto, pk=pk)
+    destino = None
+    if request.POST.get("producto_canonico_id"):
+        destino = get_object_or_404(ProductoCanonico, pk=request.POST["producto_canonico_id"])
+    try:
+        canonico = aceptar_sugerencia_matching(sugerencia, destino, request.POST.get("nota_revision", ""))
+        messages.success(request, f"Matching aceptado y vinculado a {canonico}.")
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("oportunidades:matching_producto_detalle", pk=pk)
+    return redirect("oportunidades:detalle_producto_multifuente", pk=canonico.pk)
+
+
+@require_POST
+def matching_producto_rechazar(request, pk):
+    sugerencia = get_object_or_404(SugerenciaMatchingProducto, pk=pk)
+    revisar_sugerencia_matching(sugerencia, SugerenciaMatchingProducto.ESTADO_RECHAZADA, request.POST.get("nota_revision", ""))
+    messages.success(request, "Sugerencia rechazada; no se recreara automaticamente.")
+    return redirect("oportunidades:matching_productos")
+
+
+@require_POST
+def matching_producto_ignorar(request, pk):
+    sugerencia = get_object_or_404(SugerenciaMatchingProducto, pk=pk)
+    revisar_sugerencia_matching(sugerencia, SugerenciaMatchingProducto.ESTADO_IGNORADA, request.POST.get("nota_revision", ""))
+    messages.success(request, "Sugerencia ignorada.")
+    return redirect("oportunidades:matching_productos")
+
+
+@require_POST
+def desvincular_producto_multifuente(request, pk, producto_fuente_id):
+    producto = get_object_or_404(ProductoFuente, pk=producto_fuente_id, producto_canonico_id=pk)
+    producto.producto_canonico = None
+    producto.requiere_revision = True
+    producto.save(update_fields=["producto_canonico", "requiere_revision", "fecha_actualizacion"])
+    messages.success(request, "Producto desvinculado del canonico y marcado para revision.")
+    return redirect("oportunidades:detalle_producto_multifuente", pk=pk)
 
 
 def _ultimo_precio_producto(producto_fuente):

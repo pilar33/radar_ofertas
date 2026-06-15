@@ -1,86 +1,20 @@
 {% extends "base.html" %}
-
 {% block title %}Producto multifuente{% endblock %}
-
 {% block content %}
 {% include "oportunidades/_advertencia_persistencia.html" %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0">{{ producto.nombre_normalizado }}</h1>
-  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_productos_multifuente' %}">Volver</a>
-</div>
-
+<div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3 mb-0">{{ producto.nombre_normalizado }}</h1><a class="btn btn-outline-secondary" href="{% url 'oportunidades:lista_productos_multifuente' %}">Volver</a></div>
 <div class="bg-white border rounded p-3 mb-3">
-  <div class="row">
-    <div class="col-md-3"><strong>Categoria</strong><br>{{ producto.categoria.nombre }}</div>
-    <div class="col-md-3"><strong>Marca</strong><br>{{ producto.marca|default:"-" }}</div>
-    <div class="col-md-3"><strong>Chico/liviano</strong><br>{{ producto.es_chico_liviano|yesno:"Si,No" }}</div>
-    <div class="col-md-3"><strong>Fragil</strong><br>{{ producto.es_fragil|yesno:"Si,No" }}</div>
-  </div>
-  <div class="d-flex gap-2 mt-3">
-    <form method="post" action="{% url 'oportunidades:recalcular_comparacion_multifuente' producto.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Recalcular comparacion</button></form>
-    <form method="post" action="{% url 'oportunidades:recalcular_evaluacion_multifuente' producto.pk %}">{% csrf_token %}<button class="btn btn-outline-success btn-sm">Recalcular evaluacion</button></form>
-  </div>
+  <div class="row"><div class="col-md-3"><strong>Categoria</strong><br>{{ producto.categoria.nombre }}</div><div class="col-md-3"><strong>Marca / modelo</strong><br>{{ producto.marca|default:"-" }} / {{ producto.modelo|default:"-" }}</div><div class="col-md-3"><strong>Fuentes</strong><br>{{ comparacion.cantidad_fuentes|default:0 }}</div><div class="col-md-3"><strong>Mejor precio</strong><br>{% if comparacion.precio_minimo_oportunidad > 0 %}${{ comparacion.precio_minimo_oportunidad }}{% elif comparacion %}${{ comparacion.precio_minimo }}{% else %}-{% endif %}</div></div>
+  <div class="d-flex gap-2 mt-3"><form method="post" action="{% url 'oportunidades:recalcular_comparacion_multifuente' producto.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Recalcular comparacion</button></form><form method="post" action="{% url 'oportunidades:recalcular_evaluacion_multifuente' producto.pk %}">{% csrf_token %}<button class="btn btn-outline-success btn-sm">Recalcular evaluacion</button></form></div>
 </div>
-
-<div class="row g-3 mb-3">
-  <div class="col-lg-6">
-    <div class="bg-white border rounded p-3 h-100">
-      <h2 class="h5">Comparaciones</h2>
-      <table class="table table-sm">
-        <thead><tr><th>Fecha</th><th>Min.</th><th>Prom.</th><th>Max.</th><th>Fuentes</th></tr></thead>
-        <tbody>
-          {% for comparacion in producto.comparaciones.all %}
-            <tr><td>{{ comparacion.fecha_calculo|date:"d/m/Y H:i" }}</td><td>${{ comparacion.precio_minimo }}</td><td>${{ comparacion.precio_promedio }}</td><td>${{ comparacion.precio_maximo }}</td><td>{{ comparacion.cantidad_fuentes }}</td></tr>
-          {% empty %}
-            <tr><td colspan="5" class="text-muted">Sin comparaciones.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="bg-white border rounded p-3 h-100">
-      <h2 class="h5">Evaluaciones</h2>
-      <table class="table table-sm">
-        <thead><tr><th>Indice</th><th>Tipo</th><th>Riesgo</th><th>Margen</th></tr></thead>
-        <tbody>
-          {% for evaluacion in producto.evaluaciones_multifuente.all %}
-            <tr><td>{{ evaluacion.indice_oportunidad }}</td><td>{{ evaluacion.get_tipo_display }}</td><td>{{ evaluacion.get_riesgo_display }}</td><td>{{ evaluacion.porcentaje_margen }}%</td></tr>
-          {% empty %}
-            <tr><td colspan="4" class="text-muted">Sin evaluaciones.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="bg-white border rounded p-3">
-  <h2 class="h5">Apariciones por fuente</h2>
-  <div class="table-responsive">
-    <table class="table table-sm align-middle">
-      <thead><tr><th>Imagen</th><th>Fuente</th><th>Titulo</th><th>Disponible</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Oportunidad</th><th>Revision</th><th>URL</th></tr></thead>
-      <tbody>
-        {% for aparicion in producto.apariciones.all %}
-          {% with precio=aparicion.precios_fuente.first %}
-          <tr>
-            <td>{% if aparicion.imagen_url %}<img src="{{ aparicion.imagen_url }}" style="width:46px;height:46px;object-fit:cover">{% else %}-{% endif %}</td>
-            <td>{{ aparicion.fuente_web.nombre }}</td>
-            <td>{{ aparicion.titulo_original }}</td>
-            <td>{{ aparicion.disponible|yesno:"Si,No" }}</td>
-            <td>{% if precio %}${{ precio.precio_lista }}{% else %}-{% endif %}</td>
-            <td>{% if precio %}${{ precio.precio_transferencia }}{% else %}-{% endif %}</td>
-            <td>{% if precio %}${{ precio.precio_tarjeta }}{% else %}-{% endif %}</td>
-            <td>{% if precio %}${{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
-            <td>{% if aparicion.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% else %}-{% endif %}</td>
-            <td><a href="{{ aparicion.url_producto }}" target="_blank" rel="noopener">Abrir</a></td>
-          </tr>
-          {% endwith %}
-        {% empty %}
-          <tr><td colspan="10" class="text-muted">Sin apariciones.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% if comparacion %}<div class="alert alert-info">{{ comparacion.fuente_mas_barata|default:"Sin fuente" }} tiene el mejor precio. Es {{ comparacion.diferencia_pct_min_promedio }}% menor al promedio y {{ comparacion.diferencia_pct_min_max }}% menor al maximo.</div>{% endif %}
+<div class="table-responsive bg-white border rounded"><table class="table table-sm align-middle mb-0">
+  <thead class="table-light"><tr><th>Fuente</th><th>Titulo</th><th>Imagen</th><th>Lista</th><th>Transferencia</th><th>Tarjeta/cuotas</th><th>Oportunidad</th><th>Fecha</th><th>Score / ranking</th><th>Acciones</th></tr></thead>
+  <tbody>{% for aparicion in apariciones %}<tr>
+    <td>{{ aparicion.fuente_web.nombre }}</td><td>{{ aparicion.titulo_original }}</td><td>{% if aparicion.imagen_url %}<img src="{{ aparicion.imagen_url }}" alt="" style="width:56px;height:56px;object-fit:cover">{% else %}-{% endif %}</td>
+    <td>{% if aparicion.precio_actual %}${{ aparicion.precio_actual.precio_lista }}{% else %}-{% endif %}</td><td>{% if aparicion.precio_actual %}${{ aparicion.precio_actual.precio_transferencia }}{% else %}-{% endif %}</td>
+    <td>{% if aparicion.precio_actual %}${{ aparicion.precio_actual.precio_tarjeta }} {{ aparicion.precio_actual.cuotas_texto|default:"" }}{% else %}-{% endif %}</td><td>{% if aparicion.precio_actual %}<strong>${{ aparicion.precio_actual.precio_oportunidad }}</strong>{% else %}-{% endif %}</td><td>{{ aparicion.precio_actual.fecha_relevamiento|date:"d/m/Y H:i"|default:"-" }}</td>
+    <td>{{ aparicion.score_comercial }} / {{ aparicion.get_nivel_oportunidad_display }}</td><td class="text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{{ aparicion.url_producto }}" target="_blank" rel="noopener">URL</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'oportunidades:detalle_curaduria_producto' aparicion.pk %}">Historial</a><form class="d-inline" method="post" action="{% url 'oportunidades:marcar_revision_producto' aparicion.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-warning">Revisar</button></form><form class="d-inline" method="post" action="{% url 'oportunidades:marcar_candidato_compra' aparicion.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-success">Candidato</button></form><form class="d-inline" method="post" action="{% url 'oportunidades:desvincular_producto_multifuente' producto.pk aparicion.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Desvincular</button></form></td>
+  </tr>{% empty %}<tr><td colspan="10" class="text-muted py-4 text-center">Sin apariciones.</td></tr>{% endfor %}</tbody>
+</table></div>
 {% endblock %}

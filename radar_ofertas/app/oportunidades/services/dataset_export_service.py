@@ -2,7 +2,9 @@ import csv
 import io
 import zipfile
 
-from oportunidades.models import PrecioFuente, ProductoFuente, ResultadoExtraccionWeb
+from django.db.models import Q
+
+from oportunidades.models import PrecioFuente, ProductoFuente, ResultadoExtraccionWeb, SugerenciaMatchingProducto
 
 
 def _ultimo_precio(producto_fuente):
@@ -15,6 +17,15 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
     writer.writerow(
         [
             "producto_canonico_id",
+            "grupo_canonico_nombre",
+            "cantidad_fuentes_canonico",
+            "fuente_mas_barata",
+            "precio_minimo_oportunidad",
+            "precio_promedio_oportunidad",
+            "diferencia_pct_min_promedio",
+            "score_matching",
+            "tiene_matching_aceptado",
+            "requiere_revision_matching",
             "nombre_normalizado",
             "categoria",
             "producto_fuente_id",
@@ -38,9 +49,21 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
     for producto in productos:
         precio = _ultimo_precio(producto)
         canonico = producto.producto_canonico
+        comparacion = canonico.comparaciones.order_by("-fecha_calculo", "-id").first() if canonico else None
+        matching = SugerenciaMatchingProducto.objects.filter(Q(producto_a=producto) | Q(producto_b=producto)).order_by("-score", "-fecha_creacion").first()
+        cantidad_fuentes = canonico.apariciones.values("fuente_web_id").distinct().count() if canonico else 0
         writer.writerow(
             [
                 canonico.pk if canonico else "",
+                canonico.nombre_normalizado if canonico else "",
+                cantidad_fuentes,
+                comparacion.fuente_mas_barata.nombre if comparacion and comparacion.fuente_mas_barata else "",
+                comparacion.precio_minimo_oportunidad if comparacion else "",
+                comparacion.precio_promedio_oportunidad if comparacion else "",
+                comparacion.diferencia_pct_min_promedio if comparacion else "",
+                matching.score if matching else "",
+                bool(matching and matching.estado == SugerenciaMatchingProducto.ESTADO_ACEPTADA),
+                bool(matching and matching.estado == SugerenciaMatchingProducto.ESTADO_PENDIENTE),
                 canonico.nombre_normalizado if canonico else "",
                 canonico.categoria.nombre if canonico and canonico.categoria_id else "",
                 producto.pk,

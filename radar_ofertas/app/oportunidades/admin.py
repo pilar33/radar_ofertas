@@ -13,12 +13,14 @@ from .models import (
     DecisionTecnica,
     DuplicadoIgnorado,
     DetalleImportacionProducto,
+    DetalleLoteCaptura,
     DetalleEjecucionConector,
     EjecucionConector,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
     ImportacionProductos,
+    LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
     OperacionCuraduria,
@@ -37,6 +39,24 @@ from .models import (
     SenalDemandaProducto,
     SugerenciaMatchingProducto,
 )
+
+
+@admin.register(LoteCaptura)
+class LoteCapturaAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "nombre", "fuente_web", "origen", "tipo_carga", "estado",
+        "productos_detectados", "productos_procesados", "precios_creados", "errores",
+        "apto_dataset", "excluir_ml", "fecha_inicio",
+    )
+    list_filter = ("origen", "tipo_carga", "estado", "apto_dataset", "excluir_ml", "fuente_web")
+    search_fields = ("nombre", "url_origen", "observaciones")
+
+
+@admin.register(DetalleLoteCaptura)
+class DetalleLoteCapturaAdmin(admin.ModelAdmin):
+    list_display = ("lote", "estado", "producto_fuente", "precio_fuente", "fecha")
+    list_filter = ("estado",)
+    search_fields = ("mensaje", "datos_originales")
 
 
 @admin.register(FuenteProducto)

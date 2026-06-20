@@ -204,3 +204,38 @@ El menú sigue el flujo operativo:
 4. Ejecutar preview.
 5. Revisar los resultados antes de procesar.
 6. Seleccionar y procesar pocos productos primero.
+
+# Lotes de captura y trazabilidad
+
+Un lote de captura identifica una ejecucion concreta y permite saber cuando, desde que fuente, URL, extractor o archivo se obtuvo cada dato. Se crea automaticamente al analizar una URL en el laboratorio, ejecutar un preview de extractor o procesar una importacion CSV/Excel. Tambien puede crearse manualmente con `crear_lote_manual`.
+
+- Laboratorio: conserva los resultados detectados aunque sean una prueba.
+- Extractor web: vincula ejecucion, resultados preview y los productos confirmados.
+- Importacion: vincula archivo, filas, productos y precios creados o actualizados.
+- Manual: sirve para documentar una carga controlada que no nace de esos flujos.
+
+Abrir `/lotes-captura/`, revisar origen, URL, contadores, errores y detalles. Un lote correcto puede marcarse **Validado**. Un lote inutil debe marcarse **Descartado**, lo que lo deja no apto para dataset y excluido de ML. La accion **Excluir de ML** mantiene la trazabilidad y el uso operativo, pero evita que el export futuro de entrenamiento lo incluya. El CSV individual se descarga desde **Exportar CSV**.
+
+No cargar datos masivos sin lote: se perderia la posibilidad de auditar errores, comparar capturas y separar pruebas de datos reales. Los lotes y sus fechas permiten agrupar precios y demanda por dia, mes o anio. Machine learning no se implementa en esta etapa; `apto_dataset`, `excluir_ml`, origen y fechas preparan el historial para modelos futuros de oportunidad y demanda.
+
+Comandos:
+
+```powershell
+docker compose exec web python manage.py listar_lotes_captura
+docker compose exec web python manage.py recalcular_lotes_captura
+docker compose exec web python manage.py exportar_lote_captura --lote-id ID --output data/exports/lote_ID.csv
+docker compose exec web python manage.py crear_lote_manual --fuente-id ID --nombre "Carga controlada" --tipo-carga piloto
+```
+
+# Flujo recomendado antes de cargar muchos datos
+
+1. Diagnosticar la base SQL Server.
+2. Crear un backup inicial.
+3. Ejecutar laboratorio o extractor.
+4. Revisar el lote generado.
+5. Procesar pocos productos.
+6. Validar el lote.
+7. Curar productos y duplicados.
+8. Recalcular el ranking.
+9. Exportar el dataset.
+10. Crear un backup final.

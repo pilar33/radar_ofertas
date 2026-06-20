@@ -12,6 +12,7 @@
   <p><strong>URL:</strong> <a href="{{ sesion.url }}" target="_blank" rel="noreferrer">{{ sesion.url }}</a></p>
   <p><strong>Fuente:</strong> {{ sesion.fuente_web|default:"-" }} | <strong>Estado:</strong> {{ sesion.get_estado_display }} | <strong>HTTP:</strong> {{ sesion.status_code|default:"-" }}</p>
   <p class="mb-0"><strong>JS probable:</strong> {{ sesion.requiere_js_probable|yesno:"Si,No" }} | <strong>JSON-LD:</strong> {{ sesion.tiene_json_ld|yesno:"Si,No" }}</p>
+  {% if lote %}<hr><p class="mb-0"><strong>Lote:</strong> <a href="{% url 'oportunidades:lote_captura_detalle' lote.id %}">{{ lote.nombre }}</a> | {{ lote.fecha_inicio|date:"d/m/Y H:i" }} | {{ lote.productos_detectados }} detectados | {{ lote.get_estado_display }} | Dataset: {{ lote.apto_dataset|yesno:"Apto,No apto" }}</p>{% endif %}
 </div>
 <div class="bg-white border rounded p-3">
   <div class="d-flex justify-content-between align-items-center mb-2">

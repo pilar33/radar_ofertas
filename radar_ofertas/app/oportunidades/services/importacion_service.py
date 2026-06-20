@@ -19,6 +19,11 @@ from oportunidades.models import (
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
 from oportunidades.services.normalizacion_service import normalizar_texto_producto
+from oportunidades.services.lotes_captura_service import (
+    crear_lote_captura,
+    finalizar_lote_captura,
+    registrar_detalle_lote,
+)
 
 
 COLUMNAS_ALIASES = {
@@ -243,9 +248,12 @@ def crear_o_actualizar_producto_fuente(row, fuente_web, categoria, producto_cano
         if campo in row:
             datos[campo] = row.get(campo)
     if creado:
+        datos["lote_origen"] = row.get("lote_captura")
         producto = ProductoFuente.objects.create(**datos)
         return producto, True, False
     if actualizar:
+        if row.get("lote_captura") and not producto.lote_origen_id:
+            datos["lote_origen"] = row["lote_captura"]
         for campo, valor in datos.items():
             setattr(producto, campo, valor)
         producto.save()
@@ -268,6 +276,7 @@ def crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False):
 
     precio_fuente = PrecioFuente.objects.create(
         producto_fuente=producto_fuente,
+        lote_captura=row.get("lote_captura"),
         precio=precio,
         precio_lista=precio_lista,
         precio_transferencia=precio_transferencia,
@@ -312,6 +321,15 @@ def procesar_importacion(importacion, opciones=None):
     importacion.estado = ImportacionProductos.ESTADO_PROCESANDO
     importacion.tipo_archivo = importacion.tipo_archivo or detectar_tipo_archivo(importacion.archivo)
     importacion.save(update_fields=["estado", "tipo_archivo", "conector"])
+    lote = crear_lote_captura(
+        origen="importacion_csv_excel",
+        fuente_web=importacion.fuente_web,
+        conector=importacion.conector,
+        importacion=importacion,
+        tipo_carga=opciones.get("tipo_carga", "real"),
+        observaciones=importacion.observaciones,
+        parametros=opciones,
+    )
 
     lectura = leer_archivo_productos(importacion)
     if not lectura["ok"]:
@@ -319,6 +337,7 @@ def procesar_importacion(importacion, opciones=None):
         importacion.mensaje_error = lectura["error"]
         importacion.fecha_procesamiento = timezone.now()
         importacion.save(update_fields=["estado", "mensaje_error", "fecha_procesamiento"])
+        finalizar_lote_captura(lote, estado="error")
         return importacion
 
     df = normalizar_columnas_importacion(lectura["df"])
@@ -337,10 +356,12 @@ def procesar_importacion(importacion, opciones=None):
                 mensaje=" ".join(errores),
                 datos_originales=json.dumps({k: _valor_texto(v) for k, v in datos.items()}, ensure_ascii=True),
             )
+            registrar_detalle_lote(lote, "error", mensaje=" ".join(errores), datos_originales=datos)
             continue
 
         try:
             datos["origen_dato"] = opciones.get("origen_dato", PrecioFuente.ORIGEN_CSV_EXCEL)
+            datos["lote_captura"] = lote
             categoria = obtener_o_crear_categoria_desde_texto(datos.get("categoria"), opciones.get("categoria_default"))
             producto_canonico = None
             if opciones.get("crear_producto_canonico", True):
@@ -372,6 +393,14 @@ def procesar_importacion(importacion, opciones=None):
                 precio_fuente=precio_fuente,
                 datos_originales=json.dumps({k: _valor_texto(v) for k, v in datos.items()}, ensure_ascii=True),
             )
+            registrar_detalle_lote(
+                lote,
+                "procesado",
+                producto_fuente=producto_fuente,
+                precio_fuente=precio_fuente,
+                mensaje="Producto creado." if creado else "Producto actualizado.",
+                datos_originales=datos,
+            )
         except Exception as exc:
             importacion.errores += 1
             DetalleImportacionProducto.objects.create(
@@ -381,6 +410,7 @@ def procesar_importacion(importacion, opciones=None):
                 mensaje=f"No se pudo procesar la fila: {exc}",
                 datos_originales=json.dumps({k: _valor_texto(v) for k, v in datos.items()}, ensure_ascii=True),
             )
+            registrar_detalle_lote(lote, "error", mensaje=str(exc), datos_originales=datos)
 
     productos_canonicos = ProductoCanonico.objects.filter(pk__in=afectados)
     _recalcular_multifuente(productos_canonicos)
@@ -392,6 +422,7 @@ def procesar_importacion(importacion, opciones=None):
     )
     importacion.fecha_procesamiento = timezone.now()
     importacion.save()
+    finalizar_lote_captura(lote)
     return importacion
 
 

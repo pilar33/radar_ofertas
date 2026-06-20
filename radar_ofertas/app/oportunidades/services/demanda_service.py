@@ -182,7 +182,7 @@ def _recurrencia_preview(producto_fuente):
     return ResultadoExtraccionWeb.objects.filter(consulta).count() + ResultadoLaboratorioMapeo.objects.filter(consulta).count()
 
 
-def crear_o_actualizar_senal_demanda(producto_fuente, datos, origen_dato=None):
+def crear_o_actualizar_senal_demanda(producto_fuente, datos, origen_dato=None, lote_captura=None):
     datos = dict(datos or {})
     anterior = producto_fuente.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
     stock_anterior = anterior.stock_visible if anterior else 0
@@ -210,6 +210,7 @@ def crear_o_actualizar_senal_demanda(producto_fuente, datos, origen_dato=None):
     senal = SenalDemandaProducto.objects.create(
         producto_fuente=producto_fuente,
         fuente_web=producto_fuente.fuente_web,
+        lote_captura=lote_captura,
         **valores,
     )
     producto_fuente.score_demanda_actual = senal.score_demanda

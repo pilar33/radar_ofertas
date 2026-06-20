@@ -23,6 +23,7 @@ from oportunidades.services.importacion_service import (
     obtener_o_crear_producto_canonico,
 )
 from oportunidades.services.normalizacion_service import normalizar_texto_producto
+from oportunidades.services.lotes_captura_service import finalizar_lote_captura, registrar_detalle_lote
 
 
 def _fuente_restringida_meli(fuente):
@@ -130,6 +131,7 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
         "motivo_revision": " ".join(motivos_revision) or None,
         "url_tecnica_generada": not url_real,
         "hash_origen": _identificador_preview(resultado),
+        "lote_captura": resultado.lote_captura,
     }
     existente = _buscar_existente_por_preview(fuente, resultado)
     canonico, _ = obtener_o_crear_producto_canonico(row, categoria)
@@ -141,7 +143,7 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
     calcular_comparacion_producto(canonico)
     evaluar_producto_multifuente(canonico)
     datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
-    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
+    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda, lote_captura=resultado.lote_captura)
     calcular_score_comercial_producto_fuente(producto_fuente)
     resultado.estado = ResultadoExtraccionWeb.ESTADO_PROCESADO
     resultado.producto_fuente = producto_fuente
@@ -155,6 +157,17 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
         producto_fuente=producto_fuente,
         datos_originales=resultado.raw_data,
     )
+    if resultado.lote_captura_id:
+        registrar_detalle_lote(
+            resultado.lote_captura,
+            "procesado",
+            producto_fuente=producto_fuente,
+            precio_fuente=precio,
+            resultado_extraccion=resultado,
+            mensaje="Producto creado desde preview." if creado else "Producto actualizado desde preview.",
+            datos_originales=resultado.raw_data,
+        )
+        finalizar_lote_captura(resultado.lote_captura)
     return {
         "ok": True,
         "mensaje": "Resultado procesado.",

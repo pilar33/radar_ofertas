@@ -12,6 +12,7 @@
   <div class="col-md-8">
     <table class="table">
       <tr><th>Fuente</th><td>{{ producto.fuente_web }}</td></tr>
+      <tr><th>Lote origen</th><td>{% if producto.lote_origen %}<a href="{% url 'oportunidades:lote_captura_detalle' producto.lote_origen.id %}">{{ producto.lote_origen.nombre }}</a> · {{ producto.lote_origen.fecha_inicio }}{% else %}-{% endif %}</td></tr>
       <tr><th>Canonico</th><td>{{ producto.producto_canonico|default:"-" }}</td></tr>
       <tr><th>URL</th><td>{% if producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">{{ producto.url_producto }}</a>{% else %}-{% endif %}</td></tr>
       <tr><th>URL tecnica</th><td>{{ producto.url_tecnica_generada|yesno:"Si,No" }}</td></tr>
@@ -33,11 +34,11 @@
 
 <h2 class="mt-4">Historial de precios</h2>
 <table class="table table-sm">
-  <thead><tr><th>Fecha</th><th>Precio</th><th>Lista</th><th>Transferencia</th><th>Tarjeta</th><th>Oportunidad</th><th>Tipo</th></tr></thead>
+  <thead><tr><th>Fecha</th><th>Lote</th><th>Precio</th><th>Lista</th><th>Transferencia</th><th>Tarjeta</th><th>Oportunidad</th><th>Tipo</th></tr></thead>
   <tbody>
     {% for precio in producto.precios_fuente.all %}
-      <tr><td>{{ precio.fecha_relevamiento }}</td><td>{{ precio.precio }}</td><td>{{ precio.precio_lista }}</td><td>{{ precio.precio_transferencia }}</td><td>{{ precio.precio_tarjeta }}</td><td>{{ precio.precio_oportunidad }}</td><td>{{ precio.tipo_precio_oportunidad }}</td></tr>
-    {% empty %}<tr><td colspan="7">Sin precios.</td></tr>{% endfor %}
+      <tr><td>{{ precio.fecha_relevamiento }}</td><td>{% if precio.lote_captura %}<a href="{% url 'oportunidades:lote_captura_detalle' precio.lote_captura.id %}">{{ precio.lote_captura.nombre }}</a>{% else %}-{% endif %}</td><td>{{ precio.precio }}</td><td>{{ precio.precio_lista }}</td><td>{{ precio.precio_transferencia }}</td><td>{{ precio.precio_tarjeta }}</td><td>{{ precio.precio_oportunidad }}</td><td>{{ precio.tipo_precio_oportunidad }}</td></tr>
+    {% empty %}<tr><td colspan="8">Sin precios.</td></tr>{% endfor %}
   </tbody>
 </table>
 

@@ -41,6 +41,7 @@ from .models import (
     EvaluacionOportunidadMultifuente,
     FuenteWeb,
     ImportacionProductos,
+    LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
     OperacionCuraduria,
@@ -144,7 +145,13 @@ from .services.dataset_export_service import (
     exportar_dataset_completo_zip,
     exportar_dataset_productos_csv,
     exportar_historial_precios_csv,
+    exportar_lote_captura_csv,
     exportar_resultados_preview_csv,
+)
+from .services.lotes_captura_service import (
+    marcar_lote_descartado,
+    marcar_lote_validado,
+    recalcular_contadores_lote,
 )
 from .services.entorno_service import obtener_advertencia_persistencia
 from .services.ranking_comercial_service import calcular_score_comercial_producto_fuente, recalcular_ranking_comercial
@@ -641,7 +648,7 @@ def laboratorio_seleccionar_resultado(request, resultado_id):
 
 def laboratorio_sesion(request, sesion_id):
     sesion = get_object_or_404(SesionLaboratorioMapeo.objects.prefetch_related("resultados"), pk=sesion_id)
-    return render(request, "oportunidades/laboratorio_sesion.html", {"sesion": sesion})
+    return render(request, "oportunidades/laboratorio_sesion.html", {"sesion": sesion, "lote": sesion.lotes_captura.first()})
 
 
 @require_POST
@@ -1204,7 +1211,7 @@ def curaduria_dashboard(request):
 
 
 def curaduria_productos(request):
-    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico", "lote_origen").prefetch_related("precios_fuente")
     fuente_id = request.GET.get("fuente")
     revision = request.GET.get("revision")
     url = request.GET.get("url")
@@ -1253,7 +1260,7 @@ def curaduria_productos(request):
 
 def detalle_curaduria_producto(request, pk):
     producto = get_object_or_404(
-        ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente"),
+        ProductoFuente.objects.select_related("fuente_web", "producto_canonico", "lote_origen").prefetch_related("precios_fuente__lote_captura", "senales_demanda__lote_captura"),
         pk=pk,
     )
     duplicados = detectar_producto_fuente_duplicados(producto)
@@ -1547,6 +1554,77 @@ def dataset_exportar(request):
     return render(request, "oportunidades/dataset_exportar.html", {"advertencia_persistencia": obtener_advertencia_persistencia()})
 
 
+def lotes_captura_lista(request):
+    lotes = LoteCaptura.objects.select_related("fuente_web", "extractor", "conector").all()
+    filtros = {
+        "fuente_web_id": request.GET.get("fuente"),
+        "origen": request.GET.get("origen"),
+        "tipo_carga": request.GET.get("tipo_carga"),
+        "estado": request.GET.get("estado"),
+    }
+    for campo, valor in filtros.items():
+        if valor:
+            lotes = lotes.filter(**{campo: valor})
+    for campo in ("apto_dataset", "excluir_ml"):
+        valor = request.GET.get(campo)
+        if valor in {"0", "1"}:
+            lotes = lotes.filter(**{campo: valor == "1"})
+    if request.GET.get("fecha_desde"):
+        lotes = lotes.filter(fecha_inicio__date__gte=request.GET["fecha_desde"])
+    if request.GET.get("fecha_hasta"):
+        lotes = lotes.filter(fecha_inicio__date__lte=request.GET["fecha_hasta"])
+    return render(request, "oportunidades/lotes_captura_lista.html", {
+        "lotes": lotes,
+        "fuentes": FuenteWeb.objects.order_by("nombre"),
+        "origenes": LoteCaptura.ORIGEN_CHOICES,
+        "tipos_carga": LoteCaptura.TIPO_CARGA_CHOICES,
+        "estados": LoteCaptura.ESTADO_CHOICES,
+    })
+
+
+def lote_captura_detalle(request, pk):
+    lote = get_object_or_404(LoteCaptura.objects.select_related(
+        "fuente_web", "conector", "extractor", "importacion", "sesion_laboratorio", "ejecucion_conector"
+    ), pk=pk)
+    return render(request, "oportunidades/lote_captura_detalle.html", {
+        "lote": lote,
+        "detalles": lote.detalles.select_related("producto_fuente", "precio_fuente").order_by("-fecha")[:200],
+        "productos": ProductoFuente.objects.filter(Q(lote_origen=lote) | Q(detallelotecaptura__lote=lote)).distinct()[:200],
+        "precios": lote.precios.select_related("producto_fuente").order_by("-fecha_relevamiento")[:200],
+        "senales": lote.senales_demanda.select_related("producto_fuente").order_by("-fecha_relevamiento")[:200],
+    })
+
+
+@require_POST
+def lote_captura_accion(request, pk, accion):
+    lote = get_object_or_404(LoteCaptura, pk=pk)
+    if accion == "validar":
+        marcar_lote_validado(lote)
+        messages.success(request, "Lote validado.")
+    elif accion == "descartar":
+        marcar_lote_descartado(lote, request.POST.get("motivo") or "Descartado manualmente.")
+        messages.warning(request, "Lote descartado y excluido del dataset futuro.")
+    elif accion == "excluir-ml":
+        lote.excluir_ml = True
+        lote.motivo_exclusion = request.POST.get("motivo") or "Exclusion manual de ML."
+        lote.save(update_fields=["excluir_ml", "motivo_exclusion"])
+    elif accion == "incluir-ml":
+        lote.excluir_ml = False
+        lote.motivo_exclusion = None
+        lote.save(update_fields=["excluir_ml", "motivo_exclusion"])
+    elif accion == "recalcular":
+        recalcular_contadores_lote(lote)
+        messages.success(request, "Contadores recalculados.")
+    return redirect("oportunidades:lote_captura_detalle", pk=lote.pk)
+
+
+def lote_captura_exportar(request, pk):
+    lote = get_object_or_404(LoteCaptura, pk=pk)
+    response = HttpResponse(exportar_lote_captura_csv(lote).getvalue(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="lote_{lote.pk}.csv"'
+    return response
+
+
 def dataset_backup(request):
     if request.GET.get("exportar") == "snapshot":
         response = HttpResponse(exportar_snapshot_json(), content_type="application/json; charset=utf-8")
@@ -1587,7 +1665,17 @@ def ranking_oportunidades(request):
         recalcular_ranking_comercial()
         messages.success(request, "Ranking comercial recalculado.")
         return redirect("oportunidades:ranking_oportunidades")
-    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente", "senales_demanda")
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico", "lote_origen").prefetch_related("precios_fuente", "senales_demanda")
+    if request.GET.get("tipo_carga"):
+        productos = productos.filter(lote_origen__tipo_carga=request.GET["tipo_carga"])
+    if request.GET.get("solo_validados") == "1":
+        productos = productos.filter(lote_origen__estado=LoteCaptura.ESTADO_VALIDADO)
+    if request.GET.get("excluir_prueba") == "1":
+        productos = productos.exclude(lote_origen__tipo_carga=LoteCaptura.TIPO_PRUEBA)
+    if request.GET.get("fecha_desde"):
+        productos = productos.filter(lote_origen__fecha_inicio__date__gte=request.GET["fecha_desde"])
+    if request.GET.get("fecha_hasta"):
+        productos = productos.filter(lote_origen__fecha_inicio__date__lte=request.GET["fecha_hasta"])
     if request.GET.get("nivel"):
         productos = productos.filter(nivel_oportunidad=request.GET["nivel"])
     if request.GET.get("fuente"):
@@ -1624,6 +1712,7 @@ def ranking_oportunidades(request):
             "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
             "niveles": ProductoFuente.NIVEL_CHOICES,
             "niveles_demanda": ProductoFuente.DEMANDA_CHOICES,
+            "tipos_carga": LoteCaptura.TIPO_CARGA_CHOICES,
             "advertencia_persistencia": obtener_advertencia_persistencia(),
         },
     )

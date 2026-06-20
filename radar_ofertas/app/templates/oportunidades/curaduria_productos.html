@@ -43,7 +43,7 @@
   <table class="table table-sm align-middle">
     <thead>
       <tr>
-        <th>ID</th><th>Imagen</th><th>Producto</th><th>Canonico</th><th>Fuente</th><th>Oportunidad</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Calidad</th><th></th>
+        <th>ID</th><th>Imagen</th><th>Producto</th><th>Canonico</th><th>Fuente</th><th>Lote origen</th><th>Oportunidad</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Calidad</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -55,6 +55,7 @@
           <td>{{ producto.titulo_original }}<br><small>{% if producto.url_tecnica_generada %}URL tecnica{% elif producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">URL real</a>{% else %}Sin URL{% endif %}</small></td>
           <td>{{ producto.producto_canonico|default:"-" }}</td>
           <td>{{ producto.fuente_web }}</td>
+          <td>{% if producto.lote_origen %}<a href="{% url 'oportunidades:lote_captura_detalle' producto.lote_origen.id %}">{{ producto.lote_origen.nombre }}</a><br><small>{{ producto.lote_origen.fecha_inicio|date:"d/m/Y" }}</small>{% else %}-{% endif %}</td>
           <td>{% if precio %}{{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
           <td>{% if precio %}{{ precio.precio_lista }}{% else %}-{% endif %}</td>
           <td>{% if precio %}{{ precio.precio_transferencia }}{% else %}-{% endif %}</td>
@@ -67,7 +68,7 @@
         </tr>
         {% endwith %}
       {% empty %}
-        <tr><td colspan="11">Sin productos.</td></tr>
+        <tr><td colspan="12">Sin productos.</td></tr>
       {% endfor %}
     </tbody>
   </table>

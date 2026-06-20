@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Lotes de captura{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div><h1 class="h3 mb-1">Lotes de captura</h1><p class="text-muted mb-0">Trazabilidad de laboratorio, extractores e importaciones.</p></div>
+</div>
+<form method="get" class="card card-body mb-3"><div class="row g-2">
+  <div class="col-md-3"><select class="form-select" name="fuente"><option value="">Todas las fuentes</option>{% for fuente in fuentes %}<option value="{{ fuente.id }}">{{ fuente.nombre }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="origen"><option value="">Todos los origenes</option>{% for value,label in origenes %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="tipo_carga"><option value="">Todos los tipos</option>{% for value,label in tipos_carga %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="estado"><option value="">Todos los estados</option>{% for value,label in estados %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><button class="btn btn-primary">Filtrar</button> <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lotes_captura_lista' %}">Limpiar</a></div>
+  <div class="col-md-2"><input class="form-control" type="date" name="fecha_desde" title="Fecha desde"></div>
+  <div class="col-md-2"><input class="form-control" type="date" name="fecha_hasta" title="Fecha hasta"></div>
+  <div class="col-md-2"><select class="form-select" name="apto_dataset"><option value="">Apto dataset: todos</option><option value="1">Apto</option><option value="0">No apto</option></select></div>
+  <div class="col-md-2"><select class="form-select" name="excluir_ml"><option value="">ML: todos</option><option value="0">Incluido</option><option value="1">Excluido</option></select></div>
+</div></form>
+<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+<thead><tr><th>Fecha</th><th>Nombre / URL</th><th>Fuente</th><th>Origen</th><th>Tipo</th><th>Estado</th><th>Detectados</th><th>Procesados</th><th>Precios</th><th>Errores</th><th>Dataset</th><th>ML</th><th></th></tr></thead>
+<tbody>{% for lote in lotes %}<tr>
+<td>{{ lote.fecha_inicio|date:"d/m/Y H:i" }}</td><td><strong>{{ lote.nombre }}</strong><br><small class="text-muted text-break">{{ lote.url_origen|default:"-" }}</small></td><td>{{ lote.fuente_web|default:"-" }}</td><td>{{ lote.get_origen_display }}</td><td>{{ lote.get_tipo_carga_display }}</td><td>{{ lote.get_estado_display }}</td><td>{{ lote.productos_detectados }}</td><td>{{ lote.productos_procesados }}</td><td>{{ lote.precios_creados }}</td><td>{{ lote.errores }}</td><td>{{ lote.apto_dataset|yesno:"Si,No" }}</td><td>{{ lote.excluir_ml|yesno:"Excluido,Incluido" }}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:lote_captura_detalle' lote.id %}">Ver</a></td>
+</tr>{% empty %}<tr><td colspan="13" class="text-center text-muted py-4">Todavia no hay lotes de captura.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

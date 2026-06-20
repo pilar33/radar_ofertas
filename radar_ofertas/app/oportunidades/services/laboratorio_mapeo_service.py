@@ -47,6 +47,11 @@ from oportunidades.services.importacion_service import (
     obtener_o_crear_categoria_desde_texto,
     obtener_o_crear_producto_canonico,
 )
+from oportunidades.services.lotes_captura_service import (
+    crear_lote_captura,
+    finalizar_lote_captura,
+    registrar_detalle_lote,
+)
 from oportunidades.services.dominios_service import normalizar_dominio
 
 
@@ -349,10 +354,19 @@ def crear_sesion_laboratorio(resultado, fuente_web=None):
         bloqueos_detectados=json.dumps(resultado.get("bloqueos_detectados", []), ensure_ascii=True),
         selectores_sugeridos=json.dumps(resultado.get("selectores_sugeridos", {}), ensure_ascii=True),
     )
+    lote = crear_lote_captura(
+        origen="laboratorio",
+        fuente_web=fuente_web,
+        sesion_laboratorio=sesion,
+        url_origen=resultado["url"],
+        tipo_carga="piloto",
+        parametros={"status_code": resultado.get("status_code")},
+    )
     for item in resultado.get("productos_detectados", []):
         demanda = calcular_score_demanda(item)
-        ResultadoLaboratorioMapeo.objects.create(
+        resultado_laboratorio = ResultadoLaboratorioMapeo.objects.create(
             sesion=sesion,
+            lote_captura=lote,
             titulo=item.get("titulo"),
             precio_texto=item.get("precio_texto"),
             precio_decimal=item.get("precio_decimal") or Decimal("0.00"),
@@ -376,6 +390,14 @@ def crear_sesion_laboratorio(resultado, fuente_web=None):
             seleccionado=item.get("score", 0) >= 70,
             mensaje=item.get("mensaje"),
         )
+        registrar_detalle_lote(
+            lote,
+            "detectado",
+            resultado_laboratorio=resultado_laboratorio,
+            mensaje=item.get("mensaje"),
+            datos_originales=item,
+        )
+    finalizar_lote_captura(lote, estado="procesado" if resultado["ok"] else "error")
     return sesion
 
 
@@ -480,18 +502,30 @@ def procesar_resultados_laboratorio(sesion, limite=10):
             "condicion": Producto.CONDICION_DESCONOCIDO,
             "moneda": sesion.fuente_web.moneda_principal,
             "origen_dato": PrecioFuente.ORIGEN_SCRAPING,
+            "lote_captura": resultado.lote_captura,
         }
         producto_canonico, _ = obtener_o_crear_producto_canonico(row, categoria)
         producto_fuente, _, _ = crear_o_actualizar_producto_fuente(row, sesion.fuente_web, categoria, producto_canonico, actualizar=True)
-        _, precio_creado = crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False)
+        precio, precio_creado = crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False)
         calcular_comparacion_producto(producto_canonico)
         evaluar_producto_multifuente(producto_canonico)
         datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
-        crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
+        crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda, lote_captura=resultado.lote_captura)
         resultado.procesado = True
         resultado.save(update_fields=["procesado"])
         procesados += 1
         precios_creados += int(precio_creado)
+        if resultado.lote_captura_id:
+            registrar_detalle_lote(
+                resultado.lote_captura,
+                "procesado",
+                producto_fuente=producto_fuente,
+                precio_fuente=precio,
+                resultado_laboratorio=resultado,
+                mensaje="Resultado de laboratorio procesado.",
+                datos_originales=row,
+            )
+            finalizar_lote_captura(resultado.lote_captura)
     sesion.estado = SesionLaboratorioMapeo.ESTADO_PROCESADA
     sesion.save(update_fields=["estado"])
     return {"ok": True, "procesados": procesados, "precios_creados": precios_creados, "errores": 0, "mensaje": "Resultados procesados."}

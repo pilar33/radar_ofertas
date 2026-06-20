@@ -4,14 +4,14 @@ import zipfile
 
 from django.db.models import Q
 
-from oportunidades.models import PrecioFuente, ProductoFuente, ResultadoExtraccionWeb, SugerenciaMatchingProducto
+from oportunidades.models import LoteCaptura, PrecioFuente, ProductoFuente, ResultadoExtraccionWeb, SugerenciaMatchingProducto
 
 
 def _ultimo_precio(producto_fuente):
     return producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
 
 
-def exportar_dataset_productos_csv(output=None, delimiter=","):
+def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_excluidos=False):
     buffer = output or io.StringIO()
     writer = csv.writer(buffer, delimiter=delimiter)
     writer.writerow(
@@ -57,11 +57,23 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
             "cantidad_fuentes_donde_aparece",
             "requiere_revision",
             "revisado",
+            "lote_captura_id",
+            "lote_nombre",
+            "lote_origen",
+            "lote_tipo_carga",
+            "lote_fecha_inicio",
+            "lote_fecha_relevamiento",
+            "lote_apto_dataset",
+            "lote_excluir_ml",
+            "lote_url_origen",
         ]
     )
-    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web").prefetch_related("precios_fuente", "senales_demanda")
+    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web", "lote_origen").prefetch_related("precios_fuente__lote_captura", "senales_demanda")
     for producto in productos:
         precio = _ultimo_precio(producto)
+        lote = precio.lote_captura if precio and precio.lote_captura_id else producto.lote_origen
+        if lote and lote.excluir_ml and not incluir_lotes_excluidos:
+            continue
         canonico = producto.producto_canonico
         comparacion = canonico.comparaciones.order_by("-fecha_calculo", "-id").first() if canonico else None
         matching = SugerenciaMatchingProducto.objects.filter(Q(producto_a=producto) | Q(producto_b=producto)).order_by("-score", "-fecha_creacion").first()
@@ -110,8 +122,41 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
                 senal.cantidad_fuentes_donde_aparece if senal else cantidad_fuentes,
                 producto.requiere_revision,
                 producto.revisado,
+                lote.pk if lote else "",
+                lote.nombre if lote else "",
+                lote.origen if lote else "",
+                lote.tipo_carga if lote else "",
+                lote.fecha_inicio.isoformat() if lote else "",
+                lote.fecha_relevamiento.isoformat() if lote and lote.fecha_relevamiento else "",
+                lote.apto_dataset if lote else "",
+                lote.excluir_ml if lote else "",
+                lote.url_origen if lote else "",
             ]
         )
+    return buffer
+
+
+def exportar_lote_captura_csv(lote, output=None, delimiter=","):
+    buffer = output or io.StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow([
+        "producto", "fuente", "url", "imagen", "precio_lista", "precio_transferencia",
+        "precio_tarjeta", "precio_oportunidad", "tipo_oportunidad", "score_demanda",
+        "score_comercial", "fecha_captura", "estado_revision",
+    ])
+    productos = ProductoFuente.objects.filter(
+        Q(lote_origen=lote) | Q(precios_fuente__lote_captura=lote) | Q(detallelotecaptura__lote=lote)
+    ).select_related("fuente_web").distinct()
+    for producto in productos:
+        precio = producto.precios_fuente.filter(lote_captura=lote).order_by("-fecha_relevamiento", "-id").first() or _ultimo_precio(producto)
+        writer.writerow([
+            producto.titulo_original, producto.fuente_web.nombre, producto.url_producto,
+            producto.imagen_url or "", precio.precio_lista if precio else "",
+            precio.precio_transferencia if precio else "", precio.precio_tarjeta if precio else "",
+            precio.precio_oportunidad if precio else "", precio.tipo_precio_oportunidad if precio else "",
+            producto.score_demanda_actual, producto.score_comercial, lote.fecha_relevamiento or lote.fecha_inicio,
+            "revisado" if producto.revisado else "requiere_revision" if producto.requiere_revision else "pendiente",
+        ])
     return buffer
 
 

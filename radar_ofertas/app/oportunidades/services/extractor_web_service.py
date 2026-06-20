@@ -35,6 +35,11 @@ from oportunidades.services.importacion_service import (
     obtener_o_crear_producto_canonico,
 )
 from oportunidades.services.dominios_service import url_pertenece_a_dominio
+from oportunidades.services.lotes_captura_service import (
+    crear_lote_captura,
+    finalizar_lote_captura,
+    registrar_detalle_lote,
+)
 
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -741,6 +746,7 @@ def procesar_resultado_a_producto(resultado, conector):
         "condicion": Producto.CONDICION_DESCONOCIDO,
         "moneda": fuente.moneda_principal,
         "origen_dato": PrecioFuente.ORIGEN_SCRAPING,
+        "lote_captura": resultado.lote_captura,
     }
     canonico, _ = obtener_o_crear_producto_canonico(row, categoria)
     producto_fuente, _, _ = crear_o_actualizar_producto_fuente(row, fuente, categoria, canonico, actualizar=True)
@@ -748,10 +754,20 @@ def procesar_resultado_a_producto(resultado, conector):
     calcular_comparacion_producto(canonico)
     evaluar_producto_multifuente(canonico)
     datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
-    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
+    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda, lote_captura=resultado.lote_captura)
     resultado.producto_fuente = producto_fuente
     resultado.estado = ResultadoExtraccionWeb.ESTADO_PROCESADO
     resultado.save(update_fields=["producto_fuente", "estado"])
+    if resultado.lote_captura_id:
+        registrar_detalle_lote(
+            resultado.lote_captura,
+            "procesado",
+            producto_fuente=producto_fuente,
+            precio_fuente=precio,
+            resultado_extraccion=resultado,
+            mensaje="Resultado de extractor procesado.",
+            datos_originales=row,
+        )
     return producto_fuente, precio
 
 
@@ -761,7 +777,19 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
     if not validacion["valido"]:
         return finalizar_ejecucion_conector(ejecucion, {"estado": EjecucionConector.ESTADO_ERROR, "errores": 1, "mensaje": validacion["mensaje"]})
     config = conector.configuracion_web
+    lote = crear_lote_captura(
+        origen="extractor_web",
+        fuente_web=conector.fuente_web,
+        conector=conector,
+        extractor=config,
+        ejecucion_conector=ejecucion,
+        url_origen=config.pagina_prueba_url or config.url_categoria or config.url_inicio,
+        url_categoria=config.url_categoria,
+        tipo_carga="piloto",
+        parametros={"max_productos": max_productos, "max_paginas": max_paginas, "procesar": procesar},
+    )
     if procesar and config.solo_preview:
+        finalizar_lote_captura(lote, estado="error")
         return finalizar_ejecucion_conector(ejecucion, {"estado": EjecucionConector.ESTADO_ERROR, "errores": 1, "mensaje": "solo_preview=True bloquea procesamiento."})
     limite_productos = min(max_productos or config.max_productos, config.max_productos, 50)
     paginas = min(max_paginas or config.max_paginas, config.max_paginas, 3)
@@ -794,6 +822,7 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
             mensaje = ""
             resultado = ResultadoExtraccionWeb.objects.create(
                 ejecucion=ejecucion,
+                lote_captura=lote,
                 titulo=item.get("titulo"),
                 precio_texto=item.get("precio_texto"),
                 precio_decimal=precio,
@@ -818,13 +847,20 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
                 raw_data=json.dumps(item, ensure_ascii=True, default=str),
             )
             actualizar_calidad_resultado_preview(resultado)
+            registrar_detalle_lote(
+                lote,
+                "detectado",
+                resultado_extraccion=resultado,
+                mensaje=resultado.mensaje,
+                datos_originales=item,
+            )
             detectados += 1
             if procesar:
                 procesar_resultado_a_producto(resultado, conector)
                 procesados += 1
         if detectados >= limite_productos:
             break
-    return finalizar_ejecucion_conector(
+    ejecucion_final = finalizar_ejecucion_conector(
         ejecucion,
         {
             "productos_detectados": detectados,
@@ -835,3 +871,5 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
             "mensaje": f"Extractor finalizado. Detectados={detectados}, procesados={procesados}, errores={errores}.",
         },
     )
+    finalizar_lote_captura(lote, estado="procesado_con_errores" if errores else "procesado")
+    return ejecucion_final

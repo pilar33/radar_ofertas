@@ -283,6 +283,13 @@ class ProductoCanonico(models.Model):
 
 
 class ProductoFuente(models.Model):
+    lote_origen = models.ForeignKey(
+        "LoteCaptura",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_origen",
+    )
     producto_canonico = models.ForeignKey(
         ProductoCanonico,
         on_delete=models.SET_NULL,
@@ -374,6 +381,13 @@ class SenalDemandaProducto(models.Model):
     ]
 
     producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="senales_demanda")
+    lote_captura = models.ForeignKey(
+        "LoteCaptura",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="senales_demanda",
+    )
     fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, null=True, blank=True)
     fecha_relevamiento = models.DateTimeField(auto_now_add=True)
     cantidad_vendida_visible = models.PositiveIntegerField(default=0)
@@ -527,6 +541,13 @@ class PrecioFuente(models.Model):
     ]
 
     producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="precios_fuente")
+    lote_captura = models.ForeignKey(
+        "LoteCaptura",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="precios",
+    )
     precio = models.DecimalField(max_digits=12, decimal_places=2)
     precio_lista = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     precio_transferencia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1114,6 +1135,13 @@ class ResultadoExtraccionWeb(models.Model):
     ]
 
     ejecucion = models.ForeignKey(EjecucionConector, on_delete=models.CASCADE, related_name="resultados_web")
+    lote_captura = models.ForeignKey(
+        "LoteCaptura",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resultados_extraccion",
+    )
     titulo = models.CharField(max_length=255, blank=True, null=True)
     precio_texto = models.CharField(max_length=100, blank=True, null=True)
     precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1197,6 +1225,13 @@ class SesionLaboratorioMapeo(models.Model):
 
 class ResultadoLaboratorioMapeo(models.Model):
     sesion = models.ForeignKey(SesionLaboratorioMapeo, on_delete=models.CASCADE, related_name="resultados")
+    lote_captura = models.ForeignKey(
+        "LoteCaptura",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resultados_laboratorio",
+    )
     titulo = models.CharField(max_length=255, blank=True, null=True)
     precio_texto = models.CharField(max_length=100, blank=True, null=True)
     precio_decimal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1438,3 +1473,123 @@ class Publicacion(models.Model):
 
     def __str__(self):
         return f"{self.get_red_social_display()} - {self.oportunidad}"
+
+
+class LoteCaptura(models.Model):
+    ORIGEN_LABORATORIO = "laboratorio"
+    ORIGEN_EXTRACTOR_WEB = "extractor_web"
+    ORIGEN_IMPORTACION = "importacion_csv_excel"
+    ORIGEN_CARGA_URL = "carga_url"
+    ORIGEN_MANUAL = "manual"
+    ORIGEN_API = "api"
+    ORIGEN_OTRO = "otro"
+    ORIGEN_CHOICES = [
+        (ORIGEN_LABORATORIO, "Laboratorio"),
+        (ORIGEN_EXTRACTOR_WEB, "Extractor web"),
+        (ORIGEN_IMPORTACION, "Importacion CSV/Excel"),
+        (ORIGEN_CARGA_URL, "Carga URL"),
+        (ORIGEN_MANUAL, "Manual"),
+        (ORIGEN_API, "API"),
+        (ORIGEN_OTRO, "Otro"),
+    ]
+    TIPO_PRUEBA = "prueba"
+    TIPO_PILOTO = "piloto"
+    TIPO_REAL = "real"
+    TIPO_HISTORICA = "historica"
+    TIPO_DESCARTE = "descarte"
+    TIPO_CARGA_CHOICES = [
+        (TIPO_PRUEBA, "Prueba"),
+        (TIPO_PILOTO, "Piloto"),
+        (TIPO_REAL, "Real"),
+        (TIPO_HISTORICA, "Historica"),
+        (TIPO_DESCARTE, "Descarte"),
+    ]
+    ESTADO_CREADO = "creado"
+    ESTADO_EJECUTANDO = "ejecutando"
+    ESTADO_PROCESADO = "procesado"
+    ESTADO_PROCESADO_CON_ERRORES = "procesado_con_errores"
+    ESTADO_VALIDADO = "validado"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_CREADO, "Creado"),
+        (ESTADO_EJECUTANDO, "Ejecutando"),
+        (ESTADO_PROCESADO, "Procesado"),
+        (ESTADO_PROCESADO_CON_ERRORES, "Procesado con errores"),
+        (ESTADO_VALIDADO, "Validado"),
+        (ESTADO_DESCARTADO, "Descartado"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    nombre = models.CharField(max_length=200)
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, null=True, blank=True, related_name="lotes_captura")
+    conector = models.ForeignKey(ConectorFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_captura")
+    extractor = models.ForeignKey(ConfiguracionExtractorWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_captura")
+    importacion = models.ForeignKey(ImportacionProductos, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_captura")
+    sesion_laboratorio = models.ForeignKey(SesionLaboratorioMapeo, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_captura")
+    ejecucion_conector = models.ForeignKey(EjecucionConector, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_captura")
+    origen = models.CharField(max_length=30, choices=ORIGEN_CHOICES)
+    tipo_carga = models.CharField(max_length=20, choices=TIPO_CARGA_CHOICES, default=TIPO_PILOTO)
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_CREADO)
+    url_origen = models.URLField(blank=True, null=True)
+    url_categoria = models.URLField(blank=True, null=True)
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    fecha_relevamiento = models.DateTimeField(null=True, blank=True)
+    observaciones = models.TextField(blank=True, null=True)
+    usuario_texto = models.CharField(max_length=150, blank=True, null=True)
+    productos_detectados = models.PositiveIntegerField(default=0)
+    productos_seleccionados = models.PositiveIntegerField(default=0)
+    productos_procesados = models.PositiveIntegerField(default=0)
+    productos_creados = models.PositiveIntegerField(default=0)
+    productos_actualizados = models.PositiveIntegerField(default=0)
+    precios_creados = models.PositiveIntegerField(default=0)
+    senales_demanda_creadas = models.PositiveIntegerField(default=0)
+    errores = models.PositiveIntegerField(default=0)
+    requiere_revision = models.BooleanField(default=False)
+    apto_dataset = models.BooleanField(default=True)
+    excluir_ml = models.BooleanField(default=False)
+    motivo_exclusion = models.TextField(blank=True, null=True)
+    parametros = models.TextField(blank=True, null=True)
+    resumen = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "lote de captura"
+        verbose_name_plural = "lotes de captura"
+        ordering = ["-fecha_inicio"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class DetalleLoteCaptura(models.Model):
+    ESTADO_DETECTADO = "detectado"
+    ESTADO_SELECCIONADO = "seleccionado"
+    ESTADO_PROCESADO = "procesado"
+    ESTADO_OMITIDO = "omitido"
+    ESTADO_ERROR = "error"
+    ESTADO_CHOICES = [
+        (ESTADO_DETECTADO, "Detectado"),
+        (ESTADO_SELECCIONADO, "Seleccionado"),
+        (ESTADO_PROCESADO, "Procesado"),
+        (ESTADO_OMITIDO, "Omitido"),
+        (ESTADO_ERROR, "Error"),
+    ]
+
+    lote = models.ForeignKey(LoteCaptura, on_delete=models.CASCADE, related_name="detalles")
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    precio_fuente = models.ForeignKey(PrecioFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    resultado_extraccion = models.ForeignKey(ResultadoExtraccionWeb, on_delete=models.SET_NULL, null=True, blank=True)
+    resultado_laboratorio = models.ForeignKey(ResultadoLaboratorioMapeo, on_delete=models.SET_NULL, null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES)
+    mensaje = models.TextField(blank=True, null=True)
+    datos_originales = models.TextField(blank=True, null=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "detalle de lote de captura"
+        verbose_name_plural = "detalles de lotes de captura"
+        ordering = ["lote", "fecha", "id"]
+
+    def __str__(self):
+        return f"{self.lote} - {self.estado}"

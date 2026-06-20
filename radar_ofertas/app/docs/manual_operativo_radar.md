@@ -75,3 +75,28 @@ El menú agrupa Fuentes, Mapeo, Procesamiento, Curaduría, Análisis comercial, 
 # Habilitar manualmente un extractor guardado
 
 Configurar política amarilla/verde con scraping, robots y términos revisados; activar el conector sin revisión manual; habilitar el extractor en `solo_preview` con una página, diez productos y dos segundos de demora. Ejecutar preview, revisar y procesar pocos productos.
+
+# Lotes de captura y trazabilidad
+
+Cada laboratorio, preview de extractor o importacion CSV/Excel crea un lote que conserva fuente, URL, fecha, origen, resultados, productos, precios, demanda y errores. Tambien se puede crear un lote manual. Revisar `/lotes-captura/`; validar los lotes correctos, descartar los inutiles y usar **Excluir de ML** cuando deban conservarse operativamente pero no incorporarse a un futuro entrenamiento.
+
+El CSV individual se exporta desde el detalle o con:
+
+```bash
+docker compose exec web python manage.py exportar_lote_captura --lote-id ID --output data/exports/lote_ID.csv
+```
+
+No cargar datos masivos sin lote. Las fechas y relaciones permiten comparar precios por dia, mes y anio. Machine learning todavia no se implementa; estos metadatos preparan un dataset auditable para modelos futuros.
+
+# Flujo recomendado antes de cargar muchos datos
+
+1. Diagnosticar SQL Server.
+2. Crear backup inicial.
+3. Ejecutar laboratorio o extractor.
+4. Revisar el lote.
+5. Procesar pocos productos.
+6. Validar el lote.
+7. Curar productos.
+8. Recalcular ranking.
+9. Exportar dataset.
+10. Crear backup final.

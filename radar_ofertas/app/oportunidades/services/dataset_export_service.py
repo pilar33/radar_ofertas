@@ -41,17 +41,32 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
             "tipo_precio_oportunidad",
             "fecha_precio",
             "score_comercial",
+            "score_demanda_actual",
+            "nivel_demanda_actual",
+            "motivo_demanda_actual",
+            "cantidad_vendida_visible",
+            "texto_vendidos",
+            "cantidad_resenas",
+            "cantidad_preguntas",
+            "calificacion",
+            "stock_visible",
+            "variacion_stock",
+            "etiqueta_mas_vendido",
+            "etiqueta_destacado",
+            "etiqueta_tendencia",
+            "cantidad_fuentes_donde_aparece",
             "requiere_revision",
             "revisado",
         ]
     )
-    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web").prefetch_related("precios_fuente")
+    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web").prefetch_related("precios_fuente", "senales_demanda")
     for producto in productos:
         precio = _ultimo_precio(producto)
         canonico = producto.producto_canonico
         comparacion = canonico.comparaciones.order_by("-fecha_calculo", "-id").first() if canonico else None
         matching = SugerenciaMatchingProducto.objects.filter(Q(producto_a=producto) | Q(producto_b=producto)).order_by("-score", "-fecha_creacion").first()
         cantidad_fuentes = canonico.apariciones.values("fuente_web_id").distinct().count() if canonico else 0
+        senal = producto.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
         writer.writerow(
             [
                 canonico.pk if canonico else "",
@@ -79,6 +94,20 @@ def exportar_dataset_productos_csv(output=None, delimiter=","):
                 precio.tipo_precio_oportunidad if precio else "",
                 precio.fecha_relevamiento.isoformat() if precio else "",
                 producto.score_comercial,
+                producto.score_demanda_actual,
+                producto.nivel_demanda_actual,
+                producto.motivo_demanda_actual or "",
+                senal.cantidad_vendida_visible if senal else 0,
+                senal.texto_vendidos if senal else "",
+                senal.cantidad_resenas if senal else 0,
+                senal.cantidad_preguntas if senal else 0,
+                senal.calificacion if senal else 0,
+                senal.stock_visible if senal else 0,
+                senal.variacion_stock if senal else 0,
+                senal.etiqueta_mas_vendido if senal else False,
+                senal.etiqueta_destacado if senal else False,
+                senal.etiqueta_tendencia if senal else False,
+                senal.cantidad_fuentes_donde_aparece if senal else cantidad_fuentes,
                 producto.requiere_revision,
                 producto.revisado,
             ]

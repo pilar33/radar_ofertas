@@ -7,49 +7,27 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-  <nav class="navbar navbar-expand-lg bg-dark navbar-dark">
+  <nav class="navbar navbar-expand-xl bg-dark navbar-dark">
     <div class="container-fluid">
       <a class="navbar-brand fw-semibold" href="{% url 'oportunidades:lista' %}">radar_ofertas</a>
-      <div class="navbar-nav">
-        <a class="nav-link" href="{% url 'oportunidades:lista' %}">Oportunidades</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_productos_multifuente' %}">Productos multifuente</a>
-        <a class="nav-link" href="{% url 'oportunidades:matching_productos' %}">Matching</a>
-        <a class="nav-link" href="{% url 'oportunidades:curaduria_dashboard' %}">Curaduria</a>
-        <a class="nav-link" href="{% url 'oportunidades:ranking_oportunidades' %}">Ranking</a>
-        <a class="nav-link" href="{% url 'oportunidades:dataset_exportar' %}">Dataset</a>
-        <a class="nav-link" href="{% url 'oportunidades:dataset_validacion_piloto' %}">Validacion piloto</a>
-        <a class="nav-link" href="{% url 'oportunidades:diagnostico_base_datos' %}">Base datos</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a>
-        <a class="nav-link" href="{% url 'oportunidades:estado_operativo_fuentes' %}">Estado fuentes</a>
-        <a class="nav-link" href="{% url 'oportunidades:nueva_fuente_rapida' %}">Nueva fuente rapida</a>
-        <a class="nav-link" href="{% url 'oportunidades:laboratorio_mapeo_web' %}">Laboratorio Web</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_auditorias_fuentes' %}">Auditorias</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_conectores' %}">Conectores</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_extractores' %}">Extractores</a>
-        <a class="nav-link" href="{% url 'oportunidades:resultados_pendientes_extractores' %}">Previews</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_importaciones' %}">Importar productos</a>
-        <a class="nav-link" href="{% url 'oportunidades:cargar_producto_url' %}">Cargar URL</a>
-        <a class="nav-link" href="{% url 'oportunidades:diagnostico_storage' %}">Storage</a>
-        <a class="nav-link" href="{% url 'oportunidades:lista_decisiones_tecnicas' %}">Decisiones tecnicas</a>
-        <a class="nav-link" href="{% url 'oportunidades:buscar_meli' %}">Buscar Mercado Libre</a>
-        <a class="nav-link" href="{% url 'oportunidades:oauth_diagnostico' %}">Diagnostico Mercado Libre</a>
-        <a class="nav-link" href="/admin/">Admin</a>
-        <a class="nav-link" href="{% url 'oportunidades:api_lista' %}">API</a>
-      </div>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuProceso"><span class="navbar-toggler-icon"></span></button>
+      <div class="collapse navbar-collapse" id="menuProceso"><ul class="navbar-nav me-auto">
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Inicio</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:lista' %}">Dashboard general</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:estado_operativo_fuentes' %}">Estado del sistema</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:diagnostico_base_datos' %}">Base de datos</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">1. Fuentes</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:lista_fuentes' %}">Fuentes</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:nueva_fuente_rapida' %}">Nueva fuente rápida</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:estado_operativo_fuentes' %}">Estado de fuentes</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_auditorias_fuentes' %}">Auditorías</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_conectores' %}">Conectores</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_extractores' %}">Extractores</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">2. Mapeo</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:laboratorio_mapeo_web' %}">Laboratorio Web</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_importaciones' %}">Importar productos</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:cargar_producto_url' %}">Carga asistida por URL</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:resultados_pendientes_extractores' %}">Resultados preview</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">3. Procesamiento</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_productos' %}">Productos procesados</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_productos_multifuente' %}">Productos multifuente</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:matching_productos' %}">Matching de productos</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_duplicados' %}">Duplicados</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">4. Curaduría</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_dashboard' %}">Dashboard curaduría</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_productos' %}">Curar productos</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_previews' %}">Curar previews</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:curaduria_duplicados' %}">Duplicados</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">5. Análisis comercial</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:ranking_oportunidades' %}">Ranking comercial</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:demanda_dashboard' %}">Demanda estimada</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:demanda_productos' %}">Productos por demanda</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:candidatos_compra' %}">Candidatos de compra</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista' %}">Oportunidades</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">6. Dataset</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'oportunidades:dataset_exportar' %}">Dataset / Exportar</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:dataset_backup' %}">Backup</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:dataset_validacion_piloto' %}">Validación piloto</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">7. Configuración</a><ul class="dropdown-menu dropdown-menu-end"><li><a class="dropdown-item" href="{% url 'oportunidades:diagnostico_base_datos' %}">Base de datos</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:diagnostico_storage' %}">Storage</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:politica_scraping' %}">Política scraping</a></li><li><a class="dropdown-item" href="{% url 'oportunidades:lista_decisiones_tecnicas' %}">Decisiones técnicas</a></li><li><a class="dropdown-item" href="/admin/">Admin</a></li></ul></li>
+      </ul></div>
     </div>
   </nav>
-
   <main class="container-fluid py-4">
-    {% if messages %}
-      <div class="mb-3">
-        {% for message in messages %}
-          <div class="alert alert-{{ message.tags|default:'info' }} mb-2">{{ message }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
+    <div class="small text-uppercase text-secondary fw-semibold mb-2">{% block proceso %}{% endblock %}</div>
+    {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} mb-2">{{ message }}</div>{% endfor %}{% endif %}
     {% block content %}{% endblock %}
   </main>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

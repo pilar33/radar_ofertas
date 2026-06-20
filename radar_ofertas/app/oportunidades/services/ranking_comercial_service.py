@@ -68,6 +68,7 @@ def calcular_score_comercial_producto_fuente(producto_fuente, guardar=True):
     score = 0
     motivos = []
     componentes = {}
+    senal_demanda = producto_fuente.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
 
     if not precio:
         score -= 20
@@ -120,6 +121,38 @@ def calcular_score_comercial_producto_fuente(producto_fuente, guardar=True):
             score += 8
             motivos.append(f"{comparacion['diferencia_peor']}% menor que la fuente mas cara.")
 
+    componentes["score_demanda"] = producto_fuente.score_demanda_actual
+    if producto_fuente.nivel_demanda_actual == ProductoFuente.DEMANDA_ALTA:
+        score += 18
+        motivos.append("Demanda estimada alta.")
+        if precio and precio.precio_oportunidad > 0 and _descuento(precio) >= 10:
+            score += 8
+            motivos.append("Demanda alta combinada con precio oportunidad conveniente.")
+    elif producto_fuente.nivel_demanda_actual == ProductoFuente.DEMANDA_MEDIA:
+        score += 9
+        motivos.append("Demanda estimada media.")
+    elif producto_fuente.nivel_demanda_actual == ProductoFuente.DEMANDA_BAJA:
+        score += 2
+    else:
+        score -= 5
+        motivos.append("Demanda desconocida; requiere validacion manual.")
+    if senal_demanda:
+        if senal_demanda.etiqueta_mas_vendido:
+            score += 6
+        if senal_demanda.cantidad_resenas:
+            score += min(6, senal_demanda.cantidad_resenas // 25 + 1)
+        if senal_demanda.cantidad_preguntas:
+            score += min(4, senal_demanda.cantidad_preguntas // 20 + 1)
+        if senal_demanda.aparece_en_varias_fuentes:
+            score += 5
+            motivos.append("Producto aparece en varias fuentes.")
+        if senal_demanda.recurrencia_en_previews > 1:
+            score += min(5, senal_demanda.recurrencia_en_previews)
+        texto_stock = (senal_demanda.texto_stock or "").lower()
+        if "agotado" in texto_stock or "sin stock" in texto_stock:
+            score -= 18
+            motivos.append("Producto agotado o sin stock.")
+
     if producto_fuente.imagen_url:
         score += 8
     else:
@@ -166,7 +199,7 @@ def calcular_score_comercial_producto_fuente(producto_fuente, guardar=True):
 
 
 def recalcular_ranking_comercial(fuente_id=None, producto_fuente_id=None, solo_revisados=False, limite=None):
-    qs = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
+    qs = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente", "senales_demanda")
     if fuente_id:
         qs = qs.filter(fuente_web_id=fuente_id)
     if producto_fuente_id:

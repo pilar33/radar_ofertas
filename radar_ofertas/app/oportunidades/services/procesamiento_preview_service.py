@@ -13,6 +13,8 @@ from oportunidades.models import (
 )
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from oportunidades.services.demanda_service import crear_o_actualizar_senal_demanda, extraer_senales_demanda_desde_texto
+from oportunidades.services.ranking_comercial_service import calcular_score_comercial_producto_fuente
 from oportunidades.services.extractor_web_service import validar_ejecucion_extractor
 from oportunidades.services.importacion_service import (
     crear_o_actualizar_producto_fuente,
@@ -138,6 +140,9 @@ def procesar_resultado_preview(resultado, forzar_precio=False):
     precio, precio_creado = crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=forzar_precio)
     calcular_comparacion_producto(canonico)
     evaluar_producto_multifuente(canonico)
+    datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
+    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
+    calcular_score_comercial_producto_fuente(producto_fuente)
     resultado.estado = ResultadoExtraccionWeb.ESTADO_PROCESADO
     resultado.producto_fuente = producto_fuente
     resultado.fecha_procesamiento = timezone.now()

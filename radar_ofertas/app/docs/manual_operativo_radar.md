@@ -64,3 +64,14 @@ La accion deja el extractor en `solo_preview=True`, con `max_paginas=1`, `max_pr
 # Comparar productos entre fuentes
 
 Generar sugerencias con `docker compose exec web python manage.py generar_sugerencias_matching --limite 200 --min-score 60`. Revisarlas en `/matching/productos/`; aceptar vincula los `ProductoFuente` al mismo `ProductoCanonico`, mientras que rechazar conserva la decision para no recrear el par.
+# Demanda estimada y señales de venta
+
+La demanda estimada usa vendidos visibles, reseñas, preguntas, etiquetas, stock, recurrencia y aparición en varias fuentes. No inventa ventas: sin una cantidad publicada por la fuente, `cantidad_vendida_visible` queda en cero. Usar `/demanda/dashboard/` junto con ranking, precio y margen.
+
+# Navegación por proceso
+
+El menú agrupa Fuentes, Mapeo, Procesamiento, Curaduría, Análisis comercial, Dataset y Configuración.
+
+# Habilitar manualmente un extractor guardado
+
+Configurar política amarilla/verde con scraping, robots y términos revisados; activar el conector sin revisión manual; habilitar el extractor en `solo_preview` con una página, diez productos y dos segundos de demora. Ejecutar preview, revisar y procesar pocos productos.

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Sesion laboratorio{% endblock %}
+{% block proceso %}Proceso: Mapeo / Laboratorio Web{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -33,6 +34,7 @@
         <th>Tipo</th>
         <th>Imagen</th>
         <th>Score</th>
+        <th>Demanda estimada</th>
         <th>Procesado</th>
         <th>URL</th>
       </tr>
@@ -58,11 +60,12 @@
           <td><span class="badge text-bg-light">{{ resultado.tipo_precio_oportunidad }}</span></td>
           <td>{% if resultado.imagen_url %}<img src="{{ resultado.imagen_url }}" alt="" style="width:48px;height:48px;object-fit:cover" class="border rounded">{% else %}-{% endif %}</td>
           <td>{{ resultado.score }}</td>
+          <td><span class="badge text-bg-info">{{ resultado.score_demanda_preview }} · {{ resultado.get_nivel_demanda_preview_display }}</span>{% if resultado.texto_demanda_detectado %}<div class="small text-muted">{{ resultado.texto_demanda_detectado|truncatechars:120 }}</div>{% endif %}</td>
           <td>{{ resultado.procesado|yesno:"Si,No" }}</td>
           <td>{% if resultado.url_producto %}<a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>{% else %}-{% endif %}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="11" class="text-muted">Sin resultados.</td></tr>
+        <tr><td colspan="12" class="text-muted">Sin resultados.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Demanda estimada{% endblock %}{% block proceso %}Proceso: Análisis comercial / Demanda estimada{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3"><h1 class="h3">Dashboard de demanda estimada</h1><a class="btn btn-primary" href="{% url 'oportunidades:demanda_productos' %}">Ver productos</a></div>
+<div class="alert alert-info">Las señales estiman interés comercial. Solo “vendidos visibles” representa una cantidad publicada explícitamente por la fuente.</div>
+<div class="row g-3 mb-4">
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Demanda alta</div><div class="display-6">{{ demanda_alta }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Demanda media</div><div class="display-6">{{ demanda_media }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Demanda baja</div><div class="display-6">{{ demanda_baja }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Desconocida</div><div class="display-6">{{ demanda_desconocida }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Agotados</div><div class="display-6">{{ agotados }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">En varias fuentes</div><div class="display-6">{{ varias_fuentes }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">Alta demanda / score bajo</div><div class="display-6">{{ alta_demanda_margen_bajo }}</div></div></div></div>
+<div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="text-muted">A revisar</div><div class="display-6">{{ a_revisar }}</div></div></div></div>
+</div>
+<h2 class="h5">Mejor combinación demanda/precio</h2><div class="list-group">{% for producto in mejor_combinacion %}<a class="list-group-item list-group-item-action d-flex justify-content-between" href="{% url 'oportunidades:demanda_producto_detalle' producto.pk %}"><span>{{ producto.titulo_original }}</span><span>Demanda {{ producto.score_demanda_actual }} · Comercial {{ producto.score_comercial }}</span></a>{% empty %}<div class="list-group-item text-muted">Todavía no hay productos con demanda alta.</div>{% endfor %}</div>
+{% endblock %}

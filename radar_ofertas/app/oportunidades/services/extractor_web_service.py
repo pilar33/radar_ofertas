@@ -22,6 +22,12 @@ from oportunidades.models import (
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
 from oportunidades.services.conectores_service import crear_ejecucion_conector, finalizar_ejecucion_conector
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from oportunidades.services.demanda_service import (
+    calcular_score_demanda,
+    crear_o_actualizar_senal_demanda,
+    extraer_senales_demanda_desde_card,
+    extraer_senales_demanda_desde_texto,
+)
 from oportunidades.services.importacion_service import (
     crear_o_actualizar_producto_fuente,
     crear_precio_fuente,
@@ -606,6 +612,7 @@ def extraer_css_productos(html, url_base, config):
         if not titulo and not precio:
             continue
         datos_precios = extraer_precios_multiples_desde_card(card)
+        datos_demanda = extraer_senales_demanda_desde_card(card)
         productos.append(
             enriquecer_item_con_precios(
                 {
@@ -618,6 +625,7 @@ def extraer_css_productos(html, url_base, config):
                     "imagen_url": extraer_imagen_producto(card, url_base),
                     "descripcion": _text(desc_el),
                     "fuente_url": url_base,
+                    **datos_demanda,
                 }
             )
         )
@@ -739,6 +747,8 @@ def procesar_resultado_a_producto(resultado, conector):
     precio, _ = crear_precio_fuente(producto_fuente, row)
     calcular_comparacion_producto(canonico)
     evaluar_producto_multifuente(canonico)
+    datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
+    crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
     resultado.producto_fuente = producto_fuente
     resultado.estado = ResultadoExtraccionWeb.ESTADO_PROCESADO
     resultado.save(update_fields=["producto_fuente", "estado"])
@@ -777,6 +787,9 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
             productos = []
         for item in productos[: max(0, limite_productos - detectados)]:
             item = enriquecer_item_con_precios(item)
+            if not item.get("texto_demanda_detectado"):
+                item.update(extraer_senales_demanda_desde_texto(" ".join(filter(None, [item.get("titulo"), item.get("descripcion")]))) )
+            demanda = calcular_score_demanda(item)
             precio = item.get("precio_oportunidad_decimal") or item.get("precio_decimal") or Decimal("0.00")
             mensaje = ""
             resultado = ResultadoExtraccionWeb.objects.create(
@@ -794,6 +807,9 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
                 precio_oportunidad_decimal=item.get("precio_oportunidad_decimal") or Decimal("0.00"),
                 tipo_precio_oportunidad=item.get("tipo_precio_oportunidad") or PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
                 texto_precios_detectado=item.get("texto_precios_detectado"),
+                texto_demanda_detectado=item.get("texto_demanda_detectado"),
+                score_demanda_preview=demanda["score"],
+                nivel_demanda_preview=demanda["nivel"],
                 url_producto=item.get("url_producto"),
                 imagen_url=item.get("imagen_url"),
                 descripcion=item.get("descripcion"),

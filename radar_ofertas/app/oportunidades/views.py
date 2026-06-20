@@ -27,6 +27,7 @@ from .forms import (
     PrecioFuenteCuraduriaForm,
     ProductoFuenteCuraduriaForm,
     RevisionManualFuenteForm,
+    SenalDemandaManualForm,
 )
 from .models import (
     AuditoriaFuenteWeb,
@@ -50,6 +51,7 @@ from .models import (
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
+    SenalDemandaProducto,
     SugerenciaMatchingProducto,
 )
 from .serializers import (
@@ -85,6 +87,7 @@ from .services.clasificacion_service import clasificar_oportunidad
 from .services.contenido_service import generar_contenido_basico
 from .services.comparacion_service import calcular_comparacion_producto
 from .services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from .services.demanda_service import crear_o_actualizar_senal_demanda, recalcular_demanda_producto
 from .services.matching_productos_service import (
     aceptar_sugerencia_matching,
     calcular_score_similitud_producto,
@@ -1584,7 +1587,7 @@ def ranking_oportunidades(request):
         recalcular_ranking_comercial()
         messages.success(request, "Ranking comercial recalculado.")
         return redirect("oportunidades:ranking_oportunidades")
-    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente")
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente", "senales_demanda")
     if request.GET.get("nivel"):
         productos = productos.filter(nivel_oportunidad=request.GET["nivel"])
     if request.GET.get("fuente"):
@@ -1597,6 +1600,18 @@ def ranking_oportunidades(request):
         productos = productos.filter(requiere_revision=False)
     if request.GET.get("score_min"):
         productos = productos.filter(score_comercial__gte=request.GET["score_min"])
+    if request.GET.get("demanda"):
+        productos = productos.filter(nivel_demanda_actual=request.GET["demanda"])
+    if request.GET.get("resenas") == "1":
+        productos = productos.filter(senales_demanda__cantidad_resenas__gt=0).distinct()
+    if request.GET.get("vendidos") == "1":
+        productos = productos.filter(senales_demanda__cantidad_vendida_visible__gt=0).distinct()
+    if request.GET.get("varias_fuentes") == "1":
+        productos = productos.filter(senales_demanda__aparece_en_varias_fuentes=True).distinct()
+    if request.GET.get("stock") == "1":
+        productos = productos.filter(Q(senales_demanda__stock_visible__gt=0) | Q(senales_demanda__texto_stock__icontains="disponible")).distinct()
+    if request.GET.get("agotado") == "1":
+        productos = productos.filter(Q(senales_demanda__texto_stock__icontains="agotado") | Q(senales_demanda__texto_stock__icontains="sin stock")).distinct()
     productos = productos.order_by("-score_comercial", "-fecha_actualizacion")[:300]
     for producto in productos:
         if not producto.score_comercial:
@@ -1608,9 +1623,94 @@ def ranking_oportunidades(request):
             "productos": productos,
             "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
             "niveles": ProductoFuente.NIVEL_CHOICES,
+            "niveles_demanda": ProductoFuente.DEMANDA_CHOICES,
             "advertencia_persistencia": obtener_advertencia_persistencia(),
         },
     )
+
+
+def demanda_dashboard(request):
+    productos = ProductoFuente.objects.all()
+    contexto = {
+        "demanda_alta": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_ALTA).count(),
+        "demanda_media": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_MEDIA).count(),
+        "demanda_baja": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_BAJA).count(),
+        "demanda_desconocida": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_DESCONOCIDA).count(),
+        "agotados": productos.filter(Q(senales_demanda__texto_stock__icontains="agotado") | Q(senales_demanda__texto_stock__icontains="sin stock")).distinct().count(),
+        "varias_fuentes": productos.filter(senales_demanda__aparece_en_varias_fuentes=True).distinct().count(),
+        "mejor_combinacion": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_ALTA).order_by("-score_comercial")[:10],
+        "alta_demanda_margen_bajo": productos.filter(nivel_demanda_actual=ProductoFuente.DEMANDA_ALTA, score_comercial__lt=50).count(),
+        "a_revisar": productos.filter(Q(requiere_revision=True) | Q(senales_demanda__requiere_revision=True)).distinct().count(),
+    }
+    return render(request, "oportunidades/demanda_dashboard.html", contexto)
+
+
+def demanda_productos(request):
+    productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico__categoria").prefetch_related("precios_fuente", "senales_demanda")
+    if request.GET.get("nivel"):
+        productos = productos.filter(nivel_demanda_actual=request.GET["nivel"])
+    if request.GET.get("fuente"):
+        productos = productos.filter(fuente_web_id=request.GET["fuente"])
+    if request.GET.get("categoria"):
+        productos = productos.filter(producto_canonico__categoria_id=request.GET["categoria"])
+    if request.GET.get("vendidos") == "1":
+        productos = productos.filter(senales_demanda__cantidad_vendida_visible__gt=0)
+    if request.GET.get("resenas") == "1":
+        productos = productos.filter(senales_demanda__cantidad_resenas__gt=0)
+    if request.GET.get("stock") == "1":
+        productos = productos.filter(Q(senales_demanda__stock_visible__gt=0) | Q(senales_demanda__texto_stock__icontains="disponible"))
+    if request.GET.get("varias_fuentes") == "1":
+        productos = productos.filter(senales_demanda__aparece_en_varias_fuentes=True)
+    filas = []
+    for producto in productos.distinct().order_by("-score_demanda_actual", "-score_comercial")[:500]:
+        producto.senal_actual = producto.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
+        producto.precio_actual = _ultimo_precio_producto(producto)
+        filas.append(producto)
+    return render(request, "oportunidades/demanda_productos.html", {
+        "productos": filas,
+        "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+        "categorias": CategoriaInteres.objects.filter(activa=True).order_by("nombre"),
+        "niveles_demanda": ProductoFuente.DEMANDA_CHOICES,
+    })
+
+
+def demanda_producto_detalle(request, producto_fuente_id):
+    producto = get_object_or_404(
+        ProductoFuente.objects.select_related("fuente_web", "producto_canonico").prefetch_related("precios_fuente", "senales_demanda"),
+        pk=producto_fuente_id,
+    )
+    otras_fuentes = producto.producto_canonico.apariciones.exclude(pk=producto.pk).select_related("fuente_web") if producto.producto_canonico_id else ProductoFuente.objects.none()
+    return render(request, "oportunidades/demanda_producto_detalle.html", {
+        "producto": producto,
+        "senal_actual": producto.senales_demanda.first(),
+        "otras_fuentes": otras_fuentes,
+    })
+
+
+@require_POST
+def demanda_producto_recalcular(request, producto_fuente_id):
+    producto = get_object_or_404(ProductoFuente, pk=producto_fuente_id)
+    recalcular_demanda_producto(producto)
+    calcular_score_comercial_producto_fuente(producto)
+    messages.success(request, "Demanda estimada recalculada.")
+    return redirect("oportunidades:demanda_producto_detalle", producto_fuente_id=producto.pk)
+
+
+def demanda_producto_editar_senales(request, producto_fuente_id):
+    producto = get_object_or_404(ProductoFuente, pk=producto_fuente_id)
+    form = SenalDemandaManualForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        senal = crear_o_actualizar_senal_demanda(producto, form.cleaned_data, SenalDemandaProducto.ORIGEN_MANUAL)
+        OperacionCuraduria.objects.create(
+            tipo_operacion=OperacionCuraduria.TIPO_CORREGIR,
+            producto_fuente=producto,
+            producto_canonico=producto.producto_canonico,
+            descripcion=f"Senales de demanda editadas manualmente. Observacion #{senal.pk}.",
+        )
+        calcular_score_comercial_producto_fuente(producto)
+        messages.success(request, "Nueva observacion manual de demanda guardada.")
+        return redirect("oportunidades:demanda_producto_detalle", producto_fuente_id=producto.pk)
+    return render(request, "oportunidades/demanda_producto_editar.html", {"producto": producto, "form": form})
 
 
 def diagnostico_storage(request):

@@ -162,3 +162,45 @@ Checklist manual si no se usa el boton automatico:
 6. Revisar el resultado en `/productos-multifuente/` y recalcular ranking cuando corresponda.
 
 El proceso siempre requiere confirmacion humana. No realiza scraping ni procesamiento automatico.
+# Demanda estimada y señales de venta
+
+La demanda estimada combina señales visibles e indirectas para priorizar productos. No equivale a ventas reales. `cantidad_vendida_visible` solo se completa cuando la fuente publica expresamente una cantidad vendida; si no existe ese dato queda en cero.
+
+Se guardan vendidos visibles, reseñas, preguntas, calificación, etiquetas como “más vendido”, “destacado” o “tendencia”, stock visible, variación de stock, recurrencia en previews y aparición en varias fuentes. Una caída de stock es únicamente un indicio y nunca se registra como venta confirmada.
+
+El `score_demanda` va de 0 a 100:
+
+- Alta: señales fuertes, generalmente score 70 o superior.
+- Media: evidencia comercial parcial, score entre 40 y 69.
+- Baja: existen señales débiles o negativas.
+- Desconocida: no hay información visible suficiente.
+
+La demanda debe analizarse junto al precio oportunidad, margen, calidad de URL, imagen e historial. Demanda alta no convierte automáticamente un producto en buena compra si el precio o margen no son convenientes.
+
+Recalcular:
+
+```powershell
+docker compose exec web python manage.py recalcular_demanda
+docker compose exec web python manage.py recalcular_ranking_comercial
+```
+
+# Navegación por proceso
+
+El menú sigue el flujo operativo:
+
+1. Fuentes: alta, estado, auditorías, conectores y extractores.
+2. Mapeo: laboratorio, importación, carga asistida y resultados preview.
+3. Procesamiento: productos, multifuente, matching y duplicados.
+4. Curaduría: revisión de productos y previews.
+5. Análisis comercial: ranking, demanda estimada y candidatos de compra.
+6. Dataset: exportación, backup y validación piloto.
+7. Configuración: base de datos, storage, política de scraping y administración.
+
+# Habilitar manualmente un extractor guardado
+
+1. Editar `PoliticaExtraccionFuente`: semáforo amarillo o verde, `permite_scraping=True`, `robots_txt_revisado=True`, `terminos_revisados=True`, `requiere_login=False` y `tiene_captcha=False`.
+2. Editar `ConectorFuente`: `estado=activo`, `respeta_politica_fuente=True` y `requiere_revision_manual=False`.
+3. Editar `ConfiguracionExtractorWeb`: `habilitado=True`, `solo_preview=True`, `max_paginas=1`, `max_productos=10` y `delay_segundos=2`.
+4. Ejecutar preview.
+5. Revisar los resultados antes de procesar.
+6. Seleccionar y procesar pocos productos primero.

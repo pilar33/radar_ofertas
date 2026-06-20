@@ -30,6 +30,7 @@
         <th>Tipo</th>
         <th>URL</th>
         <th>Score</th>
+        <th>Demanda</th>
         <th>Duplicado</th>
         <th>Estado</th>
         <th>Procesable</th>
@@ -71,6 +72,7 @@
             {% endif %}
           </td>
           <td><span class="badge text-bg-info">{{ resultado.score_preview }}</span><br><small>{{ resultado.motivo_score|default:"" }}</small></td>
+          <td><span class="badge text-bg-secondary">{{ resultado.score_demanda_preview }} · {{ resultado.get_nivel_demanda_preview_display }}</span>{% if resultado.texto_demanda_detectado %}<br><small>{{ resultado.texto_demanda_detectado|truncatechars:100 }}</small>{% endif %}</td>
           <td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td>
           <td>{{ resultado.get_estado_display }}</td>
           <td>

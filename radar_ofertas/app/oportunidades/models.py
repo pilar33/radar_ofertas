@@ -310,6 +310,20 @@ class ProductoFuente(models.Model):
     hash_origen = models.CharField(max_length=100, blank=True, null=True)
     fecha_revision = models.DateTimeField(blank=True, null=True)
     score_comercial = models.PositiveIntegerField(default=0)
+    DEMANDA_ALTA = "alta"
+    DEMANDA_MEDIA = "media"
+    DEMANDA_BAJA = "baja"
+    DEMANDA_DESCONOCIDA = "desconocida"
+    DEMANDA_CHOICES = [
+        (DEMANDA_ALTA, "Alta"),
+        (DEMANDA_MEDIA, "Media"),
+        (DEMANDA_BAJA, "Baja"),
+        (DEMANDA_DESCONOCIDA, "Desconocida"),
+    ]
+    score_demanda_actual = models.PositiveIntegerField(default=0)
+    nivel_demanda_actual = models.CharField(max_length=20, choices=DEMANDA_CHOICES, default=DEMANDA_DESCONOCIDA)
+    motivo_demanda_actual = models.TextField(blank=True, null=True)
+    fecha_demanda_actual = models.DateTimeField(blank=True, null=True)
     NIVEL_ALTO = "alto"
     NIVEL_MEDIO = "medio"
     NIVEL_BAJO = "bajo"
@@ -345,6 +359,55 @@ class ProductoFuente(models.Model):
 
     def __str__(self):
         return self.titulo_original
+
+
+class SenalDemandaProducto(models.Model):
+    ORIGEN_DIRECTO = "directo"
+    ORIGEN_ESTIMADO = "estimado"
+    ORIGEN_MANUAL = "manual"
+    ORIGEN_CALCULADO = "calculado"
+    ORIGEN_CHOICES = [
+        (ORIGEN_DIRECTO, "Directo"),
+        (ORIGEN_ESTIMADO, "Estimado"),
+        (ORIGEN_MANUAL, "Manual"),
+        (ORIGEN_CALCULADO, "Calculado"),
+    ]
+
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="senales_demanda")
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, null=True, blank=True)
+    fecha_relevamiento = models.DateTimeField(auto_now_add=True)
+    cantidad_vendida_visible = models.PositiveIntegerField(default=0)
+    texto_vendidos = models.CharField(max_length=200, blank=True, null=True)
+    cantidad_resenas = models.PositiveIntegerField(default=0)
+    cantidad_preguntas = models.PositiveIntegerField(default=0)
+    calificacion = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    etiqueta_mas_vendido = models.BooleanField(default=False)
+    etiqueta_destacado = models.BooleanField(default=False)
+    etiqueta_tendencia = models.BooleanField(default=False)
+    ranking_categoria = models.PositiveIntegerField(default=0)
+    stock_visible = models.PositiveIntegerField(default=0)
+    stock_anterior = models.PositiveIntegerField(default=0)
+    variacion_stock = models.IntegerField(default=0)
+    texto_stock = models.CharField(max_length=200, blank=True, null=True)
+    aparece_en_destacados = models.BooleanField(default=False)
+    aparece_en_promociones = models.BooleanField(default=False)
+    aparece_en_varias_fuentes = models.BooleanField(default=False)
+    cantidad_fuentes_donde_aparece = models.PositiveIntegerField(default=0)
+    recurrencia_en_previews = models.PositiveIntegerField(default=0)
+    score_demanda = models.PositiveIntegerField(default=0)
+    nivel_demanda = models.CharField(max_length=20, choices=ProductoFuente.DEMANDA_CHOICES, default=ProductoFuente.DEMANDA_DESCONOCIDA)
+    motivo_demanda = models.TextField(blank=True, null=True)
+    origen_dato = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default=ORIGEN_ESTIMADO)
+    requiere_revision = models.BooleanField(default=False)
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "senal de demanda de producto"
+        verbose_name_plural = "senales de demanda de productos"
+        ordering = ["-fecha_relevamiento", "-id"]
+
+    def __str__(self):
+        return f"{self.producto_fuente} - {self.nivel_demanda} ({self.score_demanda})"
 
 
 class OperacionCuraduria(models.Model):
@@ -1068,6 +1131,13 @@ class ResultadoExtraccionWeb(models.Model):
         default=PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
     )
     texto_precios_detectado = models.TextField(blank=True, null=True)
+    texto_demanda_detectado = models.TextField(blank=True, null=True)
+    score_demanda_preview = models.PositiveIntegerField(default=0)
+    nivel_demanda_preview = models.CharField(
+        max_length=20,
+        choices=ProductoFuente.DEMANDA_CHOICES,
+        default=ProductoFuente.DEMANDA_DESCONOCIDA,
+    )
     url_producto = models.URLField(blank=True, null=True)
     imagen_url = models.URLField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)
@@ -1144,6 +1214,13 @@ class ResultadoLaboratorioMapeo(models.Model):
         default=PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
     )
     texto_precios_detectado = models.TextField(blank=True, null=True)
+    texto_demanda_detectado = models.TextField(blank=True, null=True)
+    score_demanda_preview = models.PositiveIntegerField(default=0)
+    nivel_demanda_preview = models.CharField(
+        max_length=20,
+        choices=ProductoFuente.DEMANDA_CHOICES,
+        default=ProductoFuente.DEMANDA_DESCONOCIDA,
+    )
     url_producto = models.URLField(blank=True, null=True)
     imagen_url = models.URLField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)

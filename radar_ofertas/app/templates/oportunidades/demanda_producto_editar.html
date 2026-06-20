@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Editar señales{% endblock %}{% block proceso %}Proceso: Curaduría / Señales de demanda{% endblock %}
+{% block content %}<h1 class="h3">Nueva observación manual</h1><p>{{ producto.titulo_original }}</p><div class="alert alert-warning">Ingresá solo datos visibles o verificados. Una caída de stock es un indicio, no una venta confirmada.</div><form method="post" class="bg-white border rounded p-3">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Guardar observación</button> <a class="btn btn-outline-secondary" href="{% url 'oportunidades:demanda_producto_detalle' producto.pk %}">Cancelar</a></form>{% endblock %}

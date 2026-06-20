@@ -34,6 +34,7 @@ from .models import (
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
+    SenalDemandaProducto,
     SugerenciaMatchingProducto,
 )
 
@@ -179,6 +180,8 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
         "revisado",
         "url_tecnica_generada",
         "score_comercial",
+        "score_demanda_actual",
+        "nivel_demanda_actual",
         "nivel_oportunidad",
         "fecha_actualizacion",
     )
@@ -191,9 +194,20 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
         "revisado",
         "url_tecnica_generada",
         "nivel_oportunidad",
+        "nivel_demanda_actual",
         "descartado_curaduria",
     )
     search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada")
+
+
+@admin.register(SenalDemandaProducto)
+class SenalDemandaProductoAdmin(admin.ModelAdmin):
+    list_display = (
+        "producto_fuente", "fuente_web", "score_demanda", "nivel_demanda",
+        "cantidad_vendida_visible", "cantidad_resenas", "stock_visible", "fecha_relevamiento",
+    )
+    list_filter = ("nivel_demanda", "origen_dato", "etiqueta_mas_vendido", "etiqueta_destacado", "etiqueta_tendencia")
+    search_fields = ("producto_fuente__titulo_original", "texto_vendidos", "observaciones")
 
 
 @admin.register(PrecioFuente)

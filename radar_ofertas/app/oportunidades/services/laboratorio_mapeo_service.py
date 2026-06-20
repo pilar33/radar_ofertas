@@ -22,6 +22,12 @@ from oportunidades.models import (
 )
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
+from oportunidades.services.demanda_service import (
+    calcular_score_demanda,
+    crear_o_actualizar_senal_demanda,
+    extraer_senales_demanda_desde_card,
+    extraer_senales_demanda_desde_texto,
+)
 from oportunidades.services.extractor_web_service import (
     detectar_plataforma_ecommerce,
     enriquecer_item_con_precios,
@@ -166,6 +172,18 @@ def _normalizar_item(item, url_base):
         "imagen_url": normalizar_url_absoluta(url_base, item.get("imagen_url"), None) if item.get("imagen_url") else None,
         "descripcion": (item.get("descripcion") or "").strip() or None,
         "mensaje": mensaje_precio,
+        "texto_demanda_detectado": item.get("texto_demanda_detectado"),
+        "cantidad_vendida_visible": item.get("cantidad_vendida_visible", 0),
+        "texto_vendidos": item.get("texto_vendidos"),
+        "cantidad_resenas": item.get("cantidad_resenas", 0),
+        "cantidad_preguntas": item.get("cantidad_preguntas", 0),
+        "calificacion": item.get("calificacion", Decimal("0.00")),
+        "etiqueta_mas_vendido": item.get("etiqueta_mas_vendido", False),
+        "etiqueta_destacado": item.get("etiqueta_destacado", False),
+        "etiqueta_tendencia": item.get("etiqueta_tendencia", False),
+        "stock_visible": item.get("stock_visible", 0),
+        "texto_stock": item.get("texto_stock"),
+        "observaciones_demanda": item.get("observaciones"),
     }
     normalizado["score"] = _score_producto(normalizado)
     return normalizado
@@ -173,6 +191,8 @@ def _normalizar_item(item, url_base):
 
 def _extraer_json_ld(html, url, config):
     productos = extraer_json_ld_productos(html, url, config)
+    for item in productos:
+        item.update(extraer_senales_demanda_desde_texto(" ".join(filter(None, [item.get("titulo"), item.get("descripcion")]))) )
     return [_normalizar_item(item, url) for item in productos if item.get("titulo") or item.get("precio_texto")]
 
 
@@ -208,6 +228,7 @@ def _extraer_css_heuristico(html, url, limite=30):
             "url_producto": extraer_url_producto(tarjeta, url) or "",
             "imagen_url": extraer_imagen_producto(tarjeta, url),
             "descripcion": "",
+            **extraer_senales_demanda_desde_card(tarjeta),
         }
         if not item["url_producto"] and (titulo or "").strip().lower() in {"menu", "inicio", "ver carrito", "registrate"}:
             continue
@@ -329,6 +350,7 @@ def crear_sesion_laboratorio(resultado, fuente_web=None):
         selectores_sugeridos=json.dumps(resultado.get("selectores_sugeridos", {}), ensure_ascii=True),
     )
     for item in resultado.get("productos_detectados", []):
+        demanda = calcular_score_demanda(item)
         ResultadoLaboratorioMapeo.objects.create(
             sesion=sesion,
             titulo=item.get("titulo"),
@@ -344,6 +366,9 @@ def crear_sesion_laboratorio(resultado, fuente_web=None):
             precio_oportunidad_decimal=item.get("precio_oportunidad_decimal") or Decimal("0.00"),
             tipo_precio_oportunidad=item.get("tipo_precio_oportunidad") or PrecioFuente.TIPO_PRECIO_DESCONOCIDO,
             texto_precios_detectado=item.get("texto_precios_detectado"),
+            texto_demanda_detectado=item.get("texto_demanda_detectado"),
+            score_demanda_preview=demanda["score"],
+            nivel_demanda_preview=demanda["nivel"],
             url_producto=item.get("url_producto"),
             imagen_url=item.get("imagen_url"),
             descripcion=item.get("descripcion"),
@@ -461,6 +486,8 @@ def procesar_resultados_laboratorio(sesion, limite=10):
         _, precio_creado = crear_precio_fuente(producto_fuente, row, crear_si_no_cambio=False)
         calcular_comparacion_producto(producto_canonico)
         evaluar_producto_multifuente(producto_canonico)
+        datos_demanda = extraer_senales_demanda_desde_texto(resultado.texto_demanda_detectado or "")
+        crear_o_actualizar_senal_demanda(producto_fuente, datos_demanda)
         resultado.procesado = True
         resultado.save(update_fields=["procesado"])
         procesados += 1

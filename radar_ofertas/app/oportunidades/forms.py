@@ -13,6 +13,7 @@ from .models import (
     PrecioFuente,
     ProductoFuente,
     RevisionManualFuente,
+    SenalDemandaProducto,
 )
 from .services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
 
@@ -108,6 +109,29 @@ class PrecioFuenteCuraduriaForm(forms.ModelForm):
         if commit:
             precio.save()
         return precio
+
+
+class SenalDemandaManualForm(forms.ModelForm):
+    class Meta:
+        model = SenalDemandaProducto
+        fields = [
+            "cantidad_vendida_visible", "texto_vendidos", "cantidad_resenas", "cantidad_preguntas",
+            "calificacion", "etiqueta_mas_vendido", "etiqueta_destacado", "etiqueta_tendencia",
+            "stock_visible", "texto_stock", "observaciones",
+        ]
+        widgets = {
+            "cantidad_vendida_visible": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "texto_vendidos": forms.TextInput(attrs={"class": "form-control"}),
+            "cantidad_resenas": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "cantidad_preguntas": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "calificacion": forms.NumberInput(attrs={"class": "form-control", "min": 0, "max": 5, "step": "0.01"}),
+            "stock_visible": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "texto_stock": forms.TextInput(attrs={"class": "form-control"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "etiqueta_mas_vendido": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "etiqueta_destacado": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "etiqueta_tendencia": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
 
 
 class MercadoLibreBusquedaForm(forms.Form):

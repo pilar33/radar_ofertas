@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     AuditoriaFuenteWeb,
     CandidatoCompra,
+    CompraProducto,
     CategoriaInteres,
     CategoriaFuente,
     ComparacionPrecio,
@@ -31,13 +32,16 @@ from .models import (
     ProductoCanonico,
     ProductoFuente,
     Publicacion,
+    PublicacionReventa,
     RecursoFuenteDetectado,
     RevisionManualFuente,
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
+    ResultadoComercialProducto,
     SesionLaboratorioMapeo,
     SenalDemandaProducto,
     SugerenciaMatchingProducto,
+    VentaProducto,
 )
 
 
@@ -274,6 +278,34 @@ class CandidatoCompraAdmin(admin.ModelAdmin):
     )
     list_filter = ("estado", "fecha_actualizacion")
     search_fields = ("producto_fuente__titulo_original", "motivo", "notas")
+
+
+@admin.register(CompraProducto)
+class CompraProductoAdmin(admin.ModelAdmin):
+    list_display = ("candidato", "producto_fuente", "fecha_compra", "cantidad_comprada", "precio_unitario_compra", "costo_total", "estado")
+    list_filter = ("estado", "fecha_compra", "fuente_web")
+    search_fields = ("producto_fuente__titulo_original", "proveedor_texto", "comprobante_texto")
+
+
+@admin.register(PublicacionReventa)
+class PublicacionReventaAdmin(admin.ModelAdmin):
+    list_display = ("compra", "canal", "fecha_publicacion", "precio_publicado_unitario", "cantidad_publicada", "estado")
+    list_filter = ("canal", "estado", "fecha_publicacion")
+    search_fields = ("titulo_publicacion", "url_publicacion")
+
+
+@admin.register(VentaProducto)
+class VentaProductoAdmin(admin.ModelAdmin):
+    list_display = ("compra", "fecha_venta", "cantidad_vendida", "precio_unitario_venta", "ganancia_neta", "margen_pct", "canal_venta", "estado")
+    list_filter = ("canal_venta", "estado", "fecha_venta")
+    search_fields = ("comprador_texto", "observaciones")
+
+
+@admin.register(ResultadoComercialProducto)
+class ResultadoComercialProductoAdmin(admin.ModelAdmin):
+    list_display = ("candidato", "cantidad_comprada_total", "cantidad_vendida_total", "ganancia_neta_total", "margen_real_pct", "estado_resultado")
+    list_filter = ("estado_resultado",)
+    search_fields = ("candidato__motivo_candidato", "producto_fuente__titulo_original")
 
 
 @admin.register(ComparacionPrecio)

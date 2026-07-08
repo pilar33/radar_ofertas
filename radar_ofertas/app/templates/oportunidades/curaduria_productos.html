@@ -1,14 +1,32 @@
 {% extends "base.html" %}
 
+{% block title %}Curaduria de productos{% endblock %}
+{% block proceso %}Mapeo -> Preview -> Procesamiento -> Curaduria -> Ranking{% endblock %}
+
 {% block content %}
 {% include "oportunidades/_advertencia_persistencia.html" %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1>Curaduria de productos</h1>
-  <a class="btn btn-outline-primary" href="{% url 'oportunidades:curaduria_previews' %}">Previews</a>
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1 class="h3 mb-1">Curaduria de productos</h1>
+    <p class="text-muted mb-0">Revision de calidad de productos ya procesados.</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:resultados_pendientes_extractores' %}">Ir a Resultados Preview</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:lotes_captura_lista' %}">Ir a Lotes de captura</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:laboratorio_mapeo_web' %}">Ir al Laboratorio Web</a>
+    <a class="btn btn-primary" href="?{{ request.GET.urlencode }}&exportar=1">Exportar productos filtrados</a>
+  </div>
 </div>
 
+<div class="alert alert-info">
+  Etapa actual: revisar calidad de productos ya procesados. Esta pantalla no procesa productos nuevos; sirve para corregir, revisar y validar lo que ya fue procesado desde Resultados Preview.
+</div>
+{% if hay_problemas_lote %}
+  <div class="alert alert-warning">Hay productos con URL tecnica, sin lote o sin precios multiples. Revisa antes de validar el lote como apto dataset.</div>
+{% endif %}
+
 <form class="row g-2 mb-3">
-  <div class="col-md-3"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar titulo"></div>
+  <div class="col-md-2"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar titulo"></div>
   <div class="col-md-2">
     <select class="form-select" name="fuente">
       <option value="">Todas las fuentes</option>
@@ -16,61 +34,114 @@
     </select>
   </div>
   <div class="col-md-2">
-    <select class="form-select" name="revision">
-      <option value="">Revision</option>
-      <option value="pendiente" {% if request.GET.revision == "pendiente" %}selected{% endif %}>Pendiente</option>
-      <option value="revisado" {% if request.GET.revision == "revisado" %}selected{% endif %}>Revisado</option>
+    <select class="form-select" name="lote">
+      <option value="">Todos los lotes</option>
+      <option value="sin" {% if request.GET.lote == "sin" %}selected{% endif %}>Solo sin lote</option>
+      {% for lote in lotes %}<option value="{{ lote.id }}" {% if request.GET.lote == lote.id|stringformat:"s" %}selected{% endif %}>{{ lote.nombre }}</option>{% endfor %}
     </select>
   </div>
   <div class="col-md-2">
     <select class="form-select" name="url">
       <option value="">URL</option>
-      <option value="real" {% if request.GET.url == "real" %}selected{% endif %}>Real</option>
-      <option value="tecnica" {% if request.GET.url == "tecnica" %}selected{% endif %}>Tecnica</option>
+      <option value="real" {% if request.GET.url == "real" %}selected{% endif %}>URL real</option>
+      <option value="tecnica" {% if request.GET.url == "tecnica" %}selected{% endif %}>Solo URL tecnica</option>
+      <option value="sin" {% if request.GET.url == "sin" %}selected{% endif %}>Sin URL</option>
     </select>
   </div>
   <div class="col-md-2">
     <select class="form-select" name="imagen">
       <option value="">Imagen</option>
       <option value="con" {% if request.GET.imagen == "con" %}selected{% endif %}>Con imagen</option>
-      <option value="sin" {% if request.GET.imagen == "sin" %}selected{% endif %}>Sin imagen</option>
+      <option value="sin" {% if request.GET.imagen == "sin" %}selected{% endif %}>Solo sin imagen</option>
     </select>
   </div>
-  <div class="col-md-1"><button class="btn btn-primary w-100">Filtrar</button></div>
+  <div class="col-md-2">
+    <select class="form-select" name="precio">
+      <option value="">Precios</option>
+      <option value="sin_oportunidad" {% if request.GET.precio == "sin_oportunidad" %}selected{% endif %}>Solo sin precio oportunidad</option>
+      <option value="sin_transferencia" {% if request.GET.precio == "sin_transferencia" %}selected{% endif %}>Solo sin transferencia detectada</option>
+      <option value="transferencia" {% if request.GET.precio == "transferencia" %}selected{% endif %}>Con transferencia detectada</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="revision">
+      <option value="">Calidad</option>
+      <option value="calidad_revisar" {% if request.GET.revision == "calidad_revisar" %}selected{% endif %}>Solo calidad revisar</option>
+      <option value="pendiente" {% if request.GET.revision == "pendiente" %}selected{% endif %}>Pendiente</option>
+      <option value="revisado" {% if request.GET.revision == "revisado" %}selected{% endif %}>Revisado</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="dataset">
+      <option value="">Dataset</option>
+      <option value="apto" {% if request.GET.dataset == "apto" %}selected{% endif %}>Solo aptos dataset</option>
+      <option value="no_apto" {% if request.GET.dataset == "no_apto" %}selected{% endif %}>Solo no aptos dataset</option>
+    </select>
+  </div>
+  <div class="col-md-2"><input class="form-control" type="date" name="fecha_desde" value="{{ request.GET.fecha_desde }}"></div>
+  <div class="col-md-2"><input class="form-control" type="date" name="fecha_hasta" value="{{ request.GET.fecha_hasta }}"></div>
+  <div class="col-md-2"><button class="btn btn-primary w-100">Filtrar</button></div>
 </form>
 
-<div class="table-responsive">
-  <table class="table table-sm align-middle">
-    <thead>
-      <tr>
-        <th>ID</th><th>Imagen</th><th>Producto</th><th>Canonico</th><th>Fuente</th><th>Lote origen</th><th>Oportunidad</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Calidad</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for producto in productos %}
-        {% with precio=producto.precios_fuente.first %}
+<form method="post" action="{% url 'oportunidades:curaduria_productos_accion_masiva' %}">
+  {% csrf_token %}
+  <div class="bg-white border rounded p-2 mb-2 d-flex flex-wrap gap-2 align-items-center">
+    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="document.querySelectorAll('.producto-check').forEach(c => c.checked = true)">Seleccionar todos los visibles</button>
+    <select class="form-select form-select-sm w-auto" name="accion">
+      <option value="marcar_revisados">Marcar seleccionados como revisados</option>
+      <option value="requiere_revision">Marcar seleccionados como requieren revision</option>
+      <option value="no_apto_dataset">Marcar seleccionados como no aptos dataset</option>
+      <option value="apto_dataset">Marcar seleccionados como aptos dataset</option>
+      <option value="url_tecnica">Marcar seleccionados como URL tecnica</option>
+      <option value="recalcular_calidad">Recalcular calidad seleccionados</option>
+      <option value="asignar_lote_ultimo_preview">Asignar lote desde ultimo resultado preview</option>
+    </select>
+    <button class="btn btn-sm btn-success">Aplicar accion masiva</button>
+    <a class="btn btn-sm btn-outline-primary" href="?{{ request.GET.urlencode }}&exportar=1">Exportar seleccionados CSV</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
         <tr>
-          <td>{{ producto.id }}</td>
-          <td>{% if producto.imagen_url %}<img src="{{ producto.imagen_url }}" style="width:48px;height:48px;object-fit:cover">{% else %}-{% endif %}</td>
-          <td>{{ producto.titulo_original }}<br><small>{% if producto.url_tecnica_generada %}URL tecnica{% elif producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">URL real</a>{% else %}Sin URL{% endif %}</small></td>
-          <td>{{ producto.producto_canonico|default:"-" }}</td>
-          <td>{{ producto.fuente_web }}</td>
-          <td>{% if producto.lote_origen %}<a href="{% url 'oportunidades:lote_captura_detalle' producto.lote_origen.id %}">{{ producto.lote_origen.nombre }}</a><br><small>{{ producto.lote_origen.fecha_inicio|date:"d/m/Y" }}</small>{% else %}-{% endif %}</td>
-          <td>{% if precio %}{{ precio.precio_oportunidad }}{% else %}-{% endif %}</td>
-          <td>{% if precio %}{{ precio.precio_lista }}{% else %}-{% endif %}</td>
-          <td>{% if precio %}{{ precio.precio_transferencia }}{% else %}-{% endif %}</td>
-          <td>{% if precio %}{{ precio.precio_tarjeta }}{% else %}-{% endif %}</td>
-          <td>
-            {% if producto.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% endif %}
-            {% if producto.revisado %}<span class="badge text-bg-success">revisado</span>{% endif %}
-          </td>
-          <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td>
+          <th></th><th>ID</th><th>Imagen</th><th>Producto</th><th>Canonico</th><th>Fuente</th><th>Lote origen</th><th>Oportunidad</th><th>Lista</th><th>Transf.</th><th>Tarjeta</th><th>Calidad</th><th></th>
         </tr>
-        {% endwith %}
-      {% empty %}
-        <tr><td colspan="12">Sin productos.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+      </thead>
+      <tbody>
+        {% for producto in productos %}
+          {% with precio=producto.precios_fuente.first %}
+          <tr>
+            <td><input class="form-check-input producto-check" type="checkbox" name="producto_ids" value="{{ producto.id }}"></td>
+            <td>{{ producto.id }}</td>
+            <td>{% if producto.imagen_url %}<img src="{{ producto.imagen_url }}" style="width:48px;height:48px;object-fit:cover">{% else %}<span class="badge text-bg-warning">Sin imagen</span>{% endif %}</td>
+            <td>
+              {{ producto.titulo_original }}<br>
+              <small>
+                {% if producto.url_tecnica_generada %}<span class="badge text-bg-warning">URL tecnica</span>
+                {% elif producto.url_producto %}<a href="{{ producto.url_producto }}" target="_blank">Abrir</a>
+                {% else %}<span class="badge text-bg-danger">Sin URL</span>{% endif %}
+              </small>
+            </td>
+            <td>{{ producto.producto_canonico|default:"-" }}</td>
+            <td>{{ producto.fuente_web }}</td>
+            <td>{% if producto.lote_origen %}<a href="{% url 'oportunidades:lote_captura_detalle' producto.lote_origen.id %}">{{ producto.lote_origen.nombre }}</a><br><small>{{ producto.lote_origen.fecha_inicio|date:"d/m/Y" }}</small>{% else %}<span class="badge text-bg-warning">Sin lote</span>{% endif %}</td>
+            <td>{% if precio and precio.precio_oportunidad > 0 %}{{ precio.precio_oportunidad }}{% else %}<span class="text-muted">No detectado</span>{% endif %}{% if precio.tipo_precio_oportunidad == "transferencia" %}<br><span class="badge text-bg-success">Oportunidad transferencia</span>{% endif %}</td>
+            <td>{% if precio and precio.precio_lista > 0 %}{{ precio.precio_lista }}{% else %}<span class="text-muted">No detectado</span>{% endif %}</td>
+            <td>{% if precio and precio.precio_transferencia > 0 %}{{ precio.precio_transferencia }}{% else %}<span class="text-muted">No detectado</span>{% endif %}</td>
+            <td>{% if precio and precio.precio_tarjeta > 0 %}{{ precio.precio_tarjeta }}{% else %}<span class="text-muted">No detectado</span>{% endif %}{% if precio.cuotas_texto %}<br><small>{{ precio.cuotas_texto }}</small>{% endif %}</td>
+            <td>
+              {% if producto.requiere_revision %}<span class="badge text-bg-warning">revisar</span>{% endif %}
+              {% if producto.revisado %}<span class="badge text-bg-success">revisado</span>{% endif %}
+              {% if producto.descartado_curaduria %}<span class="badge text-bg-danger">no apto dataset</span>{% else %}<span class="badge text-bg-info">apto dataset</span>{% endif %}
+            </td>
+            <td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:detalle_curaduria_producto' producto.id %}">Ver</a></td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="13">Sin productos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
 {% endblock %}

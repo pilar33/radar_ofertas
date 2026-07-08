@@ -1,10 +1,11 @@
+import csv
 import json
 from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
 
 from django.contrib import messages
-from django.db.models import Count, F, Max, Prefetch, Q
+from django.db.models import Avg, Count, F, Max, Prefetch, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -14,9 +15,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .forms import (
+    CandidatoCompraForm,
     CargaProductoURLForm,
+    CompraProductoForm,
     ConfiguracionExtractorWebForm,
     ConectorCatalogoForm,
+    DescartarCandidatoForm,
     FuenteRapidaPreviewForm,
     FuenteWizardForm,
     ImportacionProductosForm,
@@ -25,14 +29,17 @@ from .forms import (
     MercadoLibreBusquedaForm,
     OportunidadFiltroForm,
     PrecioFuenteCuraduriaForm,
+    PublicacionReventaForm,
     ProductoFuenteCuraduriaForm,
     RevisionManualFuenteForm,
     SenalDemandaManualForm,
+    VentaProductoForm,
 )
 from .models import (
     AuditoriaFuenteWeb,
     CandidatoCompra,
     CategoriaInteres,
+    CompraProducto,
     ConfiguracionExtractorWeb,
     ConsultaMercadoLibre,
     DecisionTecnica,
@@ -48,12 +55,15 @@ from .models import (
     PrecioFuente,
     ProductoCanonico,
     ProductoFuente,
+    PublicacionReventa,
     RevisionManualFuente,
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
     SenalDemandaProducto,
+    ResultadoComercialProducto,
     SugerenciaMatchingProducto,
+    VentaProducto,
 )
 from .serializers import (
     CargaProductoURLSerializer,
@@ -156,6 +166,15 @@ from .services.lotes_captura_service import (
 from .services.entorno_service import obtener_advertencia_persistencia
 from .services.ranking_comercial_service import calcular_score_comercial_producto_fuente, recalcular_ranking_comercial
 from .services.validacion_dataset_service import validar_dataset_piloto
+from .services.seguimiento_comercial_service import (
+    aprobar_candidato_compra,
+    crear_candidato_desde_producto,
+    descartar_candidato,
+    recalcular_resultado_comercial,
+    registrar_compra,
+    registrar_publicacion,
+    registrar_venta,
+)
 from .services.mercado_libre_service import (
     buscar_productos,
     diagnosticar_endpoints_meli,
@@ -745,17 +764,91 @@ def probar_selectores_extractor(request, pk):
     )
 
 
+def _es_url_tecnica(url):
+    return bool(url and "/radar-preview/" in url)
+
+
+def _advertencias_resultado_preview(resultado, validacion=None):
+    advertencias = []
+    if not resultado.precio_oportunidad_decimal or resultado.precio_oportunidad_decimal <= 0:
+        advertencias.append("Sin precio oportunidad")
+    if _es_url_tecnica(resultado.url_producto) or not resultado.url_producto:
+        advertencias.append("URL tecnica" if resultado.url_producto else "Sin URL real")
+    if not resultado.imagen_url:
+        advertencias.append("Sin imagen")
+    if not resultado.lote_captura_id:
+        advertencias.append("Sin lote")
+    if not resultado.precio_transferencia_decimal or resultado.precio_transferencia_decimal <= 0:
+        advertencias.append("Sin precio transferencia")
+    if not resultado.precio_tarjeta_decimal or resultado.precio_tarjeta_decimal <= 0:
+        advertencias.append("Sin precio tarjeta")
+    if validacion and not validacion["valido"]:
+        advertencias.append(validacion["mensaje"])
+    if not advertencias:
+        advertencias.append("OK para procesar")
+    return advertencias
+
+
+def _resultados_extractor_qs(extractor):
+    return ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector)
+
+
+def _seleccionar_resultados_preview(extractor, modo):
+    resultados = _resultados_extractor_qs(extractor)
+    actualizados = 0
+    for resultado in resultados:
+        validacion = validar_resultado_procesable(resultado)
+        seleccionar = False
+        if modo == "visibles":
+            seleccionar = True
+        elif modo == "procesables":
+            seleccionar = validacion["valido"]
+        elif modo == "url-real":
+            seleccionar = validacion["valido"] and bool(resultado.url_producto) and not _es_url_tecnica(resultado.url_producto)
+        elif modo == "imagen":
+            seleccionar = validacion["valido"] and bool(resultado.imagen_url)
+        elif modo == "precio-oportunidad":
+            seleccionar = validacion["valido"] and bool(resultado.precio_oportunidad_decimal and resultado.precio_oportunidad_decimal > 0)
+        if seleccionar:
+            resultado.seleccionado = True
+            resultado.save(update_fields=["seleccionado"])
+            actualizados += 1
+    return actualizados
+
+
 def resultados_extractor(request, pk):
     extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
     ejecucion = extractor.conector.ejecuciones.prefetch_related("resultados_web").first()
     if ejecucion:
         rankear_resultados_ejecucion(ejecucion)
     resultados = ejecucion.resultados_web.order_by("-score_preview", "-fecha_creacion") if ejecucion else ResultadoExtraccionWeb.objects.none()
-    validaciones = [(resultado, validar_resultado_procesable(resultado)) for resultado in resultados]
+    filas = []
+    procesables_lote = 0
+    lote_actual = None
+    for resultado in resultados:
+        validacion = validar_resultado_procesable(resultado)
+        if validacion["valido"]:
+            procesables_lote += 1
+        if not lote_actual and resultado.lote_captura_id:
+            lote_actual = resultado.lote_captura
+        filas.append(
+            {
+                "resultado": resultado,
+                "validacion": validacion,
+                "advertencias": _advertencias_resultado_preview(resultado, validacion),
+            }
+        )
     return render(
         request,
         "oportunidades/resultados_extractor.html",
-        {"extractor": extractor, "ejecucion": ejecucion, "validaciones": validaciones},
+        {
+            "extractor": extractor,
+            "ejecucion": ejecucion,
+            "filas": filas,
+            "validaciones": [(fila["resultado"], fila["validacion"]) for fila in filas],
+            "procesables_lote": procesables_lote,
+            "lote_actual": lote_actual,
+        },
     )
 
 
@@ -812,23 +905,30 @@ def limpiar_seleccion_extractor(request, pk):
 @require_POST
 def seleccionar_todos_procesables_extractor(request, pk):
     extractor = get_object_or_404(ConfiguracionExtractorWeb, pk=pk)
-    actualizados = 0
-    for resultado in ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector):
-        if validar_resultado_procesable(resultado)["valido"]:
-            resultado.seleccionado = True
-            resultado.save(update_fields=["seleccionado"])
-            actualizados += 1
+    modo = request.POST.get("modo") or "procesables"
+    actualizados = _seleccionar_resultados_preview(extractor, modo)
     messages.success(request, f"{actualizados} resultados procesables seleccionados.")
     return redirect("oportunidades:resultados_extractor", pk=extractor.pk)
 
 
 def confirmar_procesamiento_extractor(request, pk):
     extractor = get_object_or_404(ConfiguracionExtractorWeb.objects.select_related("conector"), pk=pk)
-    cantidad = ResultadoExtraccionWeb.objects.filter(ejecucion__conector=extractor.conector, seleccionado=True).count()
+    accion = request.GET.get("accion") or "seleccionados"
+    resultados = _resultados_extractor_qs(extractor)
+    if accion == "todos-procesables":
+        cantidad = sum(1 for resultado in resultados if validar_resultado_procesable(resultado)["valido"])
+    else:
+        cantidad = resultados.filter(seleccionado=True).count()
+    lote_actual = resultados.filter(lote_captura__isnull=False).select_related("lote_captura").first()
     return render(
         request,
         "oportunidades/confirmar_procesamiento.html",
-        {"extractor": extractor, "cantidad": cantidad},
+        {
+            "extractor": extractor,
+            "cantidad": cantidad,
+            "accion": accion,
+            "lote_actual": lote_actual.lote_captura if lote_actual else None,
+        },
     )
 
 
@@ -839,7 +939,11 @@ def procesar_seleccionados_extractor(request, pk):
     if not ejecucion:
         messages.warning(request, "No hay ejecucion con resultados.")
         return redirect("oportunidades:detalle_extractor", pk=extractor.pk)
-    resumen = procesar_resultados_seleccionados(ejecucion, limite=20)
+    if request.POST.get("accion") == "todos-procesables":
+        ResultadoExtraccionWeb.objects.filter(ejecucion=ejecucion).update(seleccionado=False)
+        _seleccionar_resultados_preview(extractor, "procesables")
+    limite = int(request.POST.get("limite") or 50)
+    resumen = procesar_resultados_seleccionados(ejecucion, limite=min(limite, 200))
     messages.success(
         request,
         f"Procesados={resumen['procesados']}, errores={resumen['errores']}, precios={resumen['precios_creados']}.",
@@ -1210,13 +1314,17 @@ def curaduria_dashboard(request):
     return render(request, "oportunidades/curaduria_dashboard.html", contexto)
 
 
-def curaduria_productos(request):
+def _productos_curaduria_queryset(request):
     productos = ProductoFuente.objects.select_related("fuente_web", "producto_canonico", "lote_origen").prefetch_related("precios_fuente")
     fuente_id = request.GET.get("fuente")
     revision = request.GET.get("revision")
     url = request.GET.get("url")
     imagen = request.GET.get("imagen")
     precio = request.GET.get("precio")
+    lote = request.GET.get("lote")
+    fecha_desde = request.GET.get("fecha_desde")
+    fecha_hasta = request.GET.get("fecha_hasta")
+    dataset = request.GET.get("dataset")
     score = request.GET.get("score")
     duplicado = request.GET.get("duplicado")
     q = request.GET.get("q")
@@ -1226,10 +1334,14 @@ def curaduria_productos(request):
         productos = productos.filter(requiere_revision=True)
     elif revision == "revisado":
         productos = productos.filter(revisado=True)
+    elif revision == "calidad_revisar":
+        productos = productos.filter(requiere_revision=True)
     if url == "tecnica":
         productos = productos.filter(url_tecnica_generada=True)
     elif url == "real":
-        productos = productos.filter(url_tecnica_generada=False)
+        productos = productos.filter(url_tecnica_generada=False).exclude(Q(url_producto__isnull=True) | Q(url_producto=""))
+    elif url == "sin":
+        productos = productos.filter(Q(url_producto__isnull=True) | Q(url_producto=""))
     if imagen == "sin":
         productos = productos.filter(Q(imagen_url__isnull=True) | Q(imagen_url=""))
     elif imagen == "con":
@@ -1238,6 +1350,20 @@ def curaduria_productos(request):
         productos = productos.filter(Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_oportunidad=0)).distinct()
     elif precio == "transferencia":
         productos = productos.filter(precios_fuente__precio_transferencia__gt=0).distinct()
+    elif precio == "sin_transferencia":
+        productos = productos.filter(Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_transferencia=0)).distinct()
+    if lote == "sin":
+        productos = productos.filter(lote_origen__isnull=True)
+    elif lote:
+        productos = productos.filter(lote_origen_id=lote)
+    if dataset == "apto":
+        productos = productos.filter(descartado_curaduria=False)
+    elif dataset == "no_apto":
+        productos = productos.filter(descartado_curaduria=True)
+    if fecha_desde:
+        productos = productos.filter(fecha_creacion__date__gte=fecha_desde)
+    if fecha_hasta:
+        productos = productos.filter(fecha_creacion__date__lte=fecha_hasta)
     if score == "alto":
         productos = productos.filter(score_comercial__gte=75)
     if duplicado == "probable":
@@ -1246,13 +1372,114 @@ def curaduria_productos(request):
         productos = productos.filter(pk__in=ids)
     if q:
         productos = productos.filter(Q(titulo_original__icontains=q) | Q(producto_canonico__nombre_normalizado__icontains=q))
-    productos = productos.order_by("-requiere_revision", "-fecha_actualizacion")[:300]
+    return productos
+
+
+def _exportar_productos_curaduria_csv(productos):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="productos_curaduria_filtrados.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["id", "producto", "fuente", "url", "lote", "precio_oportunidad", "precio_transferencia", "precio_tarjeta", "calidad", "apto_dataset"])
+    for producto in productos:
+        precio = producto.precios_fuente.first()
+        writer.writerow(
+            [
+                producto.id,
+                producto.titulo_original,
+                producto.fuente_web.nombre if producto.fuente_web_id else "",
+                producto.url_producto,
+                producto.lote_origen.nombre if producto.lote_origen_id else "",
+                precio.precio_oportunidad if precio else "",
+                precio.precio_transferencia if precio else "",
+                precio.precio_tarjeta if precio else "",
+                "revisar" if producto.requiere_revision else "revisado" if producto.revisado else "pendiente",
+                "no" if producto.descartado_curaduria else "si",
+            ]
+        )
+    return response
+
+
+@require_POST
+def curaduria_productos_accion_masiva(request):
+    accion = request.POST.get("accion")
+    ids = request.POST.getlist("producto_ids")
+    productos = ProductoFuente.objects.filter(pk__in=ids)
+    actualizados = 0
+    for producto in productos:
+        if accion == "marcar_revisados":
+            producto.revisado = True
+            producto.requiere_revision = False
+            producto.fecha_revision = timezone.now()
+            producto.save(update_fields=["revisado", "requiere_revision", "fecha_revision", "fecha_actualizacion"])
+        elif accion == "requiere_revision":
+            producto.requiere_revision = True
+            producto.revisado = False
+            producto.motivo_revision = (producto.motivo_revision or "Revision masiva solicitada.").strip()
+            producto.save(update_fields=["requiere_revision", "revisado", "motivo_revision", "fecha_actualizacion"])
+        elif accion == "no_apto_dataset":
+            producto.descartado_curaduria = True
+            producto.requiere_revision = True
+            producto.save(update_fields=["descartado_curaduria", "requiere_revision", "fecha_actualizacion"])
+        elif accion == "apto_dataset":
+            producto.descartado_curaduria = False
+            producto.save(update_fields=["descartado_curaduria", "fecha_actualizacion"])
+        elif accion == "url_tecnica":
+            producto.url_tecnica_generada = True
+            producto.requiere_revision = True
+            producto.save(update_fields=["url_tecnica_generada", "requiere_revision", "fecha_actualizacion"])
+        elif accion == "recalcular_calidad":
+            problemas = []
+            precio = producto.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+            if producto.url_tecnica_generada or not producto.url_producto:
+                problemas.append("URL tecnica o faltante")
+            if not producto.imagen_url:
+                problemas.append("sin imagen")
+            if not producto.lote_origen_id:
+                problemas.append("sin lote")
+            if not precio or not precio.precio_oportunidad or precio.precio_oportunidad <= 0:
+                problemas.append("sin precio oportunidad")
+            producto.requiere_revision = bool(problemas)
+            producto.motivo_revision = "; ".join(problemas) if problemas else producto.motivo_revision
+            producto.save(update_fields=["requiere_revision", "motivo_revision", "fecha_actualizacion"])
+        elif accion == "asignar_lote_ultimo_preview":
+            preview = ResultadoExtraccionWeb.objects.filter(producto_fuente=producto, lote_captura__isnull=False).order_by("-fecha_creacion").first()
+            if preview and not producto.lote_origen_id:
+                producto.lote_origen = preview.lote_captura
+                producto.save(update_fields=["lote_origen", "fecha_actualizacion"])
+            else:
+                continue
+        else:
+            continue
+        actualizados += 1
+        OperacionCuraduria.objects.create(
+            tipo_operacion=OperacionCuraduria.TIPO_REVISAR,
+            producto_fuente=producto,
+            producto_canonico=producto.producto_canonico,
+            descripcion=f"Accion masiva de curaduria: {accion}.",
+        )
+    messages.success(request, f"Accion masiva aplicada a {actualizados} productos.")
+    return redirect("oportunidades:curaduria_productos")
+
+
+def curaduria_productos(request):
+    productos_qs = _productos_curaduria_queryset(request)
+    if request.GET.get("exportar") == "1":
+        return _exportar_productos_curaduria_csv(productos_qs.order_by("-fecha_actualizacion")[:1000])
+    productos = productos_qs.order_by("-requiere_revision", "-fecha_actualizacion")[:300]
+    hay_problemas_lote = productos_qs.filter(
+        Q(url_tecnica_generada=True)
+        | Q(lote_origen__isnull=True)
+        | Q(precios_fuente__precio_oportunidad=0)
+        | Q(precios_fuente__precio_transferencia=0)
+    ).distinct().exists()
     return render(
         request,
         "oportunidades/curaduria_productos.html",
         {
             "productos": productos,
             "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "lotes": LoteCaptura.objects.order_by("-fecha_inicio")[:100],
+            "hay_problemas_lote": hay_problemas_lote,
             "advertencia_persistencia": obtener_advertencia_persistencia(),
         },
     )
@@ -1496,19 +1723,7 @@ def ignorar_duplicado_view(request, producto_a_id, producto_b_id):
 @require_POST
 def marcar_candidato_compra(request, pk):
     producto = get_object_or_404(ProductoFuente, pk=pk)
-    precio = _ultimo_precio_producto(producto)
-    candidato, _ = CandidatoCompra.objects.get_or_create(
-        producto_fuente=producto,
-        defaults={
-            "estado": CandidatoCompra.ESTADO_CANDIDATO,
-            "precio_compra_estimado": precio.precio_oportunidad if precio else 0,
-            "motivo": "Marcado desde ranking comercial.",
-        },
-    )
-    if precio:
-        candidato.precio_compra_estimado = precio.precio_oportunidad
-    candidato.estado = CandidatoCompra.ESTADO_CANDIDATO
-    candidato.save()
+    crear_candidato_desde_producto(producto, "Marcado desde ranking comercial.")
     messages.success(request, "Producto marcado como candidato de compra.")
     return redirect("oportunidades:ranking_oportunidades")
 
@@ -1516,21 +1731,157 @@ def marcar_candidato_compra(request, pk):
 @require_POST
 def descartar_candidato_compra(request, pk):
     producto = get_object_or_404(ProductoFuente, pk=pk)
-    candidato, _ = CandidatoCompra.objects.get_or_create(producto_fuente=producto)
-    candidato.estado = CandidatoCompra.ESTADO_DESCARTADO
-    candidato.motivo = request.POST.get("motivo") or "Descartado desde ranking comercial."
-    candidato.save()
+    candidato, _ = crear_candidato_desde_producto(producto)
+    descartar_candidato(candidato, request.POST.get("motivo") or "Descartado desde ranking comercial.")
     messages.success(request, "Producto descartado para compra.")
     return redirect("oportunidades:ranking_oportunidades")
 
 
 def candidatos_compra(request):
-    candidatos = CandidatoCompra.objects.select_related("producto_fuente__fuente_web").order_by("-fecha_actualizacion")
+    candidatos = CandidatoCompra.objects.select_related(
+        "producto_fuente__fuente_web", "producto_canonico", "lote_captura", "resultado_comercial"
+    ).order_by("-fecha_deteccion", "-id")
+    if request.GET.get("estado"):
+        candidatos = candidatos.filter(estado=request.GET["estado"])
+    if request.GET.get("prioridad"):
+        candidatos = candidatos.filter(prioridad=request.GET["prioridad"])
+    if request.GET.get("fuente"):
+        candidatos = candidatos.filter(producto_fuente__fuente_web_id=request.GET["fuente"])
+    if request.GET.get("demanda_alta") == "1":
+        candidatos = candidatos.filter(score_demanda_detectado__gte=70)
+    if request.GET.get("score_alto") == "1":
+        candidatos = candidatos.filter(score_comercial_detectado__gte=75)
+    if request.GET.get("comprado") == "1":
+        candidatos = candidatos.filter(compras__isnull=False).distinct()
+    if request.GET.get("vendido") == "1":
+        candidatos = candidatos.filter(compras__ventas__estado=VentaProducto.ESTADO_CONFIRMADA).distinct()
     return render(
         request,
         "oportunidades/candidatos_compra.html",
-        {"candidatos": candidatos, "advertencia_persistencia": obtener_advertencia_persistencia()},
+        {
+            "candidatos": candidatos[:300], "estados": CandidatoCompra.ESTADO_CHOICES,
+            "prioridades": CandidatoCompra.PRIORIDAD_CHOICES,
+            "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+            "advertencia_persistencia": obtener_advertencia_persistencia(),
+        },
     )
+
+
+def comercial_candidato_detalle(request, pk):
+    candidato = get_object_or_404(
+        CandidatoCompra.objects.select_related(
+            "producto_fuente__fuente_web", "producto_canonico", "lote_captura", "resultado_comercial"
+        ).prefetch_related("compras__publicaciones", "compras__ventas"), pk=pk,
+    )
+    return render(request, "oportunidades/comercial_candidato_detalle.html", {
+        "candidato": candidato,
+        "producto": candidato.producto_fuente,
+        "resultado": getattr(candidato, "resultado_comercial", None),
+    })
+
+
+@require_POST
+def comercial_candidato_crear(request, producto_fuente_id):
+    producto = get_object_or_404(ProductoFuente, pk=producto_fuente_id)
+    candidato, creado = crear_candidato_desde_producto(producto, request.POST.get("motivo"))
+    messages.success(request, "Candidato creado." if creado else "El producto ya tenia un seguimiento activo.")
+    return redirect("oportunidades:comercial_candidato_detalle", pk=candidato.pk)
+
+
+@require_POST
+def comercial_candidato_aprobar(request, pk):
+    candidato = get_object_or_404(CandidatoCompra, pk=pk)
+    aprobar_candidato_compra(candidato)
+    messages.success(request, "Candidato aprobado para compra. La compra real aun debe registrarse.")
+    return redirect("oportunidades:comercial_candidato_detalle", pk=pk)
+
+
+def comercial_candidato_descartar(request, pk):
+    candidato = get_object_or_404(CandidatoCompra, pk=pk)
+    form = DescartarCandidatoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        descartar_candidato(candidato, form.cleaned_data["motivo"])
+        messages.success(request, "Candidato descartado.")
+        return redirect("oportunidades:comercial_candidato_detalle", pk=pk)
+    return render(request, "oportunidades/comercial_form.html", {"form": form, "titulo": "Descartar candidato", "candidato": candidato})
+
+
+def comercial_registrar_compra(request, pk):
+    candidato = get_object_or_404(CandidatoCompra, pk=pk)
+    form = CompraProductoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        compra = registrar_compra(candidato, form.cleaned_data)
+        messages.success(request, f"Compra #{compra.pk} registrada con costos reales.")
+        return redirect("oportunidades:comercial_candidato_detalle", pk=pk)
+    return render(request, "oportunidades/comercial_form.html", {"form": form, "titulo": "Registrar compra real", "candidato": candidato})
+
+
+def comercial_registrar_publicacion(request, pk):
+    compra = get_object_or_404(CompraProducto.objects.select_related("candidato"), pk=pk)
+    form = PublicacionReventaForm(request.POST or None, compra=compra)
+    if request.method == "POST" and form.is_valid():
+        registrar_publicacion(compra, form.cleaned_data)
+        messages.success(request, "Publicacion de reventa registrada.")
+        return redirect("oportunidades:comercial_candidato_detalle", pk=compra.candidato_id)
+    return render(request, "oportunidades/comercial_form.html", {"form": form, "titulo": "Registrar publicacion", "compra": compra})
+
+
+def comercial_registrar_venta(request, pk):
+    compra = get_object_or_404(CompraProducto.objects.select_related("candidato"), pk=pk)
+    form = VentaProductoForm(request.POST or None, compra=compra)
+    if request.method == "POST" and form.is_valid():
+        publicacion = compra.publicaciones.filter(pk=request.POST.get("publicacion_id")).first()
+        registrar_venta(compra, form.cleaned_data, publicacion=publicacion)
+        messages.success(request, "Venta real registrada y resultado recalculado.")
+        return redirect("oportunidades:comercial_candidato_detalle", pk=compra.candidato_id)
+    return render(request, "oportunidades/comercial_form.html", {
+        "form": form, "titulo": "Registrar venta real", "compra": compra,
+        "publicaciones": compra.publicaciones.all(),
+    })
+
+
+@require_POST
+def comercial_recalcular_resultado(request, pk):
+    candidato = get_object_or_404(CandidatoCompra, pk=pk)
+    recalcular_resultado_comercial(candidato)
+    messages.success(request, "Resultado comercial recalculado.")
+    return redirect("oportunidades:comercial_candidato_detalle", pk=pk)
+
+
+def comercial_dashboard(request):
+    candidatos = CandidatoCompra.objects.select_related("producto_fuente__fuente_web")
+    resultados = ResultadoComercialProducto.objects.select_related("candidato__producto_fuente")
+    compras = CompraProducto.objects.exclude(estado__in=[CompraProducto.ESTADO_CANCELADA, CompraProducto.ESTADO_DEVUELTA])
+    ventas = VentaProducto.objects.filter(estado=VentaProducto.ESTADO_CONFIRMADA)
+    if request.GET.get("fecha_desde"):
+        compras = compras.filter(fecha_compra__gte=request.GET["fecha_desde"])
+        ventas = ventas.filter(fecha_venta__gte=request.GET["fecha_desde"])
+    if request.GET.get("fecha_hasta"):
+        compras = compras.filter(fecha_compra__lte=request.GET["fecha_hasta"])
+        ventas = ventas.filter(fecha_venta__lte=request.GET["fecha_hasta"])
+    if request.GET.get("fuente"):
+        compras = compras.filter(fuente_web_id=request.GET["fuente"])
+        resultados = resultados.filter(producto_fuente__fuente_web_id=request.GET["fuente"])
+    if request.GET.get("categoria"):
+        compras = compras.filter(producto_canonico__categoria_id=request.GET["categoria"])
+        resultados = resultados.filter(producto_canonico__categoria_id=request.GET["categoria"])
+    if request.GET.get("canal"):
+        ventas = ventas.filter(canal_venta=request.GET["canal"])
+    return render(request, "oportunidades/comercial_dashboard.html", {
+        "candidatos_activos": candidatos.filter(estado__in=[CandidatoCompra.ESTADO_CANDIDATO, CandidatoCompra.ESTADO_APROBADO_COMPRA]).count(),
+        "compras_registradas": compras.count(), "publicados": PublicacionReventa.objects.filter(estado=PublicacionReventa.ESTADO_PUBLICADA).count(),
+        "ventas_registradas": ventas.count(), "inversion_total": compras.aggregate(total=Sum("costo_total"))["total"] or 0,
+        "ingreso_total": ventas.aggregate(total=Sum("ingreso_bruto"))["total"] or 0,
+        "ganancia_total": ventas.aggregate(total=Sum("ganancia_neta"))["total"] or 0,
+        "margen_promedio": resultados.aggregate(valor=Avg("margen_real_pct"))["valor"] or 0,
+        "mejores": resultados.order_by("-ganancia_neta_total")[:10],
+        "sin_vender": resultados.filter(estado_resultado=ResultadoComercialProducto.ESTADO_COMPRADO_SIN_VENDER)[:10],
+        "con_perdida": resultados.filter(estado_resultado=ResultadoComercialProducto.ESTADO_VENDIDO_CON_PERDIDA)[:10],
+        "descartados": candidatos.filter(estado=CandidatoCompra.ESTADO_DESCARTADO).count(),
+        "fuentes": FuenteWeb.objects.filter(activa=True).order_by("nombre"),
+        "categorias": CategoriaInteres.objects.filter(activa=True).order_by("nombre"),
+        "canales": VentaProducto.CANAL_CHOICES,
+    })
 
 
 def dataset_exportar(request):
@@ -1586,12 +1937,29 @@ def lote_captura_detalle(request, pk):
     lote = get_object_or_404(LoteCaptura.objects.select_related(
         "fuente_web", "conector", "extractor", "importacion", "sesion_laboratorio", "ejecucion_conector"
     ), pk=pk)
+    productos_lote = ProductoFuente.objects.filter(Q(lote_origen=lote) | Q(detallelotecaptura__lote=lote)).distinct()
+    total_productos = productos_lote.count()
+    revisar = productos_lote.filter(requiere_revision=True).count()
+    porcentaje_revisar = (revisar * 100 / total_productos) if total_productos else 0
+    problemas_validacion = []
+    if productos_lote.filter(lote_origen__isnull=True).exists():
+        problemas_validacion.append("productos sin lote")
+    if productos_lote.filter(url_tecnica_generada=True).exists():
+        problemas_validacion.append("productos con URL tecnica")
+    if productos_lote.filter(Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_oportunidad=0)).exists():
+        problemas_validacion.append("productos sin precio oportunidad")
+    if lote.errores:
+        problemas_validacion.append("errores en el lote")
+    if porcentaje_revisar > 30:
+        problemas_validacion.append("mas del 30% en calidad revisar")
     return render(request, "oportunidades/lote_captura_detalle.html", {
         "lote": lote,
         "detalles": lote.detalles.select_related("producto_fuente", "precio_fuente").order_by("-fecha")[:200],
-        "productos": ProductoFuente.objects.filter(Q(lote_origen=lote) | Q(detallelotecaptura__lote=lote)).distinct()[:200],
+        "productos": productos_lote[:200],
         "precios": lote.precios.select_related("producto_fuente").order_by("-fecha_relevamiento")[:200],
         "senales": lote.senales_demanda.select_related("producto_fuente").order_by("-fecha_relevamiento")[:200],
+        "problemas_validacion": problemas_validacion,
+        "porcentaje_revisar": porcentaje_revisar,
     })
 
 
@@ -1599,6 +1967,24 @@ def lote_captura_detalle(request, pk):
 def lote_captura_accion(request, pk, accion):
     lote = get_object_or_404(LoteCaptura, pk=pk)
     if accion == "validar":
+        productos_lote = ProductoFuente.objects.filter(Q(lote_origen=lote) | Q(detallelotecaptura__lote=lote)).distinct()
+        total_productos = productos_lote.count()
+        revisar = productos_lote.filter(requiere_revision=True).count()
+        porcentaje_revisar = (revisar * 100 / total_productos) if total_productos else 0
+        problemas = []
+        if productos_lote.filter(lote_origen__isnull=True).exists():
+            problemas.append("productos sin lote")
+        if productos_lote.filter(url_tecnica_generada=True).exists():
+            problemas.append("productos con URL tecnica")
+        if productos_lote.filter(Q(precios_fuente__isnull=True) | Q(precios_fuente__precio_oportunidad=0)).exists():
+            problemas.append("productos sin precio oportunidad")
+        if lote.errores:
+            problemas.append("errores")
+        if porcentaje_revisar > 30:
+            problemas.append("mas del 30% en revisar")
+        if problemas and request.POST.get("confirmar_advertencias") != "1":
+            messages.warning(request, "Antes de validar: " + ", ".join(problemas) + ". Si corresponde, confirmalo desde el detalle del lote.")
+            return redirect("oportunidades:lote_captura_detalle", pk=lote.pk)
         marcar_lote_validado(lote)
         messages.success(request, "Lote validado.")
     elif accion == "descartar":
@@ -1704,6 +2090,9 @@ def ranking_oportunidades(request):
     for producto in productos:
         if not producto.score_comercial:
             calcular_score_comercial_producto_fuente(producto)
+        producto.candidato_seguimiento = producto.candidaturas_compra.exclude(
+            estado__in=[CandidatoCompra.ESTADO_DESCARTADO, CandidatoCompra.ESTADO_CANCELADO, CandidatoCompra.ESTADO_PERDIDO]
+        ).order_by("-fecha_deteccion", "-id").first()
     return render(
         request,
         "oportunidades/ranking_oportunidades.html",
@@ -2529,3 +2918,5 @@ class CargaProductoURLAPIView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+    DescartarCandidatoForm,
+    CompraProducto,

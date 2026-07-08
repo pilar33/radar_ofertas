@@ -483,23 +483,51 @@ class DuplicadoIgnorado(models.Model):
 class CandidatoCompra(models.Model):
     ESTADO_OBSERVADO = "observado"
     ESTADO_CANDIDATO = "candidato"
-    ESTADO_COMPRADO = "comprado"
+    ESTADO_APROBADO_COMPRA = "aprobado_compra"
     ESTADO_DESCARTADO = "descartado"
+    ESTADO_COMPRADO = "comprado"
+    ESTADO_PUBLICADO = "publicado"
+    ESTADO_VENDIDO_PARCIAL = "vendido_parcial"
+    ESTADO_VENDIDO_TOTAL = "vendido_total"
+    ESTADO_CANCELADO = "cancelado"
+    ESTADO_PERDIDO = "perdido"
     ESTADO_CHOICES = [
         (ESTADO_OBSERVADO, "Observado"),
         (ESTADO_CANDIDATO, "Candidato"),
-        (ESTADO_COMPRADO, "Comprado"),
+        (ESTADO_APROBADO_COMPRA, "Aprobado para compra"),
         (ESTADO_DESCARTADO, "Descartado"),
+        (ESTADO_COMPRADO, "Comprado"),
+        (ESTADO_PUBLICADO, "Publicado"),
+        (ESTADO_VENDIDO_PARCIAL, "Vendido parcial"),
+        (ESTADO_VENDIDO_TOTAL, "Vendido total"),
+        (ESTADO_CANCELADO, "Cancelado"),
+        (ESTADO_PERDIDO, "Perdido"),
     ]
+    PRIORIDAD_ALTA = "alta"
+    PRIORIDAD_MEDIA = "media"
+    PRIORIDAD_BAJA = "baja"
+    PRIORIDAD_CHOICES = [(PRIORIDAD_ALTA, "Alta"), (PRIORIDAD_MEDIA, "Media"), (PRIORIDAD_BAJA, "Baja")]
 
-    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.CASCADE, related_name="candidaturas_compra")
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
+    lote_captura = models.ForeignKey("LoteCaptura", on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_CANDIDATO)
+    prioridad = models.CharField(max_length=10, choices=PRIORIDAD_CHOICES, default=PRIORIDAD_MEDIA)
+    precio_oportunidad_detectado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuente_precio = models.CharField(max_length=100, blank=True, null=True)
+    score_comercial_detectado = models.PositiveIntegerField(default=0)
+    score_demanda_detectado = models.PositiveIntegerField(default=0)
+    motivo_candidato = models.TextField(blank=True, null=True)
     precio_compra_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     precio_reventa_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     margen_estimado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     porcentaje_margen_estimado = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     motivo = models.TextField(blank=True, null=True)
     notas = models.TextField(blank=True, null=True)
+    fecha_deteccion = models.DateTimeField(auto_now_add=True, null=True)
+    fecha_decision = models.DateTimeField(null=True, blank=True)
+    motivo_descarte = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -509,7 +537,7 @@ class CandidatoCompra(models.Model):
         ordering = ["-fecha_actualizacion"]
 
     def __str__(self):
-        return f"{self.producto_fuente} - {self.estado}"
+        return f"{self.producto_fuente or self.producto_canonico or 'Candidato'} - {self.estado}"
 
 
 class PrecioFuente(models.Model):
@@ -1593,3 +1621,195 @@ class DetalleLoteCaptura(models.Model):
 
     def __str__(self):
         return f"{self.lote} - {self.estado}"
+
+
+class CompraProducto(models.Model):
+    ESTADO_PENDIENTE = "pendiente"
+    ESTADO_CONFIRMADA = "confirmada"
+    ESTADO_RECIBIDA = "recibida"
+    ESTADO_CANCELADA = "cancelada"
+    ESTADO_DEVUELTA = "devuelta"
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, "Pendiente"), (ESTADO_CONFIRMADA, "Confirmada"),
+        (ESTADO_RECIBIDA, "Recibida"), (ESTADO_CANCELADA, "Cancelada"),
+        (ESTADO_DEVUELTA, "Devuelta"),
+    ]
+    candidato = models.ForeignKey(CandidatoCompra, on_delete=models.PROTECT, related_name="compras")
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True)
+    lote_captura = models.ForeignKey(LoteCaptura, on_delete=models.SET_NULL, null=True, blank=True)
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_compra = models.DateField()
+    cantidad_comprada = models.PositiveIntegerField(default=1)
+    precio_unitario_compra = models.DecimalField(max_digits=12, decimal_places=2)
+    costo_envio = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_comision = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    otros_costos = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_unitario_real = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    medio_pago = models.CharField(max_length=100, blank=True, null=True)
+    proveedor_texto = models.CharField(max_length=200, blank=True, null=True)
+    comprobante_texto = models.CharField(max_length=200, blank=True, null=True)
+    url_compra = models.URLField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_CONFIRMADA)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_compra", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.cantidad_comprada <= 0:
+            raise ValidationError({"cantidad_comprada": "La cantidad debe ser mayor a cero."})
+        costos = [self.precio_unitario_compra, self.costo_envio, self.costo_comision, self.otros_costos]
+        if any(valor < 0 for valor in costos):
+            raise ValidationError("Los precios y costos no pueden ser negativos.")
+        self.costo_total = self.cantidad_comprada * self.precio_unitario_compra + self.costo_envio + self.costo_comision + self.otros_costos
+        self.costo_unitario_real = self.costo_total / self.cantidad_comprada
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Compra #{self.pk or 'nueva'} - {self.candidato}"
+
+
+class PublicacionReventa(models.Model):
+    CANAL_MARKETPLACE = "marketplace"
+    CANAL_FACEBOOK = "facebook"
+    CANAL_INSTAGRAM = "instagram"
+    CANAL_WHATSAPP = "whatsapp"
+    CANAL_LOCAL = "local"
+    CANAL_MERCADO_LIBRE = "mercado_libre"
+    CANAL_OTRO = "otro"
+    CANAL_CHOICES = [(valor, label) for valor, label in [
+        (CANAL_MARKETPLACE, "Marketplace"), (CANAL_FACEBOOK, "Facebook"),
+        (CANAL_INSTAGRAM, "Instagram"), (CANAL_WHATSAPP, "WhatsApp"),
+        (CANAL_LOCAL, "Local"), (CANAL_MERCADO_LIBRE, "Mercado Libre"), (CANAL_OTRO, "Otro"),
+    ]]
+    ESTADO_BORRADOR = "borrador"
+    ESTADO_PUBLICADA = "publicada"
+    ESTADO_PAUSADA = "pausada"
+    ESTADO_VENDIDA_PARCIAL = "vendida_parcial"
+    ESTADO_VENDIDA_TOTAL = "vendida_total"
+    ESTADO_CANCELADA = "cancelada"
+    ESTADO_CHOICES = [(valor, label) for valor, label in [
+        (ESTADO_BORRADOR, "Borrador"), (ESTADO_PUBLICADA, "Publicada"),
+        (ESTADO_PAUSADA, "Pausada"), (ESTADO_VENDIDA_PARCIAL, "Vendida parcial"),
+        (ESTADO_VENDIDA_TOTAL, "Vendida total"), (ESTADO_CANCELADA, "Cancelada"),
+    ]]
+    compra = models.ForeignKey(CompraProducto, on_delete=models.PROTECT, related_name="publicaciones")
+    candidato = models.ForeignKey(CandidatoCompra, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True)
+    canal = models.CharField(max_length=30, choices=CANAL_CHOICES)
+    titulo_publicacion = models.CharField(max_length=250)
+    fecha_publicacion = models.DateField()
+    precio_publicado_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    cantidad_publicada = models.PositiveIntegerField(default=1)
+    url_publicacion = models.URLField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_PUBLICADA)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_publicacion", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.cantidad_publicada <= 0:
+            raise ValidationError({"cantidad_publicada": "La cantidad debe ser mayor a cero."})
+        if self.precio_publicado_unitario <= 0:
+            raise ValidationError({"precio_publicado_unitario": "El precio debe ser mayor a cero."})
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.titulo_publicacion
+
+
+class VentaProducto(models.Model):
+    CANAL_CHOICES = PublicacionReventa.CANAL_CHOICES
+    ESTADO_REGISTRADA = "registrada"
+    ESTADO_CONFIRMADA = "confirmada"
+    ESTADO_CANCELADA = "cancelada"
+    ESTADO_DEVUELTA = "devuelta"
+    ESTADO_CHOICES = [
+        (ESTADO_REGISTRADA, "Registrada"), (ESTADO_CONFIRMADA, "Confirmada"),
+        (ESTADO_CANCELADA, "Cancelada"), (ESTADO_DEVUELTA, "Devuelta"),
+    ]
+    compra = models.ForeignKey(CompraProducto, on_delete=models.PROTECT, related_name="ventas")
+    publicacion = models.ForeignKey(PublicacionReventa, on_delete=models.SET_NULL, null=True, blank=True, related_name="ventas")
+    candidato = models.ForeignKey(CandidatoCompra, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_venta = models.DateField()
+    cantidad_vendida = models.PositiveIntegerField(default=1)
+    precio_unitario_venta = models.DecimalField(max_digits=12, decimal_places=2)
+    ingreso_bruto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_unitario_real = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_total_vendido = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    comision_venta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_envio_venta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    otros_costos_venta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ganancia_neta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margen_pct = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    canal_venta = models.CharField(max_length=30, choices=CANAL_CHOICES)
+    comprador_texto = models.CharField(max_length=200, blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_CONFIRMADA)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-fecha_venta", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.cantidad_vendida <= 0:
+            raise ValidationError({"cantidad_vendida": "La cantidad debe ser mayor a cero."})
+        valores = [self.precio_unitario_venta, self.comision_venta, self.costo_envio_venta, self.otros_costos_venta]
+        if any(valor < 0 for valor in valores):
+            raise ValidationError("Los precios y costos no pueden ser negativos.")
+        self.costo_unitario_real = self.compra.costo_unitario_real
+        self.ingreso_bruto = self.cantidad_vendida * self.precio_unitario_venta
+        self.costo_total_vendido = self.cantidad_vendida * self.costo_unitario_real
+        self.ganancia_neta = self.ingreso_bruto - self.costo_total_vendido - self.comision_venta - self.costo_envio_venta - self.otros_costos_venta
+        self.margen_pct = self.ganancia_neta / self.costo_total_vendido * 100 if self.costo_total_vendido > 0 else Decimal("0")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Venta #{self.pk or 'nueva'} - {self.compra}"
+
+
+class ResultadoComercialProducto(models.Model):
+    ESTADO_SIN_COMPRA = "sin_compra"
+    ESTADO_COMPRADO_SIN_VENDER = "comprado_sin_vender"
+    ESTADO_VENTA_PARCIAL = "venta_parcial"
+    ESTADO_VENDIDO_CON_GANANCIA = "vendido_con_ganancia"
+    ESTADO_VENDIDO_SIN_GANANCIA = "vendido_sin_ganancia"
+    ESTADO_VENDIDO_CON_PERDIDA = "vendido_con_perdida"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_CHOICES = [(valor, label) for valor, label in [
+        (ESTADO_SIN_COMPRA, "Sin compra"), (ESTADO_COMPRADO_SIN_VENDER, "Comprado sin vender"),
+        (ESTADO_VENTA_PARCIAL, "Venta parcial"), (ESTADO_VENDIDO_CON_GANANCIA, "Vendido con ganancia"),
+        (ESTADO_VENDIDO_SIN_GANANCIA, "Vendido sin ganancia"),
+        (ESTADO_VENDIDO_CON_PERDIDA, "Vendido con perdida"), (ESTADO_DESCARTADO, "Descartado"),
+    ]]
+    candidato = models.OneToOneField(CandidatoCompra, on_delete=models.CASCADE, related_name="resultado_comercial")
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True)
+    cantidad_comprada_total = models.PositiveIntegerField(default=0)
+    cantidad_vendida_total = models.PositiveIntegerField(default=0)
+    cantidad_disponible = models.IntegerField(default=0)
+    inversion_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ingreso_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ganancia_neta_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margen_real_pct = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    precio_promedio_compra = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_promedio_venta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    dias_hasta_primera_venta = models.PositiveIntegerField(null=True, blank=True)
+    dias_hasta_venta_total = models.PositiveIntegerField(null=True, blank=True)
+    estado_resultado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_SIN_COMPRA)
+    aprendizaje = models.TextField(blank=True, null=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Resultado {self.candidato}"

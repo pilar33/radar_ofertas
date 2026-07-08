@@ -66,9 +66,19 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
             "lote_apto_dataset",
             "lote_excluir_ml",
             "lote_url_origen",
+            "candidato_compra_id", "candidato_estado", "candidato_prioridad",
+            "candidato_fecha_deteccion", "candidato_motivo", "fue_comprado",
+            "cantidad_comprada_total", "precio_promedio_compra", "inversion_total",
+            "fue_publicado", "canales_publicacion", "fue_vendido", "cantidad_vendida_total",
+            "precio_promedio_venta", "ingreso_total", "ganancia_neta_total", "margen_real_pct",
+            "dias_hasta_primera_venta", "dias_hasta_venta_total", "estado_resultado_comercial",
+            "aprendizaje_comercial", "resultado_positivo",
         ]
     )
-    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web", "lote_origen").prefetch_related("precios_fuente__lote_captura", "senales_demanda")
+    productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web", "lote_origen").prefetch_related(
+        "precios_fuente__lote_captura", "senales_demanda", "candidaturas_compra__resultado_comercial",
+        "candidaturas_compra__compras__publicaciones",
+    )
     for producto in productos:
         precio = _ultimo_precio(producto)
         lote = precio.lote_captura if precio and precio.lote_captura_id else producto.lote_origen
@@ -79,6 +89,19 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
         matching = SugerenciaMatchingProducto.objects.filter(Q(producto_a=producto) | Q(producto_b=producto)).order_by("-score", "-fecha_creacion").first()
         cantidad_fuentes = canonico.apariciones.values("fuente_web_id").distinct().count() if canonico else 0
         senal = producto.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
+        candidato = producto.candidaturas_compra.order_by("-fecha_deteccion", "-id").first()
+        resultado = getattr(candidato, "resultado_comercial", None) if candidato else None
+        publicaciones = []
+        if candidato:
+            publicaciones = list(candidato.compras.values_list("publicaciones__canal", flat=True).exclude(publicaciones__canal__isnull=True).distinct())
+        if resultado and resultado.estado_resultado == resultado.ESTADO_VENDIDO_CON_GANANCIA and resultado.margen_real_pct > 0:
+            resultado_positivo = True
+        elif resultado and resultado.estado_resultado in {
+            resultado.ESTADO_VENDIDO_CON_PERDIDA, resultado.ESTADO_VENDIDO_SIN_GANANCIA, resultado.ESTADO_DESCARTADO,
+        }:
+            resultado_positivo = False
+        else:
+            resultado_positivo = ""
         writer.writerow(
             [
                 canonico.pk if canonico else "",
@@ -131,6 +154,17 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
                 lote.apto_dataset if lote else "",
                 lote.excluir_ml if lote else "",
                 lote.url_origen if lote else "",
+                candidato.pk if candidato else "", candidato.estado if candidato else "",
+                candidato.prioridad if candidato else "", candidato.fecha_deteccion.isoformat() if candidato and candidato.fecha_deteccion else "",
+                (candidato.motivo_candidato or candidato.motivo or "") if candidato else "",
+                bool(resultado and resultado.cantidad_comprada_total), resultado.cantidad_comprada_total if resultado else 0,
+                resultado.precio_promedio_compra if resultado else 0, resultado.inversion_total if resultado else 0,
+                bool(publicaciones), "|".join(publicaciones), bool(resultado and resultado.cantidad_vendida_total),
+                resultado.cantidad_vendida_total if resultado else 0, resultado.precio_promedio_venta if resultado else 0,
+                resultado.ingreso_total if resultado else 0, resultado.ganancia_neta_total if resultado else 0,
+                resultado.margen_real_pct if resultado else 0, resultado.dias_hasta_primera_venta if resultado else "",
+                resultado.dias_hasta_venta_total if resultado else "", resultado.estado_resultado if resultado else "",
+                resultado.aprendizaje if resultado else "", resultado_positivo,
             ]
         )
     return buffer

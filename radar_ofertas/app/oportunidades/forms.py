@@ -4,7 +4,9 @@ from urllib.parse import urlparse
 from django import forms
 
 from .models import (
+    CandidatoCompra,
     CategoriaInteres,
+    CompraProducto,
     ConectorFuente,
     ConfiguracionExtractorWeb,
     FuenteWeb,
@@ -12,10 +14,106 @@ from .models import (
     PoliticaExtraccionFuente,
     PrecioFuente,
     ProductoFuente,
+    PublicacionReventa,
     RevisionManualFuente,
     SenalDemandaProducto,
+    VentaProducto,
 )
 from .services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
+from .services.seguimiento_comercial_service import calcular_unidades_disponibles
+
+
+class CandidatoCompraForm(forms.ModelForm):
+    class Meta:
+        model = CandidatoCompra
+        fields = ["prioridad", "motivo_candidato", "observaciones"]
+        widgets = {
+            "prioridad": forms.Select(attrs={"class": "form-select"}),
+            "motivo_candidato": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class CompraProductoForm(forms.ModelForm):
+    class Meta:
+        model = CompraProducto
+        fields = [
+            "fecha_compra", "cantidad_comprada", "precio_unitario_compra", "costo_envio",
+            "costo_comision", "otros_costos", "medio_pago", "proveedor_texto",
+            "comprobante_texto", "url_compra", "estado", "observaciones",
+        ]
+        widgets = {
+            "fecha_compra": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "cantidad_comprada": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "precio_unitario_compra": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "costo_envio": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "costo_comision": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "otros_costos": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "medio_pago": forms.TextInput(attrs={"class": "form-control"}),
+            "proveedor_texto": forms.TextInput(attrs={"class": "form-control"}),
+            "comprobante_texto": forms.TextInput(attrs={"class": "form-control"}),
+            "url_compra": forms.URLInput(attrs={"class": "form-control"}),
+            "estado": forms.Select(attrs={"class": "form-select"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class PublicacionReventaForm(forms.ModelForm):
+    class Meta:
+        model = PublicacionReventa
+        fields = ["canal", "titulo_publicacion", "fecha_publicacion", "precio_publicado_unitario", "cantidad_publicada", "url_publicacion", "estado", "observaciones"]
+        widgets = {
+            "canal": forms.Select(attrs={"class": "form-select"}), "titulo_publicacion": forms.TextInput(attrs={"class": "form-control"}),
+            "fecha_publicacion": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "precio_publicado_unitario": forms.NumberInput(attrs={"class": "form-control", "min": 0.01, "step": "0.01"}),
+            "cantidad_publicada": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "url_publicacion": forms.URLInput(attrs={"class": "form-control"}), "estado": forms.Select(attrs={"class": "form-select"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def __init__(self, *args, compra=None, **kwargs):
+        self.compra = compra
+        super().__init__(*args, **kwargs)
+        if compra:
+            self.fields["cantidad_publicada"].help_text = f"Disponibles: {calcular_unidades_disponibles(compra)}."
+
+    def clean_cantidad_publicada(self):
+        cantidad = self.cleaned_data["cantidad_publicada"]
+        if self.compra and cantidad > calcular_unidades_disponibles(self.compra):
+            raise forms.ValidationError("La cantidad publicada supera las unidades disponibles.")
+        return cantidad
+
+
+class VentaProductoForm(forms.ModelForm):
+    class Meta:
+        model = VentaProducto
+        fields = ["fecha_venta", "cantidad_vendida", "precio_unitario_venta", "comision_venta", "costo_envio_venta", "otros_costos_venta", "canal_venta", "comprador_texto", "estado", "observaciones"]
+        widgets = {
+            "fecha_venta": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "cantidad_vendida": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "precio_unitario_venta": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "comision_venta": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "costo_envio_venta": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "otros_costos_venta": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01"}),
+            "canal_venta": forms.Select(attrs={"class": "form-select"}), "comprador_texto": forms.TextInput(attrs={"class": "form-control"}),
+            "estado": forms.Select(attrs={"class": "form-select"}), "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def __init__(self, *args, compra=None, **kwargs):
+        self.compra = compra
+        super().__init__(*args, **kwargs)
+        if compra:
+            self.fields["cantidad_vendida"].help_text = f"Disponibles: {calcular_unidades_disponibles(compra)}."
+
+    def clean_cantidad_vendida(self):
+        cantidad = self.cleaned_data["cantidad_vendida"]
+        if self.compra and cantidad > calcular_unidades_disponibles(self.compra):
+            raise forms.ValidationError("No se puede vender mas de lo disponible.")
+        return cantidad
+
+
+class DescartarCandidatoForm(forms.Form):
+    motivo = forms.CharField(widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}), min_length=3)
 
 
 class OportunidadFiltroForm(forms.Form):

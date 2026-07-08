@@ -1,90 +1,115 @@
 {% extends "base.html" %}
 
 {% block title %}Resultados preview{% endblock %}
+{% block proceso %}Mapeo -> Preview -> Procesar productos -> Curaduria{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-start mb-3">
   <div>
     <a class="text-decoration-none" href="{% url 'oportunidades:detalle_extractor' extractor.pk %}">Volver al extractor</a>
-    <h1 class="h3 mt-2 mb-0">Resultados preview</h1>
+    <h1 class="h3 mt-2 mb-1">Resultados preview</h1>
+    <p class="text-muted mb-0">Etapa actual: seleccionar y procesar productos detectados.</p>
   </div>
-  <div class="d-flex gap-2">
-    <form method="post" action="{% url 'oportunidades:seleccionar_mejores_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-success">Seleccionar mejores</button></form>
-    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-primary">Marcar procesables</button></form>
-    <form method="post" action="{% url 'oportunidades:limpiar_seleccion_extractor' extractor.pk %}">{% csrf_token %}<button class="btn btn-outline-secondary">Limpiar seleccion</button></form>
+  <div class="d-flex flex-wrap gap-2 justify-content-end">
+    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">
+      {% csrf_token %}<input type="hidden" name="modo" value="visibles"><button class="btn btn-outline-primary">Seleccionar todos los visibles</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">
+      {% csrf_token %}<input type="hidden" name="modo" value="procesables"><button class="btn btn-outline-success">Seleccionar todos los procesables</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">
+      {% csrf_token %}<input type="hidden" name="modo" value="url-real"><button class="btn btn-outline-secondary">Seleccionar con URL real</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">
+      {% csrf_token %}<input type="hidden" name="modo" value="imagen"><button class="btn btn-outline-secondary">Seleccionar con imagen</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:seleccionar_todos_procesables_extractor' extractor.pk %}">
+      {% csrf_token %}<input type="hidden" name="modo" value="precio-oportunidad"><button class="btn btn-outline-secondary">Seleccionar con precio oportunidad valido</button>
+    </form>
+    <form method="post" action="{% url 'oportunidades:limpiar_seleccion_extractor' extractor.pk %}">
+      {% csrf_token %}<button class="btn btn-outline-secondary">Limpiar seleccion</button>
+    </form>
     <a class="btn btn-success" href="{% url 'oportunidades:confirmar_procesamiento_extractor' extractor.pk %}">Procesar seleccionados</a>
+    <a class="btn btn-warning" href="{% url 'oportunidades:confirmar_procesamiento_extractor' extractor.pk %}?accion=todos-procesables">Procesar todos los procesables del lote</a>
   </div>
 </div>
 
+<div class="alert alert-info">
+  Los resultados sin precio oportunidad no se procesan. Los que no tienen URL real o imagen pueden procesarse con advertencia para corregirlos despues en curaduria.
+</div>
+
 <div class="bg-white border rounded p-3">
-  <table class="table table-sm align-middle mb-0">
-    <thead>
-      <tr>
-        <th></th>
-        <th>Imagen</th>
-        <th>Titulo</th>
-        <th>Lista</th>
-        <th>Transferencia</th>
-        <th>Tarjeta/cuotas</th>
-        <th>Oportunidad</th>
-        <th>Tipo</th>
-        <th>URL</th>
-        <th>Score</th>
-        <th>Demanda</th>
-        <th>Duplicado</th>
-        <th>Estado</th>
-        <th>Procesable</th>
-        <th>Producto</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for resultado, validacion in validaciones %}
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+      <strong>Procesables del lote:</strong> {{ procesables_lote }}
+      {% if lote_actual %}<span class="ms-2">Lote: <a href="{% url 'oportunidades:lote_captura_detalle' lote_actual.id %}">{{ lote_actual.nombre }}</a></span>{% endif %}
+    </div>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:curaduria_productos' %}">Ir a Curaduria</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
         <tr>
-          <td>
-            <form method="post" action="{% url 'oportunidades:seleccionar_resultado_extractor' resultado.pk %}">
-              {% csrf_token %}
-              <input type="hidden" name="seleccionado" value="{% if resultado.seleccionado %}0{% else %}1{% endif %}">
-              <button class="btn btn-sm {% if resultado.seleccionado %}btn-primary{% else %}btn-outline-primary{% endif %}">{% if resultado.seleccionado %}Sel{% else %}Elegir{% endif %}</button>
-            </form>
-          </td>
-          <td>
-            {% if resultado.imagen_url %}
-              <img src="{{ resultado.imagen_url }}" alt="{{ resultado.titulo|default:'Producto' }}" style="width:56px;height:56px;object-fit:cover" class="rounded border">
-            {% else %}
-              <span class="text-muted">-</span>
-            {% endif %}
-          </td>
-          <td>{{ resultado.titulo|default:"-" }}</td>
-          <td>{{ resultado.precio_lista_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.precio_lista_texto|default:"" }}</small></td>
-          <td>{{ resultado.precio_transferencia_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.precio_transferencia_texto|default:"" }}</small></td>
-          <td>{{ resultado.precio_tarjeta_decimal|default:"0,00" }}<br><small class="text-muted">{{ resultado.cuotas_texto|default:resultado.precio_tarjeta_texto|default:"" }}</small></td>
-          <td><strong>{{ resultado.precio_oportunidad_decimal|default:resultado.precio_decimal }}</strong></td>
-          <td>{{ resultado.get_tipo_precio_oportunidad_display }}</td>
-          <td>
-            {% if resultado.url_producto %}
-              {% if "/radar-preview/" in resultado.url_producto %}
-                <span class="badge text-bg-warning">URL tecnica</span>
-              {% else %}
-                <a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>
-              {% endif %}
-            {% else %}
-              <span class="text-muted">-</span>
-            {% endif %}
-          </td>
-          <td><span class="badge text-bg-info">{{ resultado.score_preview }}</span><br><small>{{ resultado.motivo_score|default:"" }}</small></td>
-          <td><span class="badge text-bg-secondary">{{ resultado.score_demanda_preview }} · {{ resultado.get_nivel_demanda_preview_display }}</span>{% if resultado.texto_demanda_detectado %}<br><small>{{ resultado.texto_demanda_detectado|truncatechars:100 }}</small>{% endif %}</td>
-          <td>{{ resultado.duplicado_probable|yesno:"Si,No" }}</td>
-          <td>{{ resultado.get_estado_display }}</td>
-          <td>
-            <span class="badge text-bg-{% if validacion.nivel == 'advertencia' %}warning{% elif validacion.valido %}success{% else %}secondary{% endif %}">{{ validacion.mensaje }}</span>
-            {% if resultado.motivo_no_procesable %}<br><small class="text-muted">{{ resultado.motivo_no_procesable }}</small>{% endif %}
-          </td>
-          <td>{{ resultado.producto_fuente|default:"-" }}</td>
+          <th></th>
+          <th>Imagen</th>
+          <th>Titulo</th>
+          <th>Lista</th>
+          <th>Transferencia</th>
+          <th>Tarjeta/cuotas</th>
+          <th>Oportunidad</th>
+          <th>Tipo</th>
+          <th>URL</th>
+          <th>Lote</th>
+          <th>Advertencias</th>
+          <th>Score</th>
+          <th>Producto</th>
         </tr>
-      {% empty %}
-        <tr><td colspan="14" class="text-muted">Sin resultados.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% for fila in filas %}
+          {% with resultado=fila.resultado validacion=fila.validacion %}
+          <tr>
+            <td>
+              <form method="post" action="{% url 'oportunidades:seleccionar_resultado_extractor' resultado.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="seleccionado" value="{% if resultado.seleccionado %}0{% else %}1{% endif %}">
+                <button class="btn btn-sm {% if resultado.seleccionado %}btn-primary{% else %}btn-outline-primary{% endif %}">{% if resultado.seleccionado %}Sel{% else %}Elegir{% endif %}</button>
+              </form>
+            </td>
+            <td>{% if resultado.imagen_url %}<img src="{{ resultado.imagen_url }}" alt="{{ resultado.titulo|default:'Producto' }}" style="width:56px;height:56px;object-fit:cover" class="rounded border">{% else %}<span class="badge text-bg-warning">Sin imagen</span>{% endif %}</td>
+            <td>{{ resultado.titulo|default:"-" }}</td>
+            <td>{% if resultado.precio_lista_decimal and resultado.precio_lista_decimal > 0 %}{{ resultado.precio_lista_decimal }}{% else %}<span class="text-muted">No detectado</span>{% endif %}<br><small class="text-muted">{{ resultado.precio_lista_texto|default:"" }}</small></td>
+            <td>{% if resultado.precio_transferencia_decimal and resultado.precio_transferencia_decimal > 0 %}{{ resultado.precio_transferencia_decimal }}{% else %}<span class="text-muted">No detectado</span>{% endif %}<br><small class="text-muted">{{ resultado.precio_transferencia_texto|default:"" }}</small></td>
+            <td>{% if resultado.precio_tarjeta_decimal and resultado.precio_tarjeta_decimal > 0 %}{{ resultado.precio_tarjeta_decimal }}{% else %}<span class="text-muted">No detectado</span>{% endif %}<br><small class="text-muted">{{ resultado.cuotas_texto|default:resultado.precio_tarjeta_texto|default:"" }}</small></td>
+            <td>{% if resultado.precio_oportunidad_decimal and resultado.precio_oportunidad_decimal > 0 %}<strong>{{ resultado.precio_oportunidad_decimal }}</strong>{% else %}<span class="badge text-bg-danger">Sin precio oportunidad</span>{% endif %}</td>
+            <td>{{ resultado.get_tipo_precio_oportunidad_display }}</td>
+            <td>
+              {% if resultado.url_producto %}
+                {% if "/radar-preview/" in resultado.url_producto %}
+                  <span class="badge text-bg-warning">URL tecnica</span>
+                {% else %}
+                  <a href="{{ resultado.url_producto }}" target="_blank" rel="noreferrer">Abrir</a>
+                {% endif %}
+              {% else %}
+                <span class="badge text-bg-warning">Sin URL real</span>
+              {% endif %}
+            </td>
+            <td>{% if resultado.lote_captura %}<a href="{% url 'oportunidades:lote_captura_detalle' resultado.lote_captura.id %}">{{ resultado.lote_captura.nombre }}</a>{% else %}<span class="badge text-bg-warning">Sin lote</span>{% endif %}</td>
+            <td>
+              {% for advertencia in fila.advertencias %}
+                <span class="badge text-bg-{% if advertencia == 'OK para procesar' %}success{% elif 'Sin precio oportunidad' in advertencia %}danger{% else %}warning{% endif %}">{{ advertencia }}</span>
+              {% endfor %}
+              <br><small class="text-muted">{{ validacion.mensaje }}</small>
+            </td>
+            <td><span class="badge text-bg-info">{{ resultado.score_preview }}</span><br><small>{{ resultado.motivo_score|default:"" }}</small></td>
+            <td>{{ resultado.producto_fuente|default:"-" }}</td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="13" class="text-muted">Sin resultados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

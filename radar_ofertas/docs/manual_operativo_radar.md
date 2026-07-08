@@ -239,3 +239,50 @@ docker compose exec web python manage.py crear_lote_manual --fuente-id ID --nomb
 8. Recalcular el ranking.
 9. Exportar el dataset.
 10. Crear un backup final.
+
+# Seguimiento comercial real
+
+Una oportunidad detectada es una estimacion basada en precio, demanda y calidad de datos. Un resultado comercial real existe solamente cuando una persona registra la decision, la compra, la publicacion y la venta efectivamente realizadas.
+
+Flujo operativo:
+
+1. Detectar la oportunidad en el ranking y marcarla como candidato.
+2. Revisar demanda, precio, URL, imagen, fuente y lote de captura.
+3. Aprobar la compra o descartar el candidato indicando el motivo.
+4. Si se compra, registrar fecha, unidades, precio unitario y todos los costos reales.
+5. Registrar la publicacion de reventa, canal, cantidad y precio publicado.
+6. Registrar cada venta real y sus comisiones, envio y otros costos.
+7. Revisar el resultado comercial, unidades disponibles, ganancia y aprendizaje.
+8. Usar estos resultados historicos para mejorar decisiones futuras.
+
+El margen real se calcula sobre el costo total vendido, incluyendo envio de compra, comisiones y otros gastos. Omitir costos produce una rentabilidad ficticia. Al inicio se recomienda comprar pocas unidades, validar la rotacion y registrar siempre el descarte cuando se decide no comprar.
+
+Abrir `/comercial/candidatos/` para el seguimiento y `/comercial/dashboard/` para el resumen. Estos datos preparan el dataset para futuro machine learning sobre conveniencia de compra, velocidad de venta, margen y riesgo. Machine learning no se implementa en esta etapa.
+
+# Diferencia entre Preview, Procesamiento y Curaduria
+
+Preview muestra productos detectados por laboratorio o extractor. Todavia no son productos definitivos: se revisan imagen, URL, precio lista, transferencia, tarjeta/cuotas, precio oportunidad, lote y advertencias. Desde `/extractores/<id>/resultados/` se seleccionan productos y se procesan masivamente con confirmacion.
+
+Procesamiento crea o actualiza `ProductoFuente`, guarda `PrecioFuente`, vincula el lote de captura, conserva URL real, imagen, multiprecio y senales de demanda, y deja trazabilidad para auditoria y dataset. Los resultados sin precio oportunidad no se procesan.
+
+Curaduria revisa calidad de productos ya procesados. Sirve para corregir URL tecnica, imagen faltante, lote faltante, precios incompletos, duplicados y aptitud de dataset. No deberia usarse como carga inicial producto por producto.
+
+# Procesamiento masivo seguro
+
+1. Abrir Resultados Preview.
+2. Filtrar o revisar los productos procesables.
+3. Usar **Seleccionar todos los procesables** o una seleccion mas especifica.
+4. Revisar advertencias: URL tecnica, sin imagen, sin lote o sin precio.
+5. Usar **Procesar seleccionados** o **Procesar todos los procesables del lote**.
+6. Confirmar el procesamiento.
+7. Ir a Curaduria.
+8. Revisar productos con problemas.
+9. Validar o descartar el lote desde `/lotes-captura/`.
+
+Si aparecen productos con URL tecnica, ejecutar:
+
+```powershell
+docker compose exec web python manage.py reparar_urls_productos_desde_preview --limite 50
+```
+
+El comando solo reemplaza URL tecnica cuando encuentra una URL real ya capturada en preview o laboratorio.

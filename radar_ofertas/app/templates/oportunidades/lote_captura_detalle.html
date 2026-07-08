@@ -1,16 +1,78 @@
 {% extends "base.html" %}
 {% block title %}{{ lote.nombre }}{% endblock %}
+{% block proceso %}Carga de datos -> Lotes -> Validacion -> Dataset{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-start mb-3"><div><h1 class="h3">{{ lote.nombre }}</h1><p class="text-muted">{{ lote.get_origen_display }} · {{ lote.get_tipo_carga_display }} · {{ lote.get_estado_display }}</p></div><a class="btn btn-outline-secondary" href="{% url 'oportunidades:lotes_captura_lista' %}">Volver</a></div>
-<div class="row g-3 mb-3"><div class="col-lg-7"><div class="card card-body h-100">
-<h2 class="h5">Datos generales</h2><dl class="row mb-0"><dt class="col-sm-4">Fuente</dt><dd class="col-sm-8">{{ lote.fuente_web|default:"-" }}</dd><dt class="col-sm-4">URL</dt><dd class="col-sm-8 text-break">{% if lote.url_origen %}<a href="{{ lote.url_origen }}" target="_blank">{{ lote.url_origen }}</a>{% else %}-{% endif %}</dd><dt class="col-sm-4">Extractor / conector</dt><dd class="col-sm-8">{{ lote.extractor|default:"-" }} / {{ lote.conector|default:"-" }}</dd><dt class="col-sm-4">Importacion / laboratorio</dt><dd class="col-sm-8">{{ lote.importacion|default:"-" }} / {{ lote.sesion_laboratorio|default:"-" }}</dd><dt class="col-sm-4">Dataset / ML</dt><dd class="col-sm-8">{{ lote.apto_dataset|yesno:"Apto,No apto" }} · {{ lote.excluir_ml|yesno:"Excluido,Incluido" }}</dd><dt class="col-sm-4">Resumen</dt><dd class="col-sm-8">{{ lote.resumen|default:"-" }}</dd></dl>
-</div></div><div class="col-lg-5"><div class="card card-body h-100"><h2 class="h5">Contadores</h2><div class="row text-center"><div class="col-4"><strong>{{ lote.productos_detectados }}</strong><br><small>Detectados</small></div><div class="col-4"><strong>{{ lote.productos_procesados }}</strong><br><small>Procesados</small></div><div class="col-4"><strong>{{ lote.precios_creados }}</strong><br><small>Precios</small></div><div class="col-4 mt-3"><strong>{{ lote.senales_demanda_creadas }}</strong><br><small>Demanda</small></div><div class="col-4 mt-3"><strong>{{ lote.errores }}</strong><br><small>Errores</small></div></div></div></div></div>
-<div class="d-flex flex-wrap gap-2 mb-4">
-<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'validar' %}">{% csrf_token %}<button class="btn btn-success">Validar</button></form>
-<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'descartar' %}">{% csrf_token %}<button class="btn btn-outline-danger">Descartar</button></form>
-<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'recalcular' %}">{% csrf_token %}<button class="btn btn-outline-primary">Recalcular</button></form>
-{% if lote.excluir_ml %}<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'incluir-ml' %}">{% csrf_token %}<button class="btn btn-outline-warning">Incluir en ML</button></form>{% else %}<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'excluir-ml' %}">{% csrf_token %}<button class="btn btn-outline-warning">Excluir de ML</button></form>{% endif %}
-<a class="btn btn-primary" href="{% url 'oportunidades:lote_captura_exportar' lote.id %}">Exportar CSV</a><a class="btn btn-outline-secondary" href="{% url 'oportunidades:curaduria_productos' %}">Curaduria</a><a class="btn btn-outline-secondary" href="{% url 'oportunidades:ranking_oportunidades' %}">Ranking</a>
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1 class="h3">{{ lote.nombre }}</h1>
+    <p class="text-muted">{{ lote.get_origen_display }} - {{ lote.get_tipo_carga_display }} - {{ lote.get_estado_display }}</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:lotes_captura_lista' %}">Volver</a>
 </div>
-<h2 class="h5">Productos y detalles</h2><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Estado</th><th>Producto</th><th>Precio</th><th>Mensaje</th></tr></thead><tbody>{% for detalle in detalles %}<tr><td>{{ detalle.fecha|date:"d/m/Y H:i" }}</td><td>{{ detalle.get_estado_display }}</td><td>{% if detalle.producto_fuente %}<a href="{% url 'oportunidades:detalle_curaduria_producto' detalle.producto_fuente.id %}">{{ detalle.producto_fuente }}</a>{% else %}-{% endif %}</td><td>{{ detalle.precio_fuente.precio_oportunidad|default:"-" }}</td><td>{{ detalle.mensaje|default:"-" }}</td></tr>{% empty %}<tr><td colspan="5">Sin detalles.</td></tr>{% endfor %}</tbody></table></div>
+
+{% if problemas_validacion %}
+  <div class="alert alert-warning">
+    Este lote tiene advertencias antes de validar: {{ problemas_validacion|join:", " }}.
+  </div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-7"><div class="card card-body h-100">
+    <h2 class="h5">Datos generales</h2>
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Fuente</dt><dd class="col-sm-8">{{ lote.fuente_web|default:"-" }}</dd>
+      <dt class="col-sm-4">URL</dt><dd class="col-sm-8 text-break">{% if lote.url_origen %}<a href="{{ lote.url_origen }}" target="_blank">{{ lote.url_origen }}</a>{% else %}-{% endif %}</dd>
+      <dt class="col-sm-4">Extractor / conector</dt><dd class="col-sm-8">{{ lote.extractor|default:"-" }} / {{ lote.conector|default:"-" }}</dd>
+      <dt class="col-sm-4">Importacion / laboratorio</dt><dd class="col-sm-8">{{ lote.importacion|default:"-" }} / {{ lote.sesion_laboratorio|default:"-" }}</dd>
+      <dt class="col-sm-4">Dataset / ML</dt><dd class="col-sm-8">{{ lote.apto_dataset|yesno:"Apto,No apto" }} - {{ lote.excluir_ml|yesno:"Excluido,Incluido" }}</dd>
+      <dt class="col-sm-4">Resumen</dt><dd class="col-sm-8">{{ lote.resumen|default:"-" }}</dd>
+    </dl>
+  </div></div>
+  <div class="col-lg-5"><div class="card card-body h-100">
+    <h2 class="h5">Contadores</h2>
+    <div class="row text-center">
+      <div class="col-4"><strong>{{ lote.productos_detectados }}</strong><br><small>Detectados</small></div>
+      <div class="col-4"><strong>{{ lote.productos_procesados }}</strong><br><small>Procesados</small></div>
+      <div class="col-4"><strong>{{ lote.precios_creados }}</strong><br><small>Precios</small></div>
+      <div class="col-4 mt-3"><strong>{{ lote.senales_demanda_creadas }}</strong><br><small>Demanda</small></div>
+      <div class="col-4 mt-3"><strong>{{ lote.errores }}</strong><br><small>Errores</small></div>
+      <div class="col-4 mt-3"><strong>{{ porcentaje_revisar|floatformat:0 }}%</strong><br><small>Revisar</small></div>
+    </div>
+  </div></div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:curaduria_productos' %}?lote={{ lote.id }}">Ver productos procesados del lote</a>
+  <a class="btn btn-outline-warning" href="{% url 'oportunidades:curaduria_productos' %}?lote={{ lote.id }}&revision=calidad_revisar">Ver productos con problemas del lote</a>
+  {% if lote.extractor %}<a class="btn btn-outline-primary" href="{% url 'oportunidades:resultados_extractor' lote.extractor.id %}">Ver resultados preview del lote</a>{% endif %}
+  <form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'validar' %}">{% csrf_token %}<button class="btn btn-success">Marcar lote validado</button></form>
+  {% if problemas_validacion %}
+    <form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'validar' %}">{% csrf_token %}<input type="hidden" name="confirmar_advertencias" value="1"><button class="btn btn-warning">Confirmar validacion con advertencias</button></form>
+  {% endif %}
+  <form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'descartar' %}">{% csrf_token %}<button class="btn btn-outline-danger">Descartar lote</button></form>
+  <form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'descartar' %}">{% csrf_token %}<input type="hidden" name="motivo" value="Marcado no apto dataset desde detalle de lote."><button class="btn btn-outline-danger">Marcar lote no apto dataset</button></form>
+  <form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'recalcular' %}">{% csrf_token %}<button class="btn btn-outline-primary">Recalcular</button></form>
+  {% if lote.excluir_ml %}<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'incluir-ml' %}">{% csrf_token %}<button class="btn btn-outline-warning">Incluir en ML</button></form>{% else %}<form method="post" action="{% url 'oportunidades:lote_captura_accion' lote.id 'excluir-ml' %}">{% csrf_token %}<button class="btn btn-outline-warning">Excluir de ML</button></form>{% endif %}
+  <a class="btn btn-primary" href="{% url 'oportunidades:lote_captura_exportar' lote.id %}">Exportar CSV</a>
+</div>
+
+<h2 class="h5">Productos y detalles</h2>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Fecha</th><th>Estado</th><th>Producto</th><th>Precio</th><th>Mensaje</th></tr></thead>
+    <tbody>
+      {% for detalle in detalles %}
+        <tr>
+          <td>{{ detalle.fecha|date:"d/m/Y H:i" }}</td>
+          <td>{{ detalle.get_estado_display }}</td>
+          <td>{% if detalle.producto_fuente %}<a href="{% url 'oportunidades:detalle_curaduria_producto' detalle.producto_fuente.id %}">{{ detalle.producto_fuente }}</a>{% else %}-{% endif %}</td>
+          <td>{{ detalle.precio_fuente.precio_oportunidad|default:"-" }}</td>
+          <td>{{ detalle.mensaje|default:"-" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">Sin detalles.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

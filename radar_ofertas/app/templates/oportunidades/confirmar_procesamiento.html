@@ -1,17 +1,33 @@
 {% extends "base.html" %}
 
 {% block title %}Confirmar procesamiento{% endblock %}
+{% block proceso %}Mapeo -> Preview -> Procesar productos -> Curaduria{% endblock %}
 
 {% block content %}
 <div class="bg-white border rounded p-4">
   <h1 class="h3">Confirmar procesamiento</h1>
+  <p class="text-muted">Etapa actual: confirmar la creacion/actualizacion de productos desde Resultados Preview.</p>
   <p><strong>Fuente:</strong> {{ extractor.conector.fuente_web.nombre }}</p>
   <p><strong>Conector:</strong> {{ extractor.conector.nombre }}</p>
-  <p><strong>Resultados seleccionados:</strong> {{ cantidad }}</p>
-  <div class="alert alert-warning">Se crearan productos y precios en la base propia. Limite de seguridad: 20 resultados por ejecucion.</div>
+  <p><strong>Lote:</strong> {% if lote_actual %}<a href="{% url 'oportunidades:lote_captura_detalle' lote_actual.id %}">{{ lote_actual.nombre }}</a>{% else %}<span class="badge text-bg-warning">Sin lote detectado</span>{% endif %}</p>
+  <p><strong>Productos a procesar:</strong> {{ cantidad }}</p>
+
+  {% if accion == "todos-procesables" %}
+    <div class="alert alert-warning">
+      Vas a procesar {{ cantidad }} productos del lote {% if lote_actual %}{{ lote_actual.nombre }}{% else %}actual{% endif %}.
+      Se crearan/actualizaran productos, precios, senales de demanda y trazabilidad. Confirmalo solo si revisaste las advertencias.
+    </div>
+  {% else %}
+    <div class="alert alert-warning">
+      Se procesaran los resultados seleccionados. Los productos sin precio oportunidad seran omitidos por seguridad.
+    </div>
+  {% endif %}
+
   <div class="d-flex gap-2">
     <form method="post" action="{% url 'oportunidades:procesar_seleccionados_extractor' extractor.pk %}">
       {% csrf_token %}
+      <input type="hidden" name="accion" value="{{ accion }}">
+      <input type="hidden" name="limite" value="200">
       <button class="btn btn-success">Confirmar procesamiento</button>
     </form>
     <a class="btn btn-outline-secondary" href="{% url 'oportunidades:resultados_extractor' extractor.pk %}">Cancelar</a>

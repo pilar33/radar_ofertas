@@ -1,23 +1,10 @@
 {% extends "base.html" %}
-
+{% block title %}Seguimiento comercial{% endblock %}
 {% block content %}
 {% include "oportunidades/_advertencia_persistencia.html" %}
-<h1>Candidatos de compra</h1>
-<table class="table table-sm align-middle">
-  <thead><tr><th>Producto</th><th>Fuente</th><th>Precio compra</th><th>Reventa</th><th>Margen</th><th>Score</th><th>Estado</th><th>Notas</th></tr></thead>
-  <tbody>
-    {% for candidato in candidatos %}
-      <tr>
-        <td>{{ candidato.producto_fuente.titulo_original }}</td>
-        <td>{{ candidato.producto_fuente.fuente_web }}</td>
-        <td>{{ candidato.precio_compra_estimado }}</td>
-        <td>{{ candidato.precio_reventa_estimado }}</td>
-        <td>{{ candidato.margen_estimado }} / {{ candidato.porcentaje_margen_estimado }}%</td>
-        <td>{{ candidato.producto_fuente.score_comercial }}</td>
-        <td>{{ candidato.get_estado_display }}</td>
-        <td>{{ candidato.notas|default:"-" }}</td>
-      </tr>
-    {% empty %}<tr><td colspan="8">Sin candidatos.</td></tr>{% endfor %}
-  </tbody>
-</table>
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h1>Seguimiento comercial</h1><p class="text-muted mb-0">Candidatos y resultados reales de compra y reventa.</p></div><a class="btn btn-primary" href="{% url 'oportunidades:comercial_dashboard' %}">Dashboard comercial</a></div>
+<form class="card card-body mb-3"><div class="row g-2"><div class="col-md-3"><select class="form-select" name="estado"><option value="">Todos los estados</option>{% for value,label in estados %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div><div class="col-md-2"><select class="form-select" name="prioridad"><option value="">Prioridad</option>{% for value,label in prioridades %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div><div class="col-md-3"><select class="form-select" name="fuente"><option value="">Todas las fuentes</option>{% for fuente in fuentes %}<option value="{{ fuente.id }}">{{ fuente.nombre }}</option>{% endfor %}</select></div><div class="col-md-3 d-flex gap-2 align-items-center"><label><input type="checkbox" name="demanda_alta" value="1"> Demanda alta</label><label><input type="checkbox" name="score_alto" value="1"> Score alto</label></div><div class="col-md-1"><button class="btn btn-outline-primary w-100">Filtrar</button></div></div></form>
+<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Producto</th><th>Fuente</th><th>Precio oportunidad</th><th>Scores</th><th>Prioridad</th><th>Estado</th><th>Deteccion</th><th>Resultado real</th><th></th></tr></thead><tbody>
+{% for candidato in candidatos %}<tr><td>{% if candidato.producto_fuente.imagen_url %}<img src="{{ candidato.producto_fuente.imagen_url }}" alt="" style="width:42px;height:42px;object-fit:cover" class="me-2">{% endif %}{{ candidato.producto_fuente|default:candidato.producto_canonico }}</td><td>{{ candidato.producto_fuente.fuente_web|default:"-" }}</td><td>{{ candidato.precio_oportunidad_detectado|default:candidato.precio_compra_estimado }}</td><td>{{ candidato.score_comercial_detectado }} / {{ candidato.score_demanda_detectado }}</td><td>{{ candidato.get_prioridad_display }}</td><td>{{ candidato.get_estado_display }}</td><td>{{ candidato.fecha_deteccion|date:"d/m/Y H:i" }}</td><td>{% if candidato.resultado_comercial %}{{ candidato.resultado_comercial.get_estado_resultado_display }} · ${{ candidato.resultado_comercial.ganancia_neta_total }}{% else %}Pendiente{% endif %}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:comercial_candidato_detalle' candidato.id %}">Ver seguimiento</a></td></tr>
+{% empty %}<tr><td colspan="9" class="text-muted">Sin candidatos.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

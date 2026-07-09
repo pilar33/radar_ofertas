@@ -28,9 +28,11 @@ from .forms import (
     LaboratorioSelectoresForm,
     MercadoLibreBusquedaForm,
     OportunidadFiltroForm,
+    OportunidadRadarForm,
     PrecioFuenteCuraduriaForm,
     PublicacionReventaForm,
     ProductoFuenteCuraduriaForm,
+    RadarTextoImportForm,
     RevisionManualFuenteForm,
     SenalDemandaManualForm,
     VentaProductoForm,
@@ -48,9 +50,11 @@ from .models import (
     EvaluacionOportunidadMultifuente,
     FuenteWeb,
     ImportacionProductos,
+    ImportacionRadarTexto,
     LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
+    OportunidadRadar,
     OperacionCuraduria,
     PrecioFuente,
     ProductoCanonico,
@@ -174,6 +178,12 @@ from .services.seguimiento_comercial_service import (
     registrar_compra,
     registrar_publicacion,
     registrar_venta,
+)
+from .services.radar_oportunidades_service import (
+    analizar_importacion_radar,
+    importar_oportunidades_desde_texto,
+    marcar_oportunidad_radar_como_candidato,
+    recalcular_oportunidad_radar,
 )
 from .services.mercado_libre_service import (
     buscar_productos,
@@ -1882,6 +1892,178 @@ def comercial_dashboard(request):
         "categorias": CategoriaInteres.objects.filter(activa=True).order_by("nombre"),
         "canales": VentaProducto.CANAL_CHOICES,
     })
+
+
+def radar_dashboard(request):
+    oportunidades = OportunidadRadar.objects.select_related("candidato_compra", "fuente_web")
+    hoy = timezone.localdate()
+    contexto = {
+        "detectadas_hoy": oportunidades.filter(fecha_detectada__date=hoy).count(),
+        "alta_prioridad": oportunidades.filter(nivel_oportunidad=OportunidadRadar.NIVEL_ALTA).count(),
+        "para_analizar": oportunidades.filter(decision_sugerida=OportunidadRadar.DECISION_ANALIZAR).count(),
+        "descartadas": oportunidades.filter(estado=OportunidadRadar.ESTADO_DESCARTADA).count(),
+        "candidatos_generados": oportunidades.filter(candidato_compra__isnull=False).count(),
+        "mayor_descuento": oportunidades.aggregate(maximo=Max("descuento_real_pct_estimado"))["maximo"] or 0,
+        "tiendas": oportunidades.exclude(tienda__isnull=True).exclude(tienda="").values("tienda").annotate(total=Count("id")).order_by("-total")[:10],
+        "top_oportunidades": oportunidades.order_by("-score_radar", "-descuento_real_pct_estimado")[:10],
+        "descuento_20": oportunidades.filter(descuento_real_pct_estimado__gte=20).order_by("-descuento_real_pct_estimado")[:10],
+        "score_alto": oportunidades.filter(score_radar__gte=80).order_by("-score_radar")[:10],
+        "pendientes_revision": oportunidades.filter(requiere_revision=True).order_by("-fecha_detectada")[:10],
+        "candidatas": oportunidades.filter(candidato_compra__isnull=False).order_by("-fecha_detectada")[:10],
+    }
+    return render(request, "oportunidades/radar_dashboard.html", contexto)
+
+
+def _radar_oportunidades_queryset(request):
+    oportunidades = OportunidadRadar.objects.select_related("producto_fuente", "producto_canonico", "fuente_web", "candidato_compra")
+    if request.GET.get("tienda"):
+        oportunidades = oportunidades.filter(tienda__icontains=request.GET["tienda"])
+    if request.GET.get("nivel"):
+        oportunidades = oportunidades.filter(nivel_oportunidad=request.GET["nivel"])
+    if request.GET.get("decision"):
+        oportunidades = oportunidades.filter(decision_sugerida=request.GET["decision"])
+    if request.GET.get("estado"):
+        oportunidades = oportunidades.filter(estado=request.GET["estado"])
+    if request.GET.get("requiere_revision") in {"0", "1"}:
+        oportunidades = oportunidades.filter(requiere_revision=request.GET["requiere_revision"] == "1")
+    if request.GET.get("fecha_desde"):
+        oportunidades = oportunidades.filter(fecha_detectada__date__gte=request.GET["fecha_desde"])
+    if request.GET.get("fecha_hasta"):
+        oportunidades = oportunidades.filter(fecha_detectada__date__lte=request.GET["fecha_hasta"])
+    if request.GET.get("descuento_min"):
+        oportunidades = oportunidades.filter(descuento_real_pct_estimado__gte=request.GET["descuento_min"])
+    if request.GET.get("score_min"):
+        oportunidades = oportunidades.filter(score_radar__gte=request.GET["score_min"])
+    return oportunidades
+
+
+def _exportar_radar_csv(oportunidades):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="radar_oportunidades.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["id", "fecha", "tienda", "producto", "precio_actual", "comparable", "descuento", "score", "nivel", "decision", "estado"])
+    for oportunidad in oportunidades:
+        writer.writerow([
+            oportunidad.pk,
+            oportunidad.fecha_detectada.isoformat(),
+            oportunidad.tienda or "",
+            oportunidad.producto_nombre,
+            oportunidad.precio_actual or "",
+            oportunidad.precio_comparable_minimo or "",
+            oportunidad.descuento_real_pct_estimado or "",
+            oportunidad.score_radar,
+            oportunidad.nivel_oportunidad,
+            oportunidad.decision_sugerida,
+            oportunidad.estado,
+        ])
+    return response
+
+
+def radar_ofertas(request):
+    oportunidades = _radar_oportunidades_queryset(request)
+    if request.GET.get("exportar") == "1":
+        return _exportar_radar_csv(oportunidades.order_by("-fecha_detectada")[:2000])
+    return render(
+        request,
+        "oportunidades/radar_ofertas.html",
+        {
+            "oportunidades": oportunidades.order_by("-fecha_detectada")[:300],
+            "niveles": OportunidadRadar.NIVEL_CHOICES,
+            "decisiones": OportunidadRadar.DECISION_CHOICES,
+            "estados": OportunidadRadar.ESTADO_CHOICES,
+        },
+    )
+
+
+def radar_importar_texto(request):
+    form = RadarTextoImportForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        importacion, _ = analizar_importacion_radar(form.cleaned_data["texto_original"], form.cleaned_data["origen"])
+        return redirect("oportunidades:radar_importacion_detalle", pk=importacion.pk)
+    return render(request, "oportunidades/radar_importar_texto.html", {"form": form})
+
+
+def radar_importacion_detalle(request, pk):
+    importacion = get_object_or_404(ImportacionRadarTexto, pk=pk)
+    oportunidades = json.loads(importacion.resumen or "[]")
+    return render(
+        request,
+        "oportunidades/radar_importacion_detalle.html",
+        {"importacion": importacion, "oportunidades": list(enumerate(oportunidades))},
+    )
+
+
+@require_POST
+def radar_importacion_importar(request, pk):
+    importacion = get_object_or_404(ImportacionRadarTexto, pk=pk)
+    indices = request.POST.getlist("indices")
+    nueva_importacion, creadas, _ = importar_oportunidades_desde_texto(
+        importacion.texto_original,
+        origen=importacion.origen,
+        confirmar=True,
+        indices=indices if indices else None,
+    )
+    importacion.estado = ImportacionRadarTexto.ESTADO_IMPORTADA if creadas else ImportacionRadarTexto.ESTADO_ANALIZADA
+    importacion.oportunidades_importadas = len(creadas)
+    importacion.save(update_fields=["estado", "oportunidades_importadas", "fecha_actualizacion"])
+    messages.success(request, f"Importadas {len(creadas)} oportunidades Radar.")
+    return redirect("oportunidades:radar_ofertas")
+
+
+@require_POST
+def radar_importacion_descartar(request, pk):
+    importacion = get_object_or_404(ImportacionRadarTexto, pk=pk)
+    importacion.estado = ImportacionRadarTexto.ESTADO_DESCARTADA
+    importacion.save(update_fields=["estado", "fecha_actualizacion"])
+    messages.warning(request, "Importacion descartada.")
+    return redirect("oportunidades:radar_importar_texto")
+
+
+def radar_oferta_detalle(request, pk):
+    oportunidad = get_object_or_404(
+        OportunidadRadar.objects.select_related("producto_fuente", "producto_canonico", "fuente_web", "candidato_compra"),
+        pk=pk,
+    )
+    return render(request, "oportunidades/radar_oferta_detalle.html", {"oportunidad": oportunidad})
+
+
+def radar_oferta_editar(request, pk):
+    oportunidad = get_object_or_404(OportunidadRadar, pk=pk)
+    form = OportunidadRadarForm(request.POST or None, instance=oportunidad)
+    if request.method == "POST" and form.is_valid():
+        oportunidad = form.save()
+        recalcular_oportunidad_radar(oportunidad)
+        messages.success(request, "Oportunidad Radar actualizada.")
+        return redirect("oportunidades:radar_oferta_detalle", pk=oportunidad.pk)
+    return render(request, "oportunidades/radar_oferta_editar.html", {"form": form, "oportunidad": oportunidad})
+
+
+@require_POST
+def radar_oferta_marcar_revisada(request, pk):
+    oportunidad = get_object_or_404(OportunidadRadar, pk=pk)
+    oportunidad.estado = OportunidadRadar.ESTADO_REVISADA
+    oportunidad.requiere_revision = False
+    oportunidad.save(update_fields=["estado", "requiere_revision"])
+    messages.success(request, "Oportunidad marcada como revisada.")
+    return redirect("oportunidades:radar_oferta_detalle", pk=oportunidad.pk)
+
+
+@require_POST
+def radar_oferta_descartar(request, pk):
+    oportunidad = get_object_or_404(OportunidadRadar, pk=pk)
+    oportunidad.estado = OportunidadRadar.ESTADO_DESCARTADA
+    oportunidad.apta_dataset = False
+    oportunidad.save(update_fields=["estado", "apta_dataset"])
+    messages.warning(request, "Oportunidad Radar descartada.")
+    return redirect("oportunidades:radar_ofertas")
+
+
+@require_POST
+def radar_oferta_marcar_candidato(request, pk):
+    oportunidad = get_object_or_404(OportunidadRadar, pk=pk)
+    candidato, creado = marcar_oportunidad_radar_como_candidato(oportunidad)
+    messages.success(request, "Candidato de compra creado." if creado else "La oportunidad ya tenia candidato.")
+    return redirect("oportunidades:comercial_candidato_detalle", pk=candidato.pk)
 
 
 def dataset_exportar(request):

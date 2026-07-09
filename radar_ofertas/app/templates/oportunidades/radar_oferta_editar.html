@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Editar Radar{% endblock %}
+{% block content %}
+<div class="card card-body">
+  <h1 class="h3">Editar oportunidad Radar</h1>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-success">Guardar</button><a class="btn btn-outline-secondary" href="{% url 'oportunidades:radar_oferta_detalle' oportunidad.id %}">Cancelar</a></form>
+</div>
+{% endblock %}

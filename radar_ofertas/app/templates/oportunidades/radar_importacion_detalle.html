@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Preview importacion Radar{% endblock %}
+{% block proceso %}Analisis comercial -> Radar inteligente -> Preview{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div><h1 class="h3">Preview importacion Radar</h1><p class="text-muted">{{ importacion.get_estado_display }} - {{ importacion.oportunidades_detectadas }} detectadas</p></div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:radar_importar_texto' %}">Nueva importacion</a>
+</div>
+<form method="post" action="{% url 'oportunidades:radar_importacion_importar' importacion.id %}">
+  {% csrf_token %}
+  <div class="table-responsive bg-white border rounded mb-3">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th></th><th>Tienda</th><th>Producto</th><th>Precio</th><th>Comparable</th><th>Descuento</th><th>Score</th><th>Nivel</th><th>Advertencias</th></tr></thead>
+      <tbody>
+        {% for indice, oportunidad in oportunidades %}
+          <tr>
+            <td><input class="form-check-input" type="checkbox" name="indices" value="{{ indice }}" checked></td>
+            <td>{{ oportunidad.tienda|default:"-" }}</td>
+            <td>{{ oportunidad.producto_nombre }}</td>
+            <td>{{ oportunidad.precio_actual|default:"-" }}</td>
+            <td>{{ oportunidad.precio_comparable_minimo|default:"-" }}</td>
+            <td>{{ oportunidad.descuento_real_pct_estimado|default:oportunidad.descuento_texto|default:"-" }}</td>
+            <td><span class="badge text-bg-info">{{ oportunidad.score_radar }}</span></td>
+            <td>{{ oportunidad.nivel_oportunidad }}</td>
+            <td>{% for advertencia in oportunidad.advertencias %}<span class="badge text-bg-warning">{{ advertencia }}</span>{% empty %}<span class="badge text-bg-success">OK</span>{% endfor %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9">No se detectaron oportunidades.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button class="btn btn-success">Importar oportunidades detectadas</button>
+  <button class="btn btn-primary" name="todas" value="1">Importar todas las oportunidades validas</button>
+</form>
+<form class="mt-2" method="post" action="{% url 'oportunidades:radar_importacion_descartar' importacion.id %}">{% csrf_token %}<button class="btn btn-outline-danger">Descartar importacion</button></form>
+<div class="card card-body mt-3"><h2 class="h5">Texto original</h2><pre class="small mb-0">{{ importacion.texto_original }}</pre></div>
+{% endblock %}

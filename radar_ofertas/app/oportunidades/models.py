@@ -507,10 +507,21 @@ class CandidatoCompra(models.Model):
     PRIORIDAD_MEDIA = "media"
     PRIORIDAD_BAJA = "baja"
     PRIORIDAD_CHOICES = [(PRIORIDAD_ALTA, "Alta"), (PRIORIDAD_MEDIA, "Media"), (PRIORIDAD_BAJA, "Baja")]
+    ORIGEN_RANKING = "ranking"
+    ORIGEN_RADAR_TEXTO = "radar_texto"
+    ORIGEN_MANUAL = "manual"
+    ORIGEN_CHOICES = [
+        (ORIGEN_RANKING, "Ranking"),
+        (ORIGEN_RADAR_TEXTO, "Radar texto"),
+        (ORIGEN_MANUAL, "Manual"),
+    ]
 
     producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
     producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
     lote_captura = models.ForeignKey("LoteCaptura", on_delete=models.SET_NULL, null=True, blank=True, related_name="candidaturas_compra")
+    producto_texto = models.CharField(max_length=250, blank=True, null=True)
+    tienda_texto = models.CharField(max_length=150, blank=True, null=True)
+    origen_candidato = models.CharField(max_length=30, choices=ORIGEN_CHOICES, default=ORIGEN_RANKING)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_CANDIDATO)
     prioridad = models.CharField(max_length=10, choices=PRIORIDAD_CHOICES, default=PRIORIDAD_MEDIA)
     precio_oportunidad_detectado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -537,7 +548,154 @@ class CandidatoCompra(models.Model):
         ordering = ["-fecha_actualizacion"]
 
     def __str__(self):
-        return f"{self.producto_fuente or self.producto_canonico or 'Candidato'} - {self.estado}"
+        return f"{self.producto_fuente or self.producto_canonico or self.producto_texto or 'Candidato'} - {self.estado}"
+
+
+class ImportacionRadarTexto(models.Model):
+    ORIGEN_CHATGPT_RADAR = "chatgpt_radar"
+    ORIGEN_TEXTO_EXTERNO = "texto_externo"
+    ORIGEN_MANUAL = "manual"
+    ORIGEN_CHOICES = [
+        (ORIGEN_CHATGPT_RADAR, "ChatGPT Radar"),
+        (ORIGEN_TEXTO_EXTERNO, "Texto externo"),
+        (ORIGEN_MANUAL, "Manual"),
+    ]
+    ESTADO_PENDIENTE = "pendiente"
+    ESTADO_ANALIZADA = "analizada"
+    ESTADO_IMPORTADA = "importada"
+    ESTADO_IMPORTADA_CON_ADVERTENCIAS = "importada_con_advertencias"
+    ESTADO_ERROR = "error"
+    ESTADO_DESCARTADA = "descartada"
+    ESTADO_CHOICES = [
+        (ESTADO_PENDIENTE, "Pendiente"),
+        (ESTADO_ANALIZADA, "Analizada"),
+        (ESTADO_IMPORTADA, "Importada"),
+        (ESTADO_IMPORTADA_CON_ADVERTENCIAS, "Importada con advertencias"),
+        (ESTADO_ERROR, "Error"),
+        (ESTADO_DESCARTADA, "Descartada"),
+    ]
+
+    titulo = models.CharField(max_length=200)
+    texto_original = models.TextField()
+    origen = models.CharField(max_length=30, choices=ORIGEN_CHOICES, default=ORIGEN_CHATGPT_RADAR)
+    estado = models.CharField(max_length=40, choices=ESTADO_CHOICES, default=ESTADO_PENDIENTE)
+    oportunidades_detectadas = models.PositiveIntegerField(default=0)
+    oportunidades_importadas = models.PositiveIntegerField(default=0)
+    errores = models.PositiveIntegerField(default=0)
+    resumen = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "importacion radar texto"
+        verbose_name_plural = "importaciones radar texto"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return self.titulo
+
+
+class OportunidadRadar(models.Model):
+    DECISION_COMPRAR = "comprar"
+    DECISION_ANALIZAR = "analizar"
+    DECISION_ESPERAR = "esperar"
+    DECISION_DESCARTAR = "descartar"
+    DECISION_CHOICES = [
+        (DECISION_COMPRAR, "Comprar"),
+        (DECISION_ANALIZAR, "Analizar"),
+        (DECISION_ESPERAR, "Esperar"),
+        (DECISION_DESCARTAR, "Descartar"),
+    ]
+    NIVEL_ALTA = "alta"
+    NIVEL_MEDIA = "media"
+    NIVEL_BAJA = "baja"
+    NIVEL_DUDOSA = "dudosa"
+    NIVEL_CHOICES = [
+        (NIVEL_ALTA, "Alta"),
+        (NIVEL_MEDIA, "Media"),
+        (NIVEL_BAJA, "Baja"),
+        (NIVEL_DUDOSA, "Dudosa"),
+    ]
+    ORIGEN_CHATGPT_RADAR = "chatgpt_radar"
+    ORIGEN_MANUAL = "manual"
+    ORIGEN_TEXTO_EXTERNO = "texto_externo"
+    ORIGEN_OTRO = "otro"
+    ORIGEN_CHOICES = [
+        (ORIGEN_CHATGPT_RADAR, "ChatGPT Radar"),
+        (ORIGEN_MANUAL, "Manual"),
+        (ORIGEN_TEXTO_EXTERNO, "Texto externo"),
+        (ORIGEN_OTRO, "Otro"),
+    ]
+    ESTADO_DETECTADA = "detectada"
+    ESTADO_IMPORTADA = "importada"
+    ESTADO_REVISADA = "revisada"
+    ESTADO_VINCULADA = "vinculada"
+    ESTADO_CANDIDATA = "candidata"
+    ESTADO_DESCARTADA = "descartada"
+    ESTADO_CHOICES = [
+        (ESTADO_DETECTADA, "Detectada"),
+        (ESTADO_IMPORTADA, "Importada"),
+        (ESTADO_REVISADA, "Revisada"),
+        (ESTADO_VINCULADA, "Vinculada"),
+        (ESTADO_CANDIDATA, "Candidata"),
+        (ESTADO_DESCARTADA, "Descartada"),
+    ]
+
+    importacion = models.ForeignKey(ImportacionRadarTexto, on_delete=models.SET_NULL, null=True, blank=True, related_name="oportunidades")
+    titulo = models.CharField(max_length=250)
+    tienda = models.CharField(max_length=150, blank=True, null=True)
+    producto_nombre = models.CharField(max_length=250)
+    marca = models.CharField(max_length=150, blank=True, null=True)
+    modelo = models.CharField(max_length=150, blank=True, null=True)
+    categoria_texto = models.CharField(max_length=150, blank=True, null=True)
+    rubro = models.CharField(max_length=150, blank=True, null=True)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="oportunidades_radar")
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="oportunidades_radar")
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="oportunidades_radar")
+    candidato_compra = models.ForeignKey(CandidatoCompra, on_delete=models.SET_NULL, null=True, blank=True, related_name="oportunidades_radar")
+    precio_actual = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    precio_comparable_minimo = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    precio_comparable_maximo = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    precio_historico_referencia = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    descuento_real_pct_estimado = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    descuento_texto = models.CharField(max_length=200, blank=True, null=True)
+    precio_lista = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    precio_transferencia_contado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    precio_tarjeta_cuotas = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    cuotas_texto = models.CharField(max_length=200, blank=True, null=True)
+    comparable_principal_tienda = models.CharField(max_length=150, blank=True, null=True)
+    comparable_principal_precio = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    comparables_texto = models.TextField(blank=True, null=True)
+    envio_texto = models.CharField(max_length=250, blank=True, null=True)
+    stock_texto = models.CharField(max_length=250, blank=True, null=True)
+    vendedor_texto = models.CharField(max_length=250, blank=True, null=True)
+    ubicacion_texto = models.CharField(max_length=250, blank=True, null=True)
+    motivo_conveniencia = models.TextField(blank=True, null=True)
+    chequeo_antimarketing = models.TextField(blank=True, null=True)
+    riesgo_texto = models.TextField(blank=True, null=True)
+    decision_sugerida = models.CharField(max_length=20, choices=DECISION_CHOICES, default=DECISION_ANALIZAR)
+    score_radar = models.PositiveIntegerField(default=0)
+    nivel_oportunidad = models.CharField(max_length=20, choices=NIVEL_CHOICES, default=NIVEL_DUDOSA)
+    requiere_revision = models.BooleanField(default=True)
+    origen = models.CharField(max_length=30, choices=ORIGEN_CHOICES, default=ORIGEN_CHATGPT_RADAR)
+    texto_original = models.TextField()
+    texto_parseado = models.TextField(blank=True, null=True)
+    url_oferta = models.URLField(blank=True, null=True)
+    url_comparable = models.URLField(blank=True, null=True)
+    fecha_detectada = models.DateTimeField(auto_now_add=True)
+    fecha_oferta_texto = models.CharField(max_length=100, blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_IMPORTADA)
+    apta_dataset = models.BooleanField(default=True)
+    excluir_ml = models.BooleanField(default=False)
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "oportunidad radar"
+        verbose_name_plural = "oportunidades radar"
+        ordering = ["-fecha_detectada", "-score_radar"]
+
+    def __str__(self):
+        return self.titulo
 
 
 class PrecioFuente(models.Model):

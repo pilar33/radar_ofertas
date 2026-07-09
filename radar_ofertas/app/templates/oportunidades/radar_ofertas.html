@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Radar de ofertas reales{% endblock %}
+{% block proceso %}Analisis comercial -> Radar inteligente -> Oportunidades{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div><h1 class="h3">Radar de ofertas reales</h1><p class="text-muted">Oportunidades importadas desde texto pegado.</p></div>
+  <div><a class="btn btn-primary" href="{% url 'oportunidades:radar_importar_texto' %}">Importar Radar desde texto</a><a class="btn btn-outline-primary" href="{% url 'oportunidades:radar_dashboard' %}">Dashboard Radar</a></div>
+</div>
+<form class="row g-2 mb-3">
+  <div class="col-md-2"><input class="form-control" name="tienda" value="{{ request.GET.tienda }}" placeholder="Tienda"></div>
+  <div class="col-md-2"><select class="form-select" name="nivel"><option value="">Nivel</option>{% for valor, label in niveles %}<option value="{{ valor }}" {% if request.GET.nivel == valor %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="decision"><option value="">Decision</option>{% for valor, label in decisiones %}<option value="{{ valor }}" {% if request.GET.decision == valor %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="estado"><option value="">Estado</option>{% for valor, label in estados %}<option value="{{ valor }}" {% if request.GET.estado == valor %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-1"><input class="form-control" name="score_min" value="{{ request.GET.score_min }}" placeholder="Score"></div>
+  <div class="col-md-1"><input class="form-control" name="descuento_min" value="{{ request.GET.descuento_min }}" placeholder="%"></div>
+  <div class="col-md-2"><button class="btn btn-primary w-100">Filtrar</button></div>
+</form>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Fecha</th><th>Tienda</th><th>Producto</th><th>Precio actual</th><th>Comparable</th><th>Descuento</th><th>Score</th><th>Nivel</th><th>Decision</th><th>Estado</th><th></th></tr></thead>
+    <tbody>{% for oportunidad in oportunidades %}<tr>
+      <td>{{ oportunidad.fecha_detectada|date:"d/m/Y H:i" }}</td><td>{{ oportunidad.tienda|default:"-" }}</td><td>{{ oportunidad.producto_nombre }}</td><td>{{ oportunidad.precio_actual|default:"-" }}</td><td>{{ oportunidad.precio_comparable_minimo|default:"-" }}</td><td>{{ oportunidad.descuento_real_pct_estimado|default:oportunidad.descuento_texto|default:"-" }}</td><td><span class="badge text-bg-info">{{ oportunidad.score_radar }}</span></td><td>{{ oportunidad.get_nivel_oportunidad_display }}</td><td>{{ oportunidad.get_decision_sugerida_display }}</td><td>{{ oportunidad.get_estado_display }}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'oportunidades:radar_oferta_detalle' oportunidad.id %}">Ver detalle</a></td>
+    </tr>{% empty %}<tr><td colspan="11">Sin oportunidades Radar.</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+<a class="btn btn-outline-secondary mt-3" href="?{{ request.GET.urlencode }}&exportar=1">Exportar CSV</a>
+{% endblock %}

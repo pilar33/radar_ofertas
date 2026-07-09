@@ -10,7 +10,9 @@ from .models import (
     ConectorFuente,
     ConfiguracionExtractorWeb,
     FuenteWeb,
+    ImportacionRadarTexto,
     Oportunidad,
+    OportunidadRadar,
     PoliticaExtraccionFuente,
     PrecioFuente,
     ProductoFuente,
@@ -31,6 +33,49 @@ class CandidatoCompraForm(forms.ModelForm):
             "prioridad": forms.Select(attrs={"class": "form-select"}),
             "motivo_candidato": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class RadarTextoImportForm(forms.Form):
+    texto_original = forms.CharField(
+        label="Pega aqui el texto completo del Radar de ChatGPT",
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 14}),
+    )
+    origen = forms.ChoiceField(
+        choices=ImportacionRadarTexto.ORIGEN_CHOICES,
+        initial=ImportacionRadarTexto.ORIGEN_CHATGPT_RADAR,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+
+class OportunidadRadarForm(forms.ModelForm):
+    class Meta:
+        model = OportunidadRadar
+        fields = [
+            "tienda",
+            "producto_nombre",
+            "precio_actual",
+            "precio_comparable_minimo",
+            "descuento_real_pct_estimado",
+            "motivo_conveniencia",
+            "url_oferta",
+            "decision_sugerida",
+            "observaciones",
+            "requiere_revision",
+            "apta_dataset",
+        ]
+        widgets = {
+            "tienda": forms.TextInput(attrs={"class": "form-control"}),
+            "producto_nombre": forms.TextInput(attrs={"class": "form-control"}),
+            "precio_actual": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "precio_comparable_minimo": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "descuento_real_pct_estimado": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+            "motivo_conveniencia": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "url_oferta": forms.URLInput(attrs={"class": "form-control"}),
+            "decision_sugerida": forms.Select(attrs={"class": "form-select"}),
+            "observaciones": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "requiere_revision": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "apta_dataset": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
 

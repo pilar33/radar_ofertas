@@ -21,9 +21,11 @@ from .models import (
     FuenteProducto,
     FuenteWeb,
     ImportacionProductos,
+    ImportacionRadarTexto,
     LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
+    OportunidadRadar,
     OperacionCuraduria,
     PoliticaExtraccionFuente,
     PrecioProducto,
@@ -306,6 +308,24 @@ class ResultadoComercialProductoAdmin(admin.ModelAdmin):
     list_display = ("candidato", "cantidad_comprada_total", "cantidad_vendida_total", "ganancia_neta_total", "margen_real_pct", "estado_resultado")
     list_filter = ("estado_resultado",)
     search_fields = ("candidato__motivo_candidato", "producto_fuente__titulo_original")
+
+
+@admin.register(OportunidadRadar)
+class OportunidadRadarAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "fecha_detectada", "tienda", "producto_nombre", "precio_actual",
+        "precio_comparable_minimo", "descuento_real_pct_estimado", "score_radar",
+        "nivel_oportunidad", "decision_sugerida", "estado",
+    )
+    list_filter = ("tienda", "nivel_oportunidad", "decision_sugerida", "estado", "requiere_revision", "origen")
+    search_fields = ("producto_nombre", "tienda", "motivo_conveniencia", "texto_original")
+
+
+@admin.register(ImportacionRadarTexto)
+class ImportacionRadarTextoAdmin(admin.ModelAdmin):
+    list_display = ("id", "titulo", "origen", "estado", "oportunidades_detectadas", "oportunidades_importadas", "errores", "fecha_creacion")
+    list_filter = ("origen", "estado")
+    search_fields = ("titulo", "texto_original", "resumen")
 
 
 @admin.register(ComparacionPrecio)

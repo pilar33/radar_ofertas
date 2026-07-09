@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Importar Radar desde texto{% endblock %}
+{% block proceso %}Analisis comercial -> Radar inteligente -> Importar texto{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card card-body">
+      <h1 class="h3">Importar Radar desde texto</h1>
+      <p class="text-muted">Pega el bloque completo del Radar de ChatGPT u otra fuente textual. La app no accede a chats privados ni usa OpenAI API.</p>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">{{ form.origen.label_tag }} {{ form.origen }}</div>
+        <div class="mb-3">{{ form.texto_original.label_tag }} {{ form.texto_original }}</div>
+        <button class="btn btn-primary">Analizar texto</button>
+        <a class="btn btn-outline-secondary" href="{% url 'oportunidades:radar_ofertas' %}">Ver oportunidades Radar</a>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

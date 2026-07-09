@@ -4,11 +4,20 @@ import zipfile
 
 from django.db.models import Q
 
-from oportunidades.models import LoteCaptura, PrecioFuente, ProductoFuente, ResultadoExtraccionWeb, SugerenciaMatchingProducto
+from oportunidades.models import LoteCaptura, OportunidadRadar, PrecioFuente, ProductoFuente, ResultadoExtraccionWeb, SugerenciaMatchingProducto
 
 
 def _ultimo_precio(producto_fuente):
     return producto_fuente.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+
+
+def _resultado_comercial(candidato):
+    if not candidato:
+        return None
+    try:
+        return candidato.resultado_comercial
+    except Exception:
+        return None
 
 
 def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_excluidos=False):
@@ -73,6 +82,7 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
             "precio_promedio_venta", "ingreso_total", "ganancia_neta_total", "margen_real_pct",
             "dias_hasta_primera_venta", "dias_hasta_venta_total", "estado_resultado_comercial",
             "aprendizaje_comercial", "resultado_positivo",
+            "tiene_oportunidad_radar", "mejor_score_radar", "ultima_oportunidad_radar_fecha", "descuento_radar_pct",
         ]
     )
     productos = ProductoFuente.objects.select_related("producto_canonico__categoria", "fuente_web", "lote_origen").prefetch_related(
@@ -90,7 +100,9 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
         cantidad_fuentes = canonico.apariciones.values("fuente_web_id").distinct().count() if canonico else 0
         senal = producto.senales_demanda.order_by("-fecha_relevamiento", "-id").first()
         candidato = producto.candidaturas_compra.order_by("-fecha_deteccion", "-id").first()
-        resultado = getattr(candidato, "resultado_comercial", None) if candidato else None
+        resultado = _resultado_comercial(candidato)
+        oportunidad_radar = producto.oportunidades_radar.order_by("-score_radar", "-fecha_detectada").first()
+        ultima_radar = producto.oportunidades_radar.order_by("-fecha_detectada").first()
         publicaciones = []
         if candidato:
             publicaciones = list(candidato.compras.values_list("publicaciones__canal", flat=True).exclude(publicaciones__canal__isnull=True).distinct())
@@ -165,8 +177,51 @@ def exportar_dataset_productos_csv(output=None, delimiter=",", incluir_lotes_exc
                 resultado.margen_real_pct if resultado else 0, resultado.dias_hasta_primera_venta if resultado else "",
                 resultado.dias_hasta_venta_total if resultado else "", resultado.estado_resultado if resultado else "",
                 resultado.aprendizaje if resultado else "", resultado_positivo,
+                bool(oportunidad_radar), oportunidad_radar.score_radar if oportunidad_radar else "",
+                ultima_radar.fecha_detectada.isoformat() if ultima_radar else "",
+                oportunidad_radar.descuento_real_pct_estimado if oportunidad_radar else "",
             ]
         )
+    return buffer
+
+
+def exportar_radar_oportunidades_csv(output=None, delimiter=","):
+    buffer = output or io.StringIO()
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow([
+        "id", "fecha_detectada", "tienda", "producto_nombre", "precio_actual",
+        "precio_comparable_minimo", "descuento_real_pct_estimado", "score_radar",
+        "nivel_oportunidad", "decision_sugerida", "estado", "requiere_revision",
+        "candidato_compra_id", "fue_comprado", "fue_vendido", "resultado_positivo",
+        "texto_original_resumido",
+    ])
+    oportunidades = OportunidadRadar.objects.select_related("candidato_compra__resultado_comercial").order_by("-fecha_detectada")
+    for oportunidad in oportunidades:
+        resultado = _resultado_comercial(oportunidad.candidato_compra)
+        resultado_positivo = ""
+        if resultado and resultado.estado_resultado == resultado.ESTADO_VENDIDO_CON_GANANCIA and resultado.margen_real_pct > 0:
+            resultado_positivo = True
+        elif resultado and resultado.estado_resultado in {resultado.ESTADO_VENDIDO_CON_PERDIDA, resultado.ESTADO_VENDIDO_SIN_GANANCIA, resultado.ESTADO_DESCARTADO}:
+            resultado_positivo = False
+        writer.writerow([
+            oportunidad.pk,
+            oportunidad.fecha_detectada.isoformat(),
+            oportunidad.tienda or "",
+            oportunidad.producto_nombre,
+            oportunidad.precio_actual or "",
+            oportunidad.precio_comparable_minimo or "",
+            oportunidad.descuento_real_pct_estimado or "",
+            oportunidad.score_radar,
+            oportunidad.nivel_oportunidad,
+            oportunidad.decision_sugerida,
+            oportunidad.estado,
+            oportunidad.requiere_revision,
+            oportunidad.candidato_compra_id or "",
+            bool(resultado and resultado.cantidad_comprada_total),
+            bool(resultado and resultado.cantidad_vendida_total),
+            resultado_positivo,
+            (oportunidad.texto_original or "")[:500],
+        ])
     return buffer
 
 
@@ -257,8 +312,10 @@ def exportar_dataset_completo_zip():
         productos = exportar_dataset_productos_csv().getvalue()
         precios = exportar_historial_precios_csv().getvalue()
         previews = exportar_resultados_preview_csv().getvalue()
+        radar = exportar_radar_oportunidades_csv().getvalue()
         archivo_zip.writestr("productos_dataset.csv", productos)
         archivo_zip.writestr("historial_precios.csv", precios)
         archivo_zip.writestr("resultados_preview.csv", previews)
+        archivo_zip.writestr("radar_oportunidades.csv", radar)
     buffer.seek(0)
     return buffer

@@ -286,3 +286,24 @@ docker compose exec web python manage.py reparar_urls_productos_desde_preview --
 ```
 
 El comando solo reemplaza URL tecnica cuando encuentra una URL real ya capturada en preview o laboratorio.
+
+# Radar inteligente desde texto de ChatGPT
+
+El Radar inteligente permite guardar oportunidades detectadas en texto pegado, por ejemplo desde una tarea de ChatGPT llamada Radar de Ofertas u otra fuente textual. La app no accede automaticamente a chats privados, no lee conversaciones de ChatGPT y no usa OpenAI API en esta etapa: la usuaria copia el bloque completo y lo pega manualmente en la app.
+
+Flujo:
+
+1. Abrir Radar de ChatGPT.
+2. Copiar el bloque completo de oportunidad.
+3. Ir a `/radar/importar-texto/`.
+4. Pegar el texto.
+5. Presionar **Analizar texto**.
+6. Revisar el preview estructurado.
+7. Importar todas las oportunidades validas o seleccionar cuales importar.
+8. Abrir `/radar/ofertas/` para revisar oportunidades detectadas.
+9. Marcar candidato de compra si corresponde.
+10. Registrar compra, publicacion y venta luego si se concreta.
+
+El parser intenta extraer tienda, producto, precio actual, comparable, descuento, motivo de conveniencia, chequeo anti-marketing, envio, stock, vendedor y URLs. Si un dato no aparece, queda vacio y la oportunidad se marca para revision. Siempre se conserva el texto original.
+
+Las oportunidades se guardan en SQL Server local como `OportunidadRadar`, pueden vincularse a `ProductoFuente` o `ProductoCanonico`, pueden generar `CandidatoCompra`, y se exportan en `radar_oportunidades.csv` dentro del dataset completo. Una integracion automatica futura con OpenAI API o busqueda web queda pendiente y debera implementarse como etapa separada con permisos explicitos.

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Radar{% endblock %}
+{% block proceso %}Analisis comercial -> Radar inteligente -> Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3"><h1 class="h3">Dashboard Radar</h1><a class="btn btn-primary" href="{% url 'oportunidades:radar_importar_texto' %}">Importar Radar desde texto</a></div>
+<div class="row g-3 mb-3">
+  <div class="col-md-2"><div class="card card-body"><small>Hoy</small><strong>{{ detectadas_hoy }}</strong></div></div>
+  <div class="col-md-2"><div class="card card-body"><small>Alta prioridad</small><strong>{{ alta_prioridad }}</strong></div></div>
+  <div class="col-md-2"><div class="card card-body"><small>Para analizar</small><strong>{{ para_analizar }}</strong></div></div>
+  <div class="col-md-2"><div class="card card-body"><small>Descartadas</small><strong>{{ descartadas }}</strong></div></div>
+  <div class="col-md-2"><div class="card card-body"><small>Candidatos</small><strong>{{ candidatos_generados }}</strong></div></div>
+  <div class="col-md-2"><div class="card card-body"><small>Mayor descuento</small><strong>{{ mayor_descuento }}</strong></div></div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card card-body"><h2 class="h5">Top oportunidades reales</h2>{% for oportunidad in top_oportunidades %}<p class="mb-1"><a href="{% url 'oportunidades:radar_oferta_detalle' oportunidad.id %}">{{ oportunidad.producto_nombre }}</a> - {{ oportunidad.score_radar }}</p>{% empty %}<p>Sin datos.</p>{% endfor %}</div></div>
+  <div class="col-lg-6"><div class="card card-body"><h2 class="h5">Pendientes de revision</h2>{% for oportunidad in pendientes_revision %}<p class="mb-1"><a href="{% url 'oportunidades:radar_oferta_detalle' oportunidad.id %}">{{ oportunidad.producto_nombre }}</a></p>{% empty %}<p>Sin pendientes.</p>{% endfor %}</div></div>
+</div>
+{% endblock %}

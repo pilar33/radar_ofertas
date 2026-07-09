@@ -63,6 +63,9 @@
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">5. Análisis comercial</a>
             <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'oportunidades:radar_ofertas' %}">Radar de ofertas reales</a></li>
+              <li><a class="dropdown-item" href="{% url 'oportunidades:radar_importar_texto' %}">Importar Radar desde texto</a></li>
+              <li><a class="dropdown-item" href="{% url 'oportunidades:radar_dashboard' %}">Dashboard Radar</a></li>
               <li><a class="dropdown-item" href="{% url 'oportunidades:ranking_oportunidades' %}">Ranking comercial</a></li>
               <li><a class="dropdown-item" href="{% url 'oportunidades:demanda_dashboard' %}">Demanda estimada</a></li>
               <li><a class="dropdown-item" href="{% url 'oportunidades:candidatos_compra' %}">Candidatos de compra</a></li>

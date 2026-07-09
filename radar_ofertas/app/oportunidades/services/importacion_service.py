@@ -17,6 +17,7 @@ from oportunidades.models import (
     ProductoFuente,
 )
 from oportunidades.services.comparacion_service import calcular_comparacion_producto
+from oportunidades.services.categorias_service import clasificar_categoria_producto
 from oportunidades.services.evaluacion_multifuente_service import evaluar_producto_multifuente
 from oportunidades.services.normalizacion_service import normalizar_texto_producto
 from oportunidades.services.lotes_captura_service import (
@@ -32,6 +33,9 @@ COLUMNAS_ALIASES = {
     "codigo_externo": ["codigo", "sku", "id", "codigo_externo"],
     "url_producto": ["url", "link", "enlace", "url_producto"],
     "categoria": ["categoria", "category", "rubro"],
+    "categoria_original": ["categoria_original", "categoria_tienda", "categoria_fuente"],
+    "subcategoria_original": ["subcategoria", "subcategoria_original", "subcategory"],
+    "etiquetas": ["etiquetas", "tags", "palabras_clave"],
     "marca": ["marca", "brand"],
     "descripcion": ["descripcion", "description", "detalle"],
     "imagen_url": ["imagen", "image", "thumbnail", "foto", "imagen_url"],
@@ -150,11 +154,19 @@ def obtener_o_crear_categoria_desde_texto(texto_categoria, categoria_default=Non
             return categoria
     if categoria_default:
         return categoria_default
-    categoria, _ = CategoriaInteres.objects.get_or_create(
-        nombre="Sin clasificar",
-        defaults={"palabra_clave": "sin clasificar", "activa": True, "prioridad": 99},
+    return clasificar_categoria_producto(categoria_original=texto)
+
+
+def clasificar_categoria_desde_row(row, fuente_web=None, categoria_default=None):
+    categoria_original = _valor_texto(row.get("categoria_original")) or _valor_texto(row.get("categoria"))
+    return clasificar_categoria_producto(
+        titulo=_valor_texto(row.get("titulo")),
+        categoria_original=categoria_original,
+        descripcion=_valor_texto(row.get("descripcion")),
+        marca=_valor_texto(row.get("marca")),
+        fuente=fuente_web,
+        categoria_default=categoria_default,
     )
-    return categoria
 
 
 def obtener_o_crear_producto_canonico(row, categoria):
@@ -224,6 +236,9 @@ def crear_o_actualizar_producto_fuente(row, fuente_web, categoria, producto_cano
     datos = {
         "producto_canonico": producto_canonico,
         "fuente_web": fuente_web,
+        "categoria_original": _valor_texto(row.get("categoria_original")) or _valor_texto(row.get("categoria")) or None,
+        "subcategoria_original": _valor_texto(row.get("subcategoria_original")) or None,
+        "etiquetas": _valor_texto(row.get("etiquetas")) or None,
         "codigo_externo": _valor_texto(row.get("codigo_externo")) or None,
         "titulo_original": _valor_texto(row.get("titulo")),
         "url_producto": _valor_texto(row.get("url_producto")) or fuente_web.url_base,
@@ -362,7 +377,7 @@ def procesar_importacion(importacion, opciones=None):
         try:
             datos["origen_dato"] = opciones.get("origen_dato", PrecioFuente.ORIGEN_CSV_EXCEL)
             datos["lote_captura"] = lote
-            categoria = obtener_o_crear_categoria_desde_texto(datos.get("categoria"), opciones.get("categoria_default"))
+            categoria = clasificar_categoria_desde_row(datos, importacion.fuente_web, opciones.get("categoria_default"))
             producto_canonico = None
             if opciones.get("crear_producto_canonico", True):
                 producto_canonico, _ = obtener_o_crear_producto_canonico(datos, categoria)
@@ -432,6 +447,7 @@ def crear_producto_desde_carga_url(datos):
         "precio": datos["precio"],
         "url_producto": datos["url_producto"],
         "categoria": datos["categoria"].nombre,
+        "categoria_original": datos["categoria"].nombre,
         "marca": datos.get("marca"),
         "descripcion": datos.get("descripcion"),
         "imagen_url": datos.get("imagen_url"),

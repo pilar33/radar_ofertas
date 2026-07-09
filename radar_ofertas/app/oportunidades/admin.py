@@ -74,9 +74,10 @@ class FuenteProductoAdmin(admin.ModelAdmin):
 
 @admin.register(CategoriaInteres)
 class CategoriaInteresAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "palabra_clave", "prioridad", "activa", "fecha_creacion")
-    list_filter = ("activa", "prioridad")
-    search_fields = ("nombre", "palabra_clave")
+    list_display = ("nombre", "slug", "categoria_padre", "palabra_clave", "prioridad", "activa", "fecha_creacion")
+    list_filter = ("activa", "prioridad", "categoria_padre")
+    search_fields = ("nombre", "slug", "palabra_clave", "palabras_clave", "marcas_clave")
+    prepopulated_fields = {"slug": ("nombre",)}
 
 
 @admin.register(Producto)
@@ -85,6 +86,7 @@ class ProductoAdmin(admin.ModelAdmin):
         "titulo",
         "codigo_externo",
         "fuente",
+        "categoria_original",
         "categoria",
         "vendedor",
         "cantidad_vendida",
@@ -92,7 +94,7 @@ class ProductoAdmin(admin.ModelAdmin):
         "fecha_alta",
     )
     list_filter = ("categoria", "fuente", "disponible", "afiliado_activo", "es_chico_liviano", "es_fragil")
-    search_fields = ("titulo", "vendedor", "marca", "codigo_externo")
+    search_fields = ("titulo", "vendedor", "marca", "codigo_externo", "categoria_original", "subcategoria_original", "etiquetas")
 
 
 @admin.register(PrecioProducto)
@@ -199,7 +201,10 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
     list_display = (
         "titulo_original",
         "fuente_web",
+        "categoria_original",
         "categoria_fuente",
+        "categoria_normalizada",
+        "precio_actual",
         "disponible",
         "condicion",
         "requiere_revision",
@@ -214,6 +219,7 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
     list_filter = (
         "fuente_web",
         "categoria_fuente",
+        "producto_canonico__categoria",
         "disponible",
         "condicion",
         "requiere_revision",
@@ -223,7 +229,19 @@ class ProductoFuenteAdmin(admin.ModelAdmin):
         "nivel_demanda_actual",
         "descartado_curaduria",
     )
-    search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada")
+    search_fields = ("titulo_original", "codigo_externo", "vendedor", "marca_detectada", "categoria_original", "subcategoria_original", "etiquetas")
+    autocomplete_fields = ("producto_canonico", "categoria_fuente")
+
+    def categoria_normalizada(self, obj):
+        if obj.producto_canonico_id:
+            return obj.producto_canonico.categoria
+        if obj.categoria_fuente_id:
+            return obj.categoria_fuente.categoria_normalizada
+        return None
+
+    def precio_actual(self, obj):
+        precio = obj.precios_fuente.order_by("-fecha_relevamiento", "-id").first()
+        return precio.precio_oportunidad if precio else None
 
 
 @admin.register(SenalDemandaProducto)

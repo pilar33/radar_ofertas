@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.text import slugify
 
 from oportunidades.services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
 
@@ -33,10 +34,22 @@ class FuenteProducto(models.Model):
 
 class CategoriaInteres(models.Model):
     nombre = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=120, blank=True, db_index=True)
     palabra_clave = models.CharField(max_length=150)
+    descripcion = models.TextField(blank=True, null=True)
     activa = models.BooleanField(default=True)
     prioridad = models.PositiveIntegerField(default=1)
+    categoria_padre = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="subcategorias",
+    )
+    palabras_clave = models.TextField(blank=True, null=True)
+    marcas_clave = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "categoria de interes"
@@ -45,6 +58,16 @@ class CategoriaInteres(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def save(self, *args, **kwargs):
+        if not self.slug and self.nombre:
+            self.slug = slugify(self.nombre)
+        if not self.palabra_clave and self.nombre:
+            self.palabra_clave = self.nombre.lower()
+        super().save(*args, **kwargs)
+
+
+CategoriaProducto = CategoriaInteres
 
 
 class Producto(models.Model):
@@ -65,6 +88,9 @@ class Producto(models.Model):
     url = models.URLField()
     marca = models.CharField(max_length=100, blank=True, null=True)
     categoria = models.ForeignKey(CategoriaInteres, on_delete=models.PROTECT)
+    categoria_original = models.CharField(max_length=255, blank=True, null=True)
+    subcategoria_original = models.CharField(max_length=255, blank=True, null=True)
+    etiquetas = models.TextField(blank=True, null=True)
     vendedor = models.CharField(max_length=150, blank=True, null=True)
     reputacion_vendedor = models.CharField(max_length=100, blank=True, null=True)
     condicion = models.CharField(max_length=50, choices=CONDICION_CHOICES)
@@ -299,6 +325,9 @@ class ProductoFuente(models.Model):
     )
     fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.PROTECT, related_name="productos_fuente")
     categoria_fuente = models.ForeignKey(CategoriaFuente, on_delete=models.SET_NULL, null=True, blank=True)
+    categoria_original = models.CharField(max_length=255, blank=True, null=True)
+    subcategoria_original = models.CharField(max_length=255, blank=True, null=True)
+    etiquetas = models.TextField(blank=True, null=True)
     codigo_externo = models.CharField(max_length=150, blank=True, null=True)
     titulo_original = models.CharField(max_length=255)
     url_producto = models.URLField()

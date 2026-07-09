@@ -188,6 +188,9 @@ class ProductoFuenteCuraduriaForm(forms.ModelForm):
         fields = [
             "titulo_original",
             "producto_canonico",
+            "categoria_original",
+            "subcategoria_original",
+            "etiquetas",
             "url_producto",
             "imagen_url",
             "marca_detectada",
@@ -206,6 +209,9 @@ class ProductoFuenteCuraduriaForm(forms.ModelForm):
         widgets = {
             "titulo_original": forms.TextInput(attrs={"class": "form-control"}),
             "producto_canonico": forms.Select(attrs={"class": "form-select"}),
+            "categoria_original": forms.TextInput(attrs={"class": "form-control"}),
+            "subcategoria_original": forms.TextInput(attrs={"class": "form-control"}),
+            "etiquetas": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "url_producto": forms.URLInput(attrs={"class": "form-control"}),
             "imagen_url": forms.URLInput(attrs={"class": "form-control"}),
             "marca_detectada": forms.TextInput(attrs={"class": "form-control"}),

@@ -29,9 +29,9 @@ from oportunidades.services.demanda_service import (
     extraer_senales_demanda_desde_texto,
 )
 from oportunidades.services.importacion_service import (
+    clasificar_categoria_desde_row,
     crear_o_actualizar_producto_fuente,
     crear_precio_fuente,
-    obtener_o_crear_categoria_desde_texto,
     obtener_o_crear_producto_canonico,
 )
 from oportunidades.services.dominios_service import url_pertenece_a_dominio
@@ -251,6 +251,7 @@ def _producto_desde_json(obj, url_base, config):
     return {
         "titulo": obj.get("name"),
         "precio_texto": str(offers.get("price") or ""),
+        "categoria_original": obj.get("category") or obj.get("productCategory"),
         "url_producto": normalizar_url_absoluta(url_base, obj.get("url"), config.dominio_permitido),
         "imagen_url": normalizar_url_absoluta(url_base, image, None) if image else None,
         "descripcion": obj.get("description"),
@@ -602,6 +603,15 @@ def extraer_titulo_producto(card):
     return ""
 
 
+def _categoria_original_desde_config(config):
+    categoria = getattr(config, "url_categoria", None)
+    if categoria:
+        return categoria
+    conector = getattr(config, "conector", None)
+    fuente = getattr(conector, "fuente_web", None) if conector else None
+    return getattr(fuente, "rubro_principal", None)
+
+
 def extraer_css_productos(html, url_base, config):
     soup = BeautifulSoup(html or "", "lxml")
     cards = soup.select(config.product_card_selector) if config.product_card_selector else [soup]
@@ -623,6 +633,7 @@ def extraer_css_productos(html, url_base, config):
                 {
                     "titulo": titulo,
                     "precio_texto": precio,
+                    "categoria_original": _categoria_original_desde_config(config),
                     "_precios_dom": datos_precios,
                     "texto_precios_detectado": texto_precios,
                     "url_producto": extraer_url_producto(card, url_base)
@@ -635,6 +646,19 @@ def extraer_css_productos(html, url_base, config):
             )
         )
     return productos
+
+
+def _categoria_original_desde_resultado(resultado, conector):
+    try:
+        data = json.loads(resultado.raw_data or "{}")
+    except json.JSONDecodeError:
+        data = {}
+    return (
+        data.get("categoria_original")
+        or data.get("category")
+        or getattr(conector.configuracion_web, "url_categoria", None)
+        or getattr(conector.fuente_web, "rubro_principal", None)
+    )
 
 
 def aplicar_preset_tiendanube_si_corresponde(html, config):
@@ -725,7 +749,7 @@ def _url_producto_preview(fuente, resultado):
 
 def procesar_resultado_a_producto(resultado, conector):
     fuente = conector.fuente_web
-    categoria = obtener_o_crear_categoria_desde_texto(None, None)
+    categoria_original = _categoria_original_desde_resultado(resultado, conector)
     codigo_preview = None
     if not resultado.url_producto:
         codigo_base = f"{fuente.pk}|{_sin_acentos(resultado.titulo)}|{resultado.precio_decimal}|{resultado.fuente_url or ''}"
@@ -743,11 +767,13 @@ def procesar_resultado_a_producto(resultado, conector):
         "url_producto": _url_producto_preview(fuente, resultado),
         "imagen_url": resultado.imagen_url,
         "descripcion": resultado.descripcion,
+        "categoria_original": categoria_original,
         "condicion": Producto.CONDICION_DESCONOCIDO,
         "moneda": fuente.moneda_principal,
         "origen_dato": PrecioFuente.ORIGEN_SCRAPING,
         "lote_captura": resultado.lote_captura,
     }
+    categoria = clasificar_categoria_desde_row(row, fuente)
     canonico, _ = obtener_o_crear_producto_canonico(row, categoria)
     producto_fuente, _, _ = crear_o_actualizar_producto_fuente(row, fuente, categoria, canonico, actualizar=True)
     precio, _ = crear_precio_fuente(producto_fuente, row)

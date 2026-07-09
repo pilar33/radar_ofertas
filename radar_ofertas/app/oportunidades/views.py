@@ -72,6 +72,7 @@ from .models import (
 from .serializers import (
     CargaProductoURLSerializer,
     AuditoriaFuenteWebSerializer,
+    CategoriaInteresSerializer,
     ConectorFuenteSerializer,
     ConfiguracionExtractorWebSerializer,
     ContenidoSugeridoSerializer,
@@ -2575,6 +2576,16 @@ class OportunidadListAPIView(generics.ListAPIView):
     queryset = Oportunidad.objects.select_related("producto", "producto__categoria", "producto__fuente")
     serializer_class = OportunidadSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        categoria = self.request.query_params.get("categoria")
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(producto__categoria_id=categoria)
+            else:
+                queryset = queryset.filter(Q(producto__categoria__slug__iexact=categoria) | Q(producto__categoria__nombre__iexact=categoria))
+        return queryset
+
 
 class OportunidadDetailAPIView(generics.RetrieveAPIView):
     queryset = Oportunidad.objects.select_related("producto", "producto__categoria", "producto__fuente").prefetch_related(
@@ -2673,14 +2684,50 @@ class DecisionTecnicaListAPIView(generics.ListAPIView):
     serializer_class = DecisionTecnicaSerializer
 
 
+class CategoriaInteresListAPIView(generics.ListAPIView):
+    queryset = CategoriaInteres.objects.filter(activa=True).select_related("categoria_padre").order_by("prioridad", "nombre")
+    serializer_class = CategoriaInteresSerializer
+
+
 class ProductoCanonicoListAPIView(generics.ListAPIView):
     queryset = ProductoCanonico.objects.select_related("categoria").all()
     serializer_class = ProductoCanonicoSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        categoria = self.request.query_params.get("categoria")
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(categoria_id=categoria)
+            else:
+                queryset = queryset.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__iexact=categoria))
+        return queryset
+
 
 class ProductoFuenteListAPIView(generics.ListAPIView):
-    queryset = ProductoFuente.objects.select_related("fuente_web", "categoria_fuente", "producto_canonico").all()
+    queryset = ProductoFuente.objects.select_related("fuente_web", "categoria_fuente", "categoria_fuente__categoria_normalizada", "producto_canonico", "producto_canonico__categoria").all()
     serializer_class = ProductoFuenteSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        categoria = self.request.query_params.get("categoria")
+        categoria_original = self.request.query_params.get("categoria_original")
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(
+                    Q(producto_canonico__categoria_id=categoria)
+                    | Q(categoria_fuente__categoria_normalizada_id=categoria)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(producto_canonico__categoria__slug__iexact=categoria)
+                    | Q(producto_canonico__categoria__nombre__iexact=categoria)
+                    | Q(categoria_fuente__categoria_normalizada__slug__iexact=categoria)
+                    | Q(categoria_fuente__categoria_normalizada__nombre__iexact=categoria)
+                )
+        if categoria_original:
+            queryset = queryset.filter(categoria_original__icontains=categoria_original)
+        return queryset.distinct()
 
 
 class ConectorFuenteListAPIView(generics.ListAPIView):
@@ -3072,6 +3119,16 @@ class ProductoMultifuenteListAPIView(generics.ListAPIView):
         "evaluaciones_multifuente",
     )
     serializer_class = ProductoMultifuenteSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        categoria = self.request.query_params.get("categoria")
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(categoria_id=categoria)
+            else:
+                queryset = queryset.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__iexact=categoria))
+        return queryset
 
 
 class ProductoMultifuenteDetailAPIView(generics.RetrieveAPIView):

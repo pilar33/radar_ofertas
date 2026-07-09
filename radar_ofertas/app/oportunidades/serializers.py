@@ -205,10 +205,19 @@ class ProductoFuenteSerializer(serializers.ModelSerializer):
     fuente_web = FuenteWebSerializer(read_only=True)
     categoria_fuente = CategoriaFuenteSerializer(read_only=True)
     producto_canonico = ProductoCanonicoSerializer(read_only=True)
+    categoria_normalizada = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductoFuente
         fields = "__all__"
+
+    def get_categoria_normalizada(self, obj):
+        categoria = None
+        if obj.producto_canonico_id:
+            categoria = obj.producto_canonico.categoria
+        elif obj.categoria_fuente_id:
+            categoria = obj.categoria_fuente.categoria_normalizada
+        return CategoriaInteresSerializer(categoria).data if categoria else None
 
 
 class PrecioFuenteSerializer(serializers.ModelSerializer):

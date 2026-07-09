@@ -158,6 +158,7 @@ urlpatterns = [
         name="recalcular_evaluacion_multifuente",
     ),
     path("api/oportunidades/", views.OportunidadListAPIView.as_view(), name="api_lista"),
+    path("api/ofertas/", views.OportunidadListAPIView.as_view(), name="api_ofertas"),
     path("api/oportunidades/<int:pk>/", views.OportunidadDetailAPIView.as_view(), name="api_detalle"),
     path("api/oportunidades/<int:pk>/estado/", views.OportunidadEstadoAPIView.as_view(), name="api_estado"),
     path("api/oportunidades/<int:pk>/recalcular/", views.OportunidadRecalcularAPIView.as_view(), name="api_recalcular"),
@@ -176,8 +177,10 @@ urlpatterns = [
     path("api/fuentes/<int:pk>/preview/", views.FuentePreviewAPIView.as_view(), name="api_fuente_preview"),
     path("api/fuentes/<int:pk>/laboratorio/analizar/", views.FuenteLaboratorioAnalizarAPIView.as_view(), name="api_fuente_laboratorio_analizar"),
     path("api/decisiones-tecnicas/", views.DecisionTecnicaListAPIView.as_view(), name="api_decisiones_tecnicas"),
+    path("api/categorias/", views.CategoriaInteresListAPIView.as_view(), name="api_categorias"),
     path("api/productos-canonicos/", views.ProductoCanonicoListAPIView.as_view(), name="api_productos_canonicos"),
     path("api/productos-fuente/", views.ProductoFuenteListAPIView.as_view(), name="api_productos_fuente"),
+    path("api/productos/", views.ProductoFuenteListAPIView.as_view(), name="api_productos"),
     path("api/importaciones/", views.ImportacionProductosListCreateAPIView.as_view(), name="api_importaciones"),
     path("api/importaciones/<int:pk>/", views.ImportacionProductosDetailAPIView.as_view(), name="api_importacion_detalle"),
     path(

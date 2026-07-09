@@ -459,7 +459,7 @@ def guardar_laboratorio_como_extractor(sesion, fuente_web=None, nombre_fuente=""
             "url_selector": sugeridos.get("url_selector") or None,
             "image_selector": sugeridos.get("image_selector") or None,
             "max_paginas": 1,
-            "max_productos": 10,
+            "max_productos": 100,
             "delay_segundos": Decimal("2.00"),
             "habilitado": habilitado,
             "solo_preview": True,

@@ -632,8 +632,8 @@ class ConfiguracionExtractorWebForm(forms.ModelForm):
         delay = cleaned_data.get("delay_segundos")
         if max_paginas > 3:
             raise forms.ValidationError("max_paginas no puede superar 3 en esta etapa.")
-        if max_productos > 50:
-            raise forms.ValidationError("max_productos no puede superar 50 en esta etapa.")
+        if max_productos > 100:
+            raise forms.ValidationError("max_productos no puede superar 100 en esta etapa.")
         if delay is not None and delay < Decimal("1.50"):
             raise forms.ValidationError("delay_segundos debe ser al menos 1.5.")
         for field in ["pagina_prueba_url", "url_inicio", "url_categoria"]:
@@ -673,7 +673,7 @@ class LaboratorioMapeoForm(forms.Form):
     )
     rubro = forms.CharField(required=False, max_length=150, widget=forms.TextInput(attrs={"class": "form-control"}))
     modo = forms.ChoiceField(choices=MODO_CHOICES, initial=MODO_AUTO, widget=forms.Select(attrs={"class": "form-select"}))
-    limite = forms.IntegerField(initial=10, min_value=1, max_value=30, widget=forms.NumberInput(attrs={"class": "form-control"}))
+    limite = forms.IntegerField(initial=10, min_value=1, max_value=100, widget=forms.NumberInput(attrs={"class": "form-control"}))
     solo_preview = forms.BooleanField(
         required=False,
         initial=True,

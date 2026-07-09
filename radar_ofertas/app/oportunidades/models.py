@@ -1287,8 +1287,8 @@ class ConfiguracionExtractorWeb(models.Model):
         errores = {}
         if self.max_paginas and self.max_paginas > 3:
             errores["max_paginas"] = "En esta etapa el extractor no puede superar 3 paginas."
-        if self.max_productos and self.max_productos > 50:
-            errores["max_productos"] = "En esta etapa el extractor no puede superar 50 productos."
+        if self.max_productos and self.max_productos > 100:
+            errores["max_productos"] = "En esta etapa el extractor no puede superar 100 productos."
         if self.delay_segundos is not None and self.delay_segundos < Decimal("1.50"):
             errores["delay_segundos"] = "El delay minimo permitido es 1.5 segundos."
         if self.dominio_permitido:

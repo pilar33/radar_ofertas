@@ -34,7 +34,7 @@ Si falta una condicion, la ejecucion se bloquea y registra un mensaje claro.
 ## Limites de esta etapa
 
 - `max_paginas <= 3`
-- `max_productos <= 50`
+- `max_productos <= 100`
 - `delay_segundos >= 1.5`
 - respuesta HTML limitada a 1 MB
 - sin reintentos agresivos
@@ -91,7 +91,7 @@ docker compose exec web python manage.py ejecutar_extractor_web --conector-id ID
 - `habilitado=False`
 - `solo_preview=True`
 - `max_paginas=1`
-- `max_productos=10`
+- `max_productos=100`
 
 Antes de habilitar el extractor se deben revisar manualmente terminos, robots.txt y selectores reales.
 

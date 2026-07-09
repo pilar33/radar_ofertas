@@ -41,7 +41,7 @@ def habilitar_extractor_preview_controlado(extractor):
     extractor.habilitado = True
     extractor.solo_preview = True
     extractor.max_paginas = 1
-    extractor.max_productos = 10
+    extractor.max_productos = 100
     extractor.delay_segundos = Decimal("2.00")
     extractor.save(update_fields=["habilitado", "solo_preview", "max_paginas", "max_productos", "delay_segundos"])
     return extractor
@@ -96,7 +96,7 @@ def reparar_extractor_gangahome():
     extractor.habilitado = True
     extractor.solo_preview = True
     extractor.max_paginas = 1
-    extractor.max_productos = 10
+    extractor.max_productos = 100
     extractor.delay_segundos = Decimal("2.00")
     extractor.save(
         update_fields=[

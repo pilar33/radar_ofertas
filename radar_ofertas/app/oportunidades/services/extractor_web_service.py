@@ -90,7 +90,7 @@ def validar_ejecucion_extractor(conector):
         return {"valido": False, "mensaje": "No existe ConfiguracionExtractorWeb.", "nivel": "bloqueado"}
     if not config.habilitado:
         return {"valido": False, "mensaje": "La configuracion del extractor no esta habilitada.", "nivel": "bloqueado"}
-    if config.max_paginas > 3 or config.max_productos > 50 or config.delay_segundos < Decimal("1.50"):
+    if config.max_paginas > 3 or config.max_productos > 100 or config.delay_segundos < Decimal("1.50"):
         return {"valido": False, "mensaje": "Limites de paginas/productos/delay fuera de rango.", "nivel": "bloqueado"}
     for url in [config.pagina_prueba_url, config.url_inicio, config.url_categoria]:
         if url:
@@ -791,7 +791,7 @@ def extraer_productos_preview(conector, procesar=False, max_productos=None, max_
     if procesar and config.solo_preview:
         finalizar_lote_captura(lote, estado="error")
         return finalizar_ejecucion_conector(ejecucion, {"estado": EjecucionConector.ESTADO_ERROR, "errores": 1, "mensaje": "solo_preview=True bloquea procesamiento."})
-    limite_productos = min(max_productos or config.max_productos, config.max_productos, 50)
+    limite_productos = min(max_productos or config.max_productos, config.max_productos, 100)
     paginas = min(max_paginas or config.max_paginas, config.max_paginas, 3)
     urls = [config.url_categoria or config.url_inicio][:paginas]
     detectados = procesados = errores = 0

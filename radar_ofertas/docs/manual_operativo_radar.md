@@ -111,7 +111,7 @@ La accion configura solo modo preview:
 - extractor habilitado;
 - `solo_preview=True`;
 - `max_paginas=1`;
-- `max_productos=10`;
+- `max_productos=100`;
 - `delay_segundos=2`.
 
 No procesa productos automaticamente. Despues de ejecutar preview, revisar resultados antes de seleccionar y procesar.
@@ -147,7 +147,7 @@ Checklist manual si no se usa el boton automatico:
    - `habilitado=True`;
    - `solo_preview=True`;
    - `max_paginas=1`;
-   - `max_productos=10`;
+   - `max_productos=100`;
    - `delay_segundos=2`.
 4. Ejecutar preview.
 5. Revisar resultados antes de procesar: imagen, URL, precio lista, transferencia, tarjeta/cuotas y precio oportunidad.
@@ -200,7 +200,7 @@ El menú sigue el flujo operativo:
 
 1. Editar `PoliticaExtraccionFuente`: semáforo amarillo o verde, `permite_scraping=True`, `robots_txt_revisado=True`, `terminos_revisados=True`, `requiere_login=False` y `tiene_captcha=False`.
 2. Editar `ConectorFuente`: `estado=activo`, `respeta_politica_fuente=True` y `requiere_revision_manual=False`.
-3. Editar `ConfiguracionExtractorWeb`: `habilitado=True`, `solo_preview=True`, `max_paginas=1`, `max_productos=10` y `delay_segundos=2`.
+3. Editar `ConfiguracionExtractorWeb`: `habilitado=True`, `solo_preview=True`, `max_paginas=1`, `max_productos=100` y `delay_segundos=2`.
 4. Ejecutar preview.
 5. Revisar los resultados antes de procesar.
 6. Seleccionar y procesar pocos productos primero.

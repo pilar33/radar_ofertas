@@ -83,7 +83,7 @@ class ExtractorWebControladoTests(TestCase):
 
     def test_configuracion_extractor_limita_max_productos(self):
         _, _, config = self._crear_conector()
-        config.max_productos = 51
+        config.max_productos = 101
 
         with self.assertRaises(ValidationError):
             config.full_clean()

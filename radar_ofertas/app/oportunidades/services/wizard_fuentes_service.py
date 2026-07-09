@@ -197,7 +197,7 @@ def crear_fuente_preview_rapida(datos):
             "image_selector": preset.get("image_selector") or None,
             "description_selector": preset.get("description_selector") or None,
             "max_paginas": 1,
-            "max_productos": 10,
+            "max_productos": 100,
             "delay_segundos": 2,
             "habilitado": True,
             "solo_preview": True,

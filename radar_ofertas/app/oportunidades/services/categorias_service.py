@@ -104,6 +104,35 @@ SUBCATEGORIAS_SUPERMERCADO = [
 ]
 
 
+CATEGORIA_MERCADERIA_LOCAL = CategoriaBase(
+    "Mercaderia local de oportunidad",
+    "mercaderia-local-oportunidad",
+    36,
+    ("mercaderia local", "salta capital", "mayorista local", "precio local"),
+    descripcion="Categoria para oportunidades observadas manualmente en comercios fisicos de Salta.",
+)
+
+
+SUBCATEGORIAS_MERCADERIA_LOCAL = [
+    CategoriaBase("Alimento economico", "alimento-economico", 361, ("fideo", "arroz", "polenta", "harina", "azucar")),
+    CategoriaBase("Alimento economico para consumo familiar", "alimento-economico-consumo-familiar", 362, ("consumo familiar", "comida economica")),
+    CategoriaBase("Alimento para perros/pichos", "alimento-para-perros-pichos", 363, ("perro", "picho", "animal", "menudo", "carcasa")),
+    CategoriaBase("Menudos, carcasas y recortes", "menudos-carcasas-recortes", 364, ("menudo", "carcasa", "recorte")),
+    CategoriaBase("Fardos y bultos", "fardos-bultos", 365, ("fardo", "bulto", "caja")),
+    CategoriaBase("Segundas marcas", "segundas-marcas", 366, ("segunda marca", "economico")),
+    CategoriaBase("Liquidaciones locales", "liquidaciones-locales", 367, ("liquidacion", "remate", "oferta local")),
+    CategoriaBase("Supermercado fisico Salta", "supermercado-fisico-salta", 368, ("supermercado fisico", "gondola", "vea fisico")),
+    CategoriaBase("Mayoristas locales", "mayoristas-locales", 369, ("mayorista", "calle oran")),
+    CategoriaBase("Bebidas y distribuidoras", "bebidas-distribuidoras", 370, ("bebida", "aceite", "distribuidora")),
+    CategoriaBase("Almacen", "almacen-local", 371, ("almacen", "arroz", "fideos", "harina")),
+    CategoriaBase("Limpieza", "limpieza-local", 372, ("limpieza", "detergente", "lavandina")),
+    CategoriaBase("Higiene", "higiene-local", 373, ("higiene", "jabon", "shampoo")),
+    CategoriaBase("Papel higienico y papel de cocina", "papel-higienico-papel-cocina", 374, ("papel higienico", "papel cocina", "rollo")),
+    CategoriaBase("Mercaderia para stock", "mercaderia-para-stock", 375, ("stock", "guardar", "familiar")),
+    CategoriaBase("Mercaderia para posible reventa", "mercaderia-para-posible-reventa", 376, ("reventa", "revender")),
+]
+
+
 def _texto_clasificacion(*partes):
     texto = " ".join(str(parte or "") for parte in partes).lower()
     texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
@@ -173,6 +202,56 @@ def asegurar_categorias_supermercado():
         resumen["creadas"] += 1
 
     for base in SUBCATEGORIAS_SUPERMERCADO:
+        categoria = CategoriaInteres.objects.filter(slug=base.slug).first()
+        if not categoria:
+            categoria = CategoriaInteres.objects.filter(nombre__iexact=base.nombre).first()
+        defaults = {
+            "slug": base.slug,
+            "palabra_clave": base.palabras_clave[0],
+            "descripcion": base.descripcion,
+            "activa": True,
+            "prioridad": base.prioridad,
+            "categoria_padre": padre,
+            "palabras_clave": ", ".join(base.palabras_clave),
+            "marcas_clave": ", ".join(base.marcas_clave),
+        }
+        if categoria:
+            for campo, valor in defaults.items():
+                if campo == "categoria_padre" or not getattr(categoria, campo):
+                    setattr(categoria, campo, valor)
+            categoria.save()
+            resumen["actualizadas"] += 1
+        else:
+            CategoriaInteres.objects.create(nombre=base.nombre, **defaults)
+            resumen["creadas"] += 1
+    return resumen
+
+
+def asegurar_categorias_mercaderia_local():
+    resumen = asegurar_categorias_supermercado()
+    padre = CategoriaInteres.objects.filter(slug=CATEGORIA_MERCADERIA_LOCAL.slug).first()
+    if not padre:
+        padre = CategoriaInteres.objects.filter(nombre__iexact=CATEGORIA_MERCADERIA_LOCAL.nombre).first()
+    defaults_padre = {
+        "slug": CATEGORIA_MERCADERIA_LOCAL.slug,
+        "palabra_clave": "mercaderia local",
+        "descripcion": CATEGORIA_MERCADERIA_LOCAL.descripcion,
+        "activa": True,
+        "prioridad": CATEGORIA_MERCADERIA_LOCAL.prioridad,
+        "palabras_clave": ", ".join(CATEGORIA_MERCADERIA_LOCAL.palabras_clave),
+        "marcas_clave": "",
+    }
+    if padre:
+        for campo, valor in defaults_padre.items():
+            if not getattr(padre, campo):
+                setattr(padre, campo, valor)
+        padre.save()
+        resumen["actualizadas"] += 1
+    else:
+        padre = CategoriaInteres.objects.create(nombre=CATEGORIA_MERCADERIA_LOCAL.nombre, **defaults_padre)
+        resumen["creadas"] += 1
+
+    for base in SUBCATEGORIAS_MERCADERIA_LOCAL:
         categoria = CategoriaInteres.objects.filter(slug=base.slug).first()
         if not categoria:
             categoria = CategoriaInteres.objects.filter(nombre__iexact=base.nombre).first()

@@ -34,6 +34,8 @@ from .forms import (
     ProductoFuenteCuraduriaForm,
     RadarTextoImportForm,
     RankingImportForm,
+    ImportacionLocalForm,
+    RegistroPrecioLocalForm,
     RevisionManualFuenteForm,
     SenalDemandaManualForm,
     VentaProductoForm,
@@ -42,6 +44,7 @@ from .models import (
     AuditoriaFuenteWeb,
     CandidatoCompra,
     CategoriaInteres,
+    ComercioLocal,
     CompraProducto,
     ConfiguracionExtractorWeb,
     ConsultaMercadoLibre,
@@ -50,12 +53,16 @@ from .models import (
     DuplicadoIgnorado,
     EvaluacionOportunidadMultifuente,
     FuenteWeb,
+    EvidenciaLocal,
     ImportacionProductos,
     ImportacionRadarTexto,
     ItemRanking,
     LoteRanking,
     LoteCaptura,
+    LoteCapturaLocal,
     MercadoLibreToken,
+    ObjetivoVigilanciaLocal,
+    ObservacionPrecioLocal,
     Oportunidad,
     OportunidadRadar,
     OperacionCuraduria,
@@ -70,6 +77,7 @@ from .models import (
     SenalDemandaProducto,
     ResultadoComercialProducto,
     SugerenciaMatchingProducto,
+    UmbralPrecioLocal,
     VentaProducto,
 )
 from .serializers import (
@@ -97,6 +105,11 @@ from .serializers import (
     ResultadoExtraccionWebSerializer,
     SesionLaboratorioMapeoSerializer,
     RevisionManualFuenteSerializer,
+    ComercioLocalSerializer,
+    LoteCapturaLocalSerializer,
+    ObjetivoVigilanciaLocalSerializer,
+    ObservacionPrecioLocalSerializer,
+    UmbralPrecioLocalSerializer,
 )
 from oportunidades.management.commands.preparar_decohome import preparar_decohome
 from .services.auditoria_fuentes_service import (
@@ -123,6 +136,14 @@ from .services.ranking_import_service import (
     confirmar_importacion_ranking,
     historico_item,
     previsualizar_ranking,
+)
+from .services.oportunidades_locales_service import (
+    calcular_normalizacion_local,
+    confirmar_importacion_local,
+    evaluar_observacion,
+    obtener_o_crear_comercio,
+    previsualizar_importacion_local,
+    ranking_oportunidades_locales,
 )
 from .services.laboratorio_mapeo_service import (
     analizar_url_laboratorio,
@@ -2703,6 +2724,173 @@ def ranking_importar(request):
     return render(request, "oportunidades/ranking_importar.html", {"form": form, "preview": preview})
 
 
+def oportunidades_locales_salta(request):
+    publicas = not request.user.is_staff
+    oportunidades = ranking_oportunidades_locales(publicas=publicas)
+    if request.GET.get("zona"):
+        oportunidades = [o for o in oportunidades if request.GET["zona"].lower() in (o.zona or "").lower()]
+    if request.GET.get("uso"):
+        oportunidades = [o for o in oportunidades if request.GET["uso"].lower() in (o.sirve_para or "").lower()]
+    if request.GET.get("estado"):
+        oportunidades = [o for o in oportunidades if o.clasificacion_final == request.GET["estado"]]
+    objetivos = ObjetivoVigilanciaLocal.objects.select_related("comercio", "categoria").filter(estado=ObjetivoVigilanciaLocal.ESTADO_ACTIVO)
+    if publicas:
+        objetivos = objetivos.filter(lote__estado=LoteCapturaLocal.ESTADO_PUBLICADO)
+    return render(
+        request,
+        "oportunidades/locales_salta.html",
+        {
+            "oportunidades": oportunidades[:200],
+            "objetivos": objetivos[:100],
+            "clasificaciones": ObservacionPrecioLocal.CLASIFICACION_CHOICES,
+        },
+    )
+
+
+def registrar_precio_local(request):
+    if request.method == "POST" and not request.user.is_staff:
+        return HttpResponse("Registrar precios locales requiere usuario administrador.", status=403)
+    initial = {"fecha_observacion": timezone.localtime().strftime("%Y-%m-%dT%H:%M")}
+    if request.method == "POST":
+        form = RegistroPrecioLocalForm(request.POST, request.FILES)
+        if form.is_valid():
+            data = form.cleaned_data
+            comercio = obtener_o_crear_comercio(data["comercio"], data["zona"])
+            categoria = CategoriaInteres.objects.filter(slug="mercaderia-local-oportunidad").first()
+            normalizacion = calcular_normalizacion_local(
+                data["precio_total_encontrado"],
+                data["presentacion"],
+                unidad_normalizada=data["unidad_normalizada"],
+                producto=data["nombre_original"],
+                traslado=data.get("costo_traslado_envio") or 0,
+            )
+            observacion = ObservacionPrecioLocal(
+                categoria=categoria,
+                nombre_original=data["nombre_original"],
+                marca=data.get("marca") or "",
+                segunda_marca=data.get("segunda_marca", False),
+                comercio=comercio,
+                zona=data["zona"],
+                fecha_observacion=data["fecha_observacion"],
+                precio_total_encontrado=data["precio_total_encontrado"],
+                tipo_presentacion=normalizacion["tipo_presentacion"],
+                cantidad_envases=normalizacion["cantidad_envases"],
+                contenido_por_envase=normalizacion["contenido_por_envase"],
+                unidad_medida=normalizacion["unidad_medida"],
+                unidades_totales=normalizacion["unidades_totales"],
+                contenido_total_normalizado=normalizacion["contenido_total_normalizado"],
+                precio_por_unidad=normalizacion["precio_por_unidad"],
+                precio_por_kg=normalizacion["precio_por_kg"],
+                precio_por_litro=normalizacion["precio_por_litro"],
+                precio_por_metro=normalizacion["precio_por_metro"],
+                costo_traslado_envio=normalizacion["costo_traslado_envio"],
+                costo_final_puesto_salta=normalizacion["costo_final_puesto_salta"],
+                stock_estimado=data.get("stock_estimado") or ObservacionPrecioLocal.STOCK_DESCONOCIDO,
+                limite_por_cliente=data.get("limite_por_cliente") or "",
+                sirve_para=data.get("sirve_para") or "",
+                observaciones=data.get("observaciones") or "",
+                estado_publicacion=LoteCapturaLocal.ESTADO_BORRADOR,
+            )
+            evaluar_observacion(observacion)
+            observacion.save()
+            if data.get("evidencia_texto") or data.get("evidencia_archivo"):
+                EvidenciaLocal.objects.create(
+                    observacion=observacion,
+                    tipo=EvidenciaLocal.TIPO_TEXTO if data.get("evidencia_texto") else EvidenciaLocal.TIPO_FOTO_GONDOLA,
+                    archivo=data.get("evidencia_archivo"),
+                    observacion_texto=data.get("evidencia_texto") or "",
+                    privada=data.get("evidencia_privada", False),
+                    nivel_verificacion=EvidenciaLocal.NIVEL_PENDIENTE,
+                )
+            messages.success(request, "Precio local guardado como borrador con clasificacion preliminar.")
+            return redirect("oportunidades:oportunidades_locales_salta")
+    else:
+        form = RegistroPrecioLocalForm(initial=initial)
+    return render(request, "oportunidades/local_registrar_precio.html", {"form": form})
+
+
+def importar_oportunidades_locales(request):
+    preview = None
+    if request.method == "POST" and not request.user.is_staff:
+        return HttpResponse("Importar oportunidades locales requiere usuario administrador.", status=403)
+    initial = {
+        "fecha_observacion": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+        "estado": LoteCapturaLocal.ESTADO_BORRADOR,
+        "zona": "Salta Capital",
+    }
+    if request.method == "POST":
+        accion = request.POST.get("accion") or "preview"
+        form = ImportacionLocalForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            if accion == "preview":
+                preview = previsualizar_importacion_local(
+                    data["texto"],
+                    fecha_observacion=data["fecha_observacion"],
+                    zona=data["zona"],
+                    metodo=data["metodo_captura"],
+                    formato=data["formato"],
+                )
+                request.session["local_import_preview"] = {
+                    "datos_lote": {
+                        "nombre": data["nombre"],
+                        "fecha_observacion": data["fecha_observacion"].isoformat(),
+                        "zona": data["zona"],
+                        "comercio_id": data["comercio_default"].id if data.get("comercio_default") else None,
+                        "metodo_captura": data["metodo_captura"],
+                        "estado": data["estado"],
+                        "hash_importacion": preview["hash"],
+                        "permitir_duplicado": data.get("permitir_duplicado", False),
+                    },
+                    "filas": preview["filas"],
+                    "texto_original": data["texto"],
+                }
+                if preview["duplicado"]:
+                    messages.warning(request, f"Posible duplicado: ya existe el lote local #{preview['duplicado'].pk}.")
+            elif accion == "confirmar":
+                payload = request.session.get("local_import_preview")
+                if not payload:
+                    messages.error(request, "Primero genera una vista previa.")
+                    return redirect("oportunidades:local_importar")
+                datos_lote = payload["datos_lote"]
+                datos_lote["fecha_observacion"] = datetime.fromisoformat(datos_lote["fecha_observacion"])
+                datos_lote["comercio"] = ComercioLocal.objects.filter(pk=datos_lote.get("comercio_id")).first()
+                try:
+                    lote = confirmar_importacion_local(
+                        datos_lote,
+                        payload["filas"],
+                        payload["texto_original"],
+                        usuario=request.user,
+                        permitir_duplicado=bool(datos_lote.get("permitir_duplicado")),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    preview = {"filas": payload["filas"], "errores": [str(exc)], "total": len(payload["filas"]), "duplicado": True}
+                else:
+                    request.session.pop("local_import_preview", None)
+                    messages.success(request, "Lote local creado como borrador.")
+                    return redirect("oportunidades:local_lote_detalle", pk=lote.pk)
+    else:
+        form = ImportacionLocalForm(initial=initial)
+    if preview is None and request.session.get("local_import_preview"):
+        payload = request.session["local_import_preview"]
+        preview = {"filas": payload["filas"], "errores": [], "total": len(payload["filas"]), "duplicado": False}
+    return render(request, "oportunidades/local_importar.html", {"form": form, "preview": preview})
+
+
+def lote_local_detalle(request, pk):
+    lote = get_object_or_404(LoteCapturaLocal.objects.select_related("comercio"), pk=pk)
+    observaciones = lote.observaciones_precio.select_related("comercio", "categoria", "umbral_aplicado").prefetch_related("evidencias")
+    objetivos = lote.objetivos.select_related("comercio", "categoria")
+    return render(request, "oportunidades/local_lote_detalle.html", {"lote": lote, "observaciones": observaciones, "objetivos": objetivos})
+
+
+def local_observacion_historico(request, pk):
+    observacion = get_object_or_404(ObservacionPrecioLocal.objects.select_related("comercio", "categoria", "umbral_aplicado"), pk=pk)
+    historico = ObservacionPrecioLocal.objects.select_related("comercio", "categoria").filter(nombre_original__iexact=observacion.nombre_original).order_by("fecha_observacion")
+    return render(request, "oportunidades/local_observacion_historico.html", {"observacion": observacion, "historico": historico})
+
+
 @require_POST
 def generar_contenido_oportunidad(request, pk):
     oportunidad = get_object_or_404(
@@ -2767,6 +2955,86 @@ class OportunidadGenerarContenidoAPIView(APIView):
         serializer = ContenidoSugeridoSerializer(contenido)
         response_status = status.HTTP_201_CREATED if creado else status.HTTP_200_OK
         return Response(serializer.data, status=response_status)
+
+
+class OportunidadLocalListAPIView(generics.ListAPIView):
+    serializer_class = ObservacionPrecioLocalSerializer
+
+    def get_queryset(self):
+        queryset = ObservacionPrecioLocal.objects.select_related("comercio", "categoria", "lote", "umbral_aplicado")
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(estado_publicacion=LoteCapturaLocal.ESTADO_PUBLICADO)
+        queryset = queryset.exclude(clasificacion_final=ObservacionPrecioLocal.CLASIFICACION_DESCARTAR)
+        if self.request.query_params.get("zona"):
+            queryset = queryset.filter(zona__icontains=self.request.query_params["zona"])
+        if self.request.query_params.get("uso"):
+            queryset = queryset.filter(sirve_para__icontains=self.request.query_params["uso"])
+        if self.request.query_params.get("estado"):
+            queryset = queryset.filter(clasificacion_final=self.request.query_params["estado"])
+        if self.request.query_params.get("categoria"):
+            queryset = queryset.filter(Q(categoria__slug__iexact=self.request.query_params["categoria"]) | Q(categoria__nombre__icontains=self.request.query_params["categoria"]))
+        return queryset
+
+
+class ObservacionLocalListAPIView(generics.ListAPIView):
+    serializer_class = ObservacionPrecioLocalSerializer
+
+    def get_queryset(self):
+        queryset = ObservacionPrecioLocal.objects.select_related("comercio", "categoria", "lote", "umbral_aplicado")
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(estado_publicacion=LoteCapturaLocal.ESTADO_PUBLICADO)
+        return queryset
+
+
+class ObjetivoVigilanciaLocalListAPIView(generics.ListAPIView):
+    serializer_class = ObjetivoVigilanciaLocalSerializer
+
+    def get_queryset(self):
+        queryset = ObjetivoVigilanciaLocal.objects.select_related("comercio", "categoria", "lote").filter(estado=ObjetivoVigilanciaLocal.ESTADO_ACTIVO)
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(lote__estado=LoteCapturaLocal.ESTADO_PUBLICADO)
+        return queryset
+
+
+class UmbralPrecioLocalListAPIView(generics.ListAPIView):
+    serializer_class = UmbralPrecioLocalSerializer
+
+    def get_queryset(self):
+        queryset = UmbralPrecioLocal.objects.select_related("categoria", "producto_canonico").filter(activo=True)
+        if self.request.query_params.get("zona"):
+            queryset = queryset.filter(Q(zona__isnull=True) | Q(zona__icontains=self.request.query_params["zona"]))
+        if self.request.query_params.get("unidad"):
+            queryset = queryset.filter(unidad_normalizada=self.request.query_params["unidad"])
+        return queryset
+
+
+class ComercioLocalListAPIView(generics.ListAPIView):
+    queryset = ComercioLocal.objects.filter(activo=True).order_by("nombre")
+    serializer_class = ComercioLocalSerializer
+
+
+class ZonaLocalListAPIView(APIView):
+    def get(self, request):
+        zonas = (
+            ComercioLocal.objects.filter(activo=True)
+            .exclude(zona__isnull=True)
+            .exclude(zona="")
+            .values_list("zona", flat=True)
+            .distinct()
+            .order_by("zona")
+        )
+        return Response({"zonas": list(zonas)}, status=status.HTTP_200_OK)
+
+
+class ObservacionLocalHistoricoAPIView(generics.ListAPIView):
+    serializer_class = ObservacionPrecioLocalSerializer
+
+    def get_queryset(self):
+        observacion = get_object_or_404(ObservacionPrecioLocal, pk=self.kwargs["pk"])
+        queryset = ObservacionPrecioLocal.objects.select_related("comercio", "categoria", "lote", "umbral_aplicado").filter(nombre_original__iexact=observacion.nombre_original)
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(estado_publicacion=LoteCapturaLocal.ESTADO_PUBLICADO)
+        return queryset.order_by("fecha_observacion")
 
 
 class MeliBuscarAPIView(APIView):

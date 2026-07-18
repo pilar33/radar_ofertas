@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Importar oportunidades locales{% endblock %}
+{% block proceso %}Proceso: Oportunidades locales / Importacion{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1>Importar oportunidades locales</h1>
+    <p class="text-secondary mb-0">Pegá una tabla Markdown o CSV. Las filas sin precio quedan como objetivos de vigilancia.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:oportunidades_locales_salta' %}">Volver</a>
+</div>
+<form method="post" class="bg-white border rounded p-3 mb-3">
+  {% csrf_token %}
+  <div class="row g-3">
+    {% for field in form %}
+      <div class="col-md-{% if field.name == 'texto' %}12{% elif field.name == 'permitir_duplicado' %}12{% else %}4{% endif %}">
+        {% if field.name == 'permitir_duplicado' %}
+          <div class="form-check mt-2">{{ field }} <label class="form-check-label">{{ field.label }}</label></div>
+        {% else %}
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+        {% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <button class="btn btn-primary" name="accion" value="preview">Vista previa</button>
+    {% if preview %}<button class="btn btn-success" name="accion" value="confirmar">Confirmar lote borrador</button>{% endif %}
+  </div>
+</form>
+
+{% if preview %}
+  <div class="bg-white border rounded p-3">
+    <h2 class="h4">Vista previa: {{ preview.total }} filas</h2>
+    {% for error in preview.errores %}<div class="alert alert-warning">{{ error }}</div>{% endfor %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead><tr><th>#</th><th>Producto</th><th>Fuente/Zona</th><th>Precio</th><th>Normalizado</th><th>Resultado</th><th>Sirve para</th></tr></thead>
+        <tbody>
+        {% for fila in preview.filas %}
+          <tr>
+            <td>{{ fila.ranking }}</td>
+            <td>{{ fila.producto }}<br><span class="small text-secondary">{{ fila.categoria_nombre }}</span></td>
+            <td>{{ fila.fuente }}<br><span class="small text-secondary">{{ fila.zona }}</span></td>
+            <td>{% if fila.precio_pendiente %}<span class="badge text-bg-info">Precio pendiente</span>{% else %}${{ fila.precio }}{% endif %}</td>
+            <td class="small">
+              Unidad: ${{ fila.normalizacion.precio_por_unidad }}<br>
+              Kg: ${{ fila.normalizacion.precio_por_kg }}<br>
+              Litro: ${{ fila.normalizacion.precio_por_litro }}<br>
+              Metro: ${{ fila.normalizacion.precio_por_metro }}
+            </td>
+            <td>{% if fila.precio_pendiente %}Objetivo de vigilancia{% elif fila.errores %}Revisar{% else %}Observacion local{% endif %}</td>
+            <td class="small">{{ fila.sirve_para|default:"-" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

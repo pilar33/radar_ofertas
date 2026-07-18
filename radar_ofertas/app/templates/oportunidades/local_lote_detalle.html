@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Lote local{% endblock %}
+{% block proceso %}Proceso: Oportunidades locales / Detalle de lote{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1>{{ lote.nombre }}</h1>
+    <p class="text-secondary mb-0">{{ lote.zona }} · {{ lote.fecha_observacion }} · {{ lote.get_estado_display }}</p>
+    <p class="small text-secondary mb-0">Metodo: {{ lote.get_metodo_captura_display }} · Filas: {{ lote.cantidad_filas }}</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:local_importar' %}">Importar otro</a>
+</div>
+
+<h2 class="h4">Observaciones</h2>
+<div class="table-responsive bg-white border rounded mb-4">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Producto</th><th>Lugar</th><th>Precio</th><th>Normalizado</th><th>Estado</th><th>Motivo</th></tr></thead>
+    <tbody>
+    {% for item in observaciones %}
+      <tr>
+        <td>{{ item.nombre_original }}<br><span class="small text-secondary">{{ item.categoria|default:"-" }}</span></td>
+        <td>{{ item.comercio|default:"-" }}<br><span class="small text-secondary">{{ item.zona }}</span></td>
+        <td>${{ item.precio_total_encontrado }}</td>
+        <td class="small">Unidad: ${{ item.precio_por_unidad }}<br>Kg: ${{ item.precio_por_kg }}<br>Litro: ${{ item.precio_por_litro }}<br>Metro: ${{ item.precio_por_metro }}</td>
+        <td><span class="badge text-bg-secondary">{{ item.get_clasificacion_final_display }}</span></td>
+        <td class="small">{{ item.motivo_clasificacion }}<br><a href="{% url 'oportunidades:local_observacion_historico' item.id %}">Historico</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-secondary py-3">Sin observaciones con precio.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="h4">Objetivos de vigilancia</h2>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Producto</th><th>Lugar</th><th>Zona</th><th>Unidad</th><th>Sirve para</th></tr></thead>
+    <tbody>
+    {% for objetivo in objetivos %}
+      <tr><td>{{ objetivo.nombre_objetivo }}</td><td>{{ objetivo.comercio|default:"-" }}</td><td>{{ objetivo.zona }}</td><td>{{ objetivo.unidad_deseada|default:"-" }}</td><td>{{ objetivo.sirve_para|default:"-" }}</td></tr>
+    {% empty %}
+      <tr><td colspan="5" class="text-center text-secondary py-3">Sin objetivos.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

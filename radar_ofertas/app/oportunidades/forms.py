@@ -4,6 +4,11 @@ from urllib.parse import urlparse
 from django import forms
 
 from .models import (
+    ComercioLocal,
+    EvidenciaLocal,
+    LoteCapturaLocal,
+    ObservacionPrecioLocal,
+    UmbralPrecioLocal,
     CandidatoCompra,
     CategoriaInteres,
     CompraProducto,
@@ -296,6 +301,62 @@ class RankingImportForm(forms.Form):
 
         self.fields["tipo_ranking"].choices = LoteRanking.TIPO_CHOICES
         self.fields["estado"].choices = LoteRanking.ESTADO_CHOICES
+
+
+class ImportacionLocalForm(forms.Form):
+    FORMATO_AUTO = "auto"
+    FORMATO_MARKDOWN = "markdown"
+    FORMATO_CSV = "csv"
+    FORMATO_CHOICES = [
+        (FORMATO_AUTO, "Detectar automaticamente"),
+        (FORMATO_MARKDOWN, "Markdown"),
+        (FORMATO_CSV, "CSV"),
+    ]
+
+    nombre = forms.CharField(max_length=200, initial="Oportunidades locales Salta", widget=forms.TextInput(attrs={"class": "form-control"}))
+    fecha_observacion = forms.DateTimeField(
+        widget=forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+    )
+    zona = forms.CharField(max_length=150, initial="Salta Capital", widget=forms.TextInput(attrs={"class": "form-control"}))
+    comercio_default = forms.ModelChoiceField(
+        queryset=ComercioLocal.objects.none(),
+        required=False,
+        label="Comercio predeterminado",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    metodo_captura = forms.ChoiceField(choices=LoteCapturaLocal.METODO_CHOICES, initial=LoteCapturaLocal.METODO_TABLA_MARKDOWN, widget=forms.Select(attrs={"class": "form-select"}))
+    formato = forms.ChoiceField(choices=FORMATO_CHOICES, initial=FORMATO_AUTO, widget=forms.Select(attrs={"class": "form-select"}))
+    estado = forms.ChoiceField(choices=LoteCapturaLocal.ESTADO_CHOICES, initial=LoteCapturaLocal.ESTADO_BORRADOR, widget=forms.Select(attrs={"class": "form-select"}))
+    texto = forms.CharField(widget=forms.Textarea(attrs={"class": "form-control font-monospace", "rows": 12}))
+    permitir_duplicado = forms.BooleanField(required=False, initial=False, widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["comercio_default"].queryset = ComercioLocal.objects.filter(activo=True).order_by("nombre")
+
+
+class RegistroPrecioLocalForm(forms.Form):
+    nombre_original = forms.CharField(label="Producto o nombre observado", max_length=255, widget=forms.TextInput(attrs={"class": "form-control"}))
+    comercio = forms.CharField(label="Comercio/lugar", max_length=180, widget=forms.TextInput(attrs={"class": "form-control"}))
+    zona = forms.CharField(max_length=150, initial="Salta Capital", widget=forms.TextInput(attrs={"class": "form-control"}))
+    precio_total_encontrado = forms.DecimalField(label="Precio", max_digits=12, decimal_places=2, min_value=Decimal("0.01"), widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}))
+    presentacion = forms.CharField(help_text="Ej: paquete de 500 g, 900 ml, 4 rollos de 30 m", widget=forms.TextInput(attrs={"class": "form-control"}))
+    unidad_normalizada = forms.ChoiceField(
+        choices=UmbralPrecioLocal.UNIDAD_CHOICES,
+        initial=UmbralPrecioLocal.UNIDAD_KG,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    fecha_observacion = forms.DateTimeField(widget=forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}))
+    marca = forms.CharField(required=False, max_length=100, widget=forms.TextInput(attrs={"class": "form-control"}))
+    segunda_marca = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
+    stock_estimado = forms.ChoiceField(required=False, choices=ObservacionPrecioLocal.STOCK_CHOICES, initial=ObservacionPrecioLocal.STOCK_DESCONOCIDO, widget=forms.Select(attrs={"class": "form-select"}))
+    sirve_para = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "consumo / stock / posible reventa"}))
+    observaciones = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}))
+    limite_por_cliente = forms.CharField(required=False, max_length=100, widget=forms.TextInput(attrs={"class": "form-control"}))
+    costo_traslado_envio = forms.DecimalField(required=False, max_digits=12, decimal_places=2, min_value=Decimal("0"), initial=0, widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}))
+    evidencia_texto = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}))
+    evidencia_archivo = forms.FileField(required=False, widget=forms.ClearableFileInput(attrs={"class": "form-control"}))
+    evidencia_privada = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
 
 
 class PrecioFuenteCuraduriaForm(forms.ModelForm):

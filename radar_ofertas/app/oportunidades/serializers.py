@@ -4,6 +4,7 @@ from .models import (
     AuditoriaFuenteWeb,
     CategoriaInteres,
     CategoriaFuente,
+    ComercioLocal,
     ComparacionPrecio,
     ConectorFuente,
     ConfiguracionExtractorWeb,
@@ -18,7 +19,10 @@ from .models import (
     FuenteWeb,
     ImportacionProductos,
     ItemRanking,
+    LoteCapturaLocal,
     LoteRanking,
+    ObjetivoVigilanciaLocal,
+    ObservacionPrecioLocal,
     Oportunidad,
     PoliticaExtraccionFuente,
     PrecioProducto,
@@ -32,6 +36,7 @@ from .models import (
     ResultadoExtraccionWeb,
     ResultadoLaboratorioMapeo,
     SesionLaboratorioMapeo,
+    UmbralPrecioLocal,
 )
 
 
@@ -237,6 +242,50 @@ class ItemRankingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ItemRanking
+        fields = "__all__"
+
+
+class ComercioLocalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComercioLocal
+        fields = "__all__"
+
+
+class LoteCapturaLocalSerializer(serializers.ModelSerializer):
+    comercio = ComercioLocalSerializer(read_only=True)
+
+    class Meta:
+        model = LoteCapturaLocal
+        fields = "__all__"
+
+
+class UmbralPrecioLocalSerializer(serializers.ModelSerializer):
+    categoria = CategoriaInteresSerializer(read_only=True)
+    producto_canonico = ProductoCanonicoSerializer(read_only=True)
+
+    class Meta:
+        model = UmbralPrecioLocal
+        fields = "__all__"
+
+
+class ObservacionPrecioLocalSerializer(serializers.ModelSerializer):
+    comercio = ComercioLocalSerializer(read_only=True)
+    categoria = CategoriaInteresSerializer(read_only=True)
+    lote = LoteCapturaLocalSerializer(read_only=True)
+    umbral_aplicado = UmbralPrecioLocalSerializer(read_only=True)
+
+    class Meta:
+        model = ObservacionPrecioLocal
+        fields = "__all__"
+
+
+class ObjetivoVigilanciaLocalSerializer(serializers.ModelSerializer):
+    comercio = ComercioLocalSerializer(read_only=True)
+    categoria = CategoriaInteresSerializer(read_only=True)
+    lote = LoteCapturaLocalSerializer(read_only=True)
+
+    class Meta:
+        model = ObjetivoVigilanciaLocal
         fields = "__all__"
 
 

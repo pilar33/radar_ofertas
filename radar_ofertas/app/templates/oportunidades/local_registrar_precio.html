@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Registrar precio local{% endblock %}
+{% block proceso %}Proceso: Oportunidades locales / Registro rapido{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1>Registrar precio local</h1>
+    <p class="text-secondary mb-0">Carga rapida para celular. La evidencia es opcional y el registro queda como borrador.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{% url 'oportunidades:oportunidades_locales_salta' %}">Volver</a>
+</div>
+<form method="post" enctype="multipart/form-data" class="bg-white border rounded p-3">
+  {% csrf_token %}
+  <div class="row g-3">
+    {% for field in form %}
+      <div class="col-md-{% if field.name == 'observaciones' or field.name == 'evidencia_texto' %}12{% else %}6{% endif %}">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="alert alert-info mt-3 mb-0">
+    Alimentacion animal informada es solo un uso manual cargado por la persona usuaria; el sistema no hace recomendaciones veterinarias.
+  </div>
+  <button class="btn btn-primary mt-3">Guardar borrador</button>
+</form>
+{% endblock %}

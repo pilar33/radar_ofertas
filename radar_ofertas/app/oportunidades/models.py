@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 from oportunidades.services.dominios_service import normalizar_dominio, url_pertenece_a_dominio
@@ -168,6 +169,17 @@ class FuenteWeb(models.Model):
     TIPO_AFILIADOS = "afiliados"
     TIPO_MANUAL_ASISTIDA = "manual_asistida"
     TIPO_API_OFICIAL = "api_oficial"
+    TIPO_SUPERMERCADO_FISICO = "supermercado_fisico"
+    TIPO_DISTRIBUIDORA = "distribuidora"
+    TIPO_ALMACEN = "almacen"
+    TIPO_CARNICERIA = "carniceria"
+    TIPO_POLLERIA = "polleria"
+    TIPO_FERIA = "feria"
+    TIPO_MERCADO = "mercado"
+    TIPO_OFERTA_GONDOLA = "oferta_gondola"
+    TIPO_FOLLETO = "folleto"
+    TIPO_LISTA_PRECIOS = "lista_precios"
+    TIPO_CAPTURA_MANUAL = "captura_manual"
     TIPO_OTRA = "otra"
     TIPO_CHOICES = [
         (TIPO_MARKETPLACE, "Marketplace"),
@@ -178,6 +190,17 @@ class FuenteWeb(models.Model):
         (TIPO_AFILIADOS, "Afiliados"),
         (TIPO_MANUAL_ASISTIDA, "Manual asistida"),
         (TIPO_API_OFICIAL, "API oficial"),
+        (TIPO_SUPERMERCADO_FISICO, "Supermercado fisico"),
+        (TIPO_DISTRIBUIDORA, "Distribuidora"),
+        (TIPO_ALMACEN, "Almacen"),
+        (TIPO_CARNICERIA, "Carniceria"),
+        (TIPO_POLLERIA, "Polleria"),
+        (TIPO_FERIA, "Feria"),
+        (TIPO_MERCADO, "Mercado"),
+        (TIPO_OFERTA_GONDOLA, "Oferta de gondola"),
+        (TIPO_FOLLETO, "Folleto"),
+        (TIPO_LISTA_PRECIOS, "Lista de precios"),
+        (TIPO_CAPTURA_MANUAL, "Captura manual"),
         (TIPO_OTRA, "Otra"),
     ]
 
@@ -2068,6 +2091,431 @@ class DetalleLoteCaptura(models.Model):
 
     def __str__(self):
         return f"{self.lote} - {self.estado}"
+
+
+class ComercioLocal(models.Model):
+    MODALIDAD_PRESENCIAL = "presencial"
+    MODALIDAD_ONLINE = "online"
+    MODALIDAD_AMBAS = "ambas"
+    MODALIDAD_CHOICES = [
+        (MODALIDAD_PRESENCIAL, "Presencial"),
+        (MODALIDAD_ONLINE, "Online"),
+        (MODALIDAD_AMBAS, "Ambas"),
+    ]
+    VERIFICACION_PENDIENTE = "pendiente"
+    VERIFICACION_VERIFICADO = "verificado"
+    VERIFICACION_DESCARTADO = "descartado"
+    VERIFICACION_CHOICES = [
+        (VERIFICACION_PENDIENTE, "Pendiente"),
+        (VERIFICACION_VERIFICADO, "Verificado"),
+        (VERIFICACION_DESCARTADO, "Descartado"),
+    ]
+
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="comercios_locales")
+    nombre = models.CharField(max_length=180)
+    tipo_fuente = models.CharField(max_length=30, choices=FuenteWeb.TIPO_CHOICES, default=FuenteWeb.TIPO_CAPTURA_MANUAL)
+    sucursal = models.CharField(max_length=150, blank=True, null=True)
+    provincia = models.CharField(max_length=80, default="Salta")
+    ciudad = models.CharField(max_length=100, default="Salta Capital")
+    zona = models.CharField(max_length=150, default="Salta Capital")
+    direccion_referencia = models.CharField(max_length=255, blank=True, null=True)
+    modalidad = models.CharField(max_length=20, choices=MODALIDAD_CHOICES, default=MODALIDAD_PRESENCIAL)
+    entrega_domicilio = models.BooleanField(default=False)
+    retiro = models.BooleanField(default=True)
+    requiere_visita = models.BooleanField(default=True)
+    contacto_publico = models.CharField(max_length=180, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+    estado_verificacion = models.CharField(max_length=20, choices=VERIFICACION_CHOICES, default=VERIFICACION_PENDIENTE)
+    activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "comercio local"
+        verbose_name_plural = "comercios locales"
+        ordering = ["ciudad", "zona", "nombre"]
+        indexes = [models.Index(fields=["ciudad", "zona", "nombre"])]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.zona}"
+
+
+class LoteCapturaLocal(models.Model):
+    ESTADO_BORRADOR = "borrador"
+    ESTADO_PENDIENTE_REVISION = "pendiente_revision"
+    ESTADO_VALIDADO = "validado"
+    ESTADO_PUBLICADO = "publicado"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_CHOICES = [
+        (ESTADO_BORRADOR, "Borrador"),
+        (ESTADO_PENDIENTE_REVISION, "Pendiente de revision"),
+        (ESTADO_VALIDADO, "Validado"),
+        (ESTADO_PUBLICADO, "Publicado"),
+        (ESTADO_DESCARTADO, "Descartado"),
+    ]
+    METODO_CARGA_MANUAL = "carga_manual"
+    METODO_TABLA_MARKDOWN = "tabla_markdown"
+    METODO_CSV = "csv"
+    METODO_FOTO_GONDOLA = "foto_gondola"
+    METODO_TICKET = "ticket"
+    METODO_FOLLETO = "folleto"
+    METODO_PDF = "pdf"
+    METODO_CATALOGO = "catalogo"
+    METODO_MENSAJE_LISTA = "mensaje_lista_precios"
+    METODO_OTRO = "otro"
+    METODO_CHOICES = [
+        (METODO_CARGA_MANUAL, "Carga manual"),
+        (METODO_TABLA_MARKDOWN, "Tabla Markdown"),
+        (METODO_CSV, "CSV"),
+        (METODO_FOTO_GONDOLA, "Foto de gondola"),
+        (METODO_TICKET, "Ticket"),
+        (METODO_FOLLETO, "Folleto"),
+        (METODO_PDF, "PDF"),
+        (METODO_CATALOGO, "Catalogo"),
+        (METODO_MENSAJE_LISTA, "Mensaje o lista de precios"),
+        (METODO_OTRO, "Otro"),
+    ]
+
+    nombre = models.CharField(max_length=200)
+    fecha_observacion = models.DateTimeField(default=timezone.now)
+    fecha_carga = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    zona = models.CharField(max_length=150, default="Salta Capital")
+    comercio = models.ForeignKey(ComercioLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes")
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_locales")
+    metodo_captura = models.CharField(max_length=30, choices=METODO_CHOICES, default=METODO_CARGA_MANUAL)
+    texto_original = models.TextField(blank=True, null=True)
+    cantidad_filas = models.PositiveIntegerField(default=0)
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default=ESTADO_BORRADOR)
+    observaciones = models.TextField(blank=True, null=True)
+    hash_importacion = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    posible_duplicado = models.BooleanField(default=False)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "lote de captura local"
+        verbose_name_plural = "lotes de captura local"
+        ordering = ["-fecha_observacion", "-fecha_carga"]
+        indexes = [models.Index(fields=["estado", "zona", "fecha_observacion"])]
+
+    def __str__(self):
+        return f"{self.nombre} ({self.zona})"
+
+
+class UmbralPrecioLocal(models.Model):
+    UNIDAD_UNIDAD = "unidad"
+    UNIDAD_LITRO = "litro"
+    UNIDAD_KG = "kg"
+    UNIDAD_METRO = "metro"
+    UNIDAD_100ML = "100ml"
+    UNIDAD_100G = "100g"
+    UNIDAD_CHOICES = [
+        (UNIDAD_UNIDAD, "$/unidad"),
+        (UNIDAD_LITRO, "$/litro"),
+        (UNIDAD_KG, "$/kg"),
+        (UNIDAD_METRO, "$/metro"),
+        (UNIDAD_100ML, "$/100 ml"),
+        (UNIDAD_100G, "$/100 g"),
+    ]
+    USO_CONSUMO_PROPIO = "consumo_propio"
+    USO_CONSUMO_FAMILIAR = "consumo_familiar"
+    USO_COMPRA_ECONOMICA = "compra_economica"
+    USO_STOCK_FAMILIAR = "stock_familiar"
+    USO_REVENTA = "posible_reventa"
+    USO_ANIMAL_INFORMADA = "alimentacion_animal_informada"
+    USO_DONACION = "donacion"
+    USO_OTRA = "otra"
+    USO_CHOICES = [
+        (USO_CONSUMO_PROPIO, "Consumo propio"),
+        (USO_CONSUMO_FAMILIAR, "Consumo familiar"),
+        (USO_COMPRA_ECONOMICA, "Compra economica"),
+        (USO_STOCK_FAMILIAR, "Stock familiar"),
+        (USO_REVENTA, "Posible reventa"),
+        (USO_ANIMAL_INFORMADA, "Alimentacion animal informada"),
+        (USO_DONACION, "Donacion"),
+        (USO_OTRA, "Otra"),
+    ]
+
+    nombre = models.CharField(max_length=180)
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="umbrales_locales")
+    categoria = models.ForeignKey(CategoriaInteres, on_delete=models.SET_NULL, null=True, blank=True, related_name="umbrales_locales")
+    grupo_comparable = models.CharField(max_length=150, blank=True, null=True)
+    marca = models.CharField(max_length=100, blank=True, null=True)
+    marca_importa = models.BooleanField(default=False)
+    segunda_marca_aceptada = models.BooleanField(default=True)
+    zona = models.CharField(max_length=150, blank=True, null=True)
+    tipo_fuente = models.CharField(max_length=30, choices=FuenteWeb.TIPO_CHOICES, blank=True, null=True)
+    uso = models.CharField(max_length=40, choices=USO_CHOICES, blank=True, null=True)
+    unidad_normalizada = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
+    precio_maximo_bueno = models.DecimalField(max_digits=12, decimal_places=2)
+    precio_maximo_fuerte = models.DecimalField(max_digits=12, decimal_places=2)
+    moneda = models.CharField(max_length=10, default="ARS")
+    fecha_desde = models.DateField()
+    fecha_hasta = models.DateField(null=True, blank=True)
+    activo = models.BooleanField(default=True)
+    origen_justificacion = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "umbral de precio local"
+        verbose_name_plural = "umbrales de precio local"
+        ordering = ["-activo", "nombre"]
+        indexes = [models.Index(fields=["activo", "unidad_normalizada", "zona"])]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.get_unidad_normalizada_display()}"
+
+
+class ObservacionPrecioLocal(models.Model):
+    TIPO_UNIDAD = "unidad"
+    TIPO_PAQUETE = "paquete"
+    TIPO_PACK = "pack"
+    TIPO_FARDO = "fardo"
+    TIPO_BULTO = "bulto"
+    TIPO_CAJA = "caja"
+    TIPO_BOLSA = "bolsa"
+    TIPO_BOTELLA = "botella"
+    TIPO_LATA = "lata"
+    TIPO_ROLLO = "rollo"
+    TIPO_KILOGRAMO = "kilogramo"
+    TIPO_PROMOCION = "promocion"
+    TIPO_OTRA = "otra"
+    TIPO_PRESENTACION_CHOICES = [
+        (TIPO_UNIDAD, "Unidad"),
+        (TIPO_PAQUETE, "Paquete"),
+        (TIPO_PACK, "Pack"),
+        (TIPO_FARDO, "Fardo"),
+        (TIPO_BULTO, "Bulto"),
+        (TIPO_CAJA, "Caja"),
+        (TIPO_BOLSA, "Bolsa"),
+        (TIPO_BOTELLA, "Botella"),
+        (TIPO_LATA, "Lata"),
+        (TIPO_ROLLO, "Rollo"),
+        (TIPO_KILOGRAMO, "Kilogramo"),
+        (TIPO_PROMOCION, "Promocion"),
+        (TIPO_OTRA, "Otra"),
+    ]
+    STOCK_DESCONOCIDO = "desconocido"
+    STOCK_BAJO = "bajo"
+    STOCK_MEDIO = "medio"
+    STOCK_ALTO = "alto"
+    STOCK_AGOTADO = "agotado"
+    STOCK_CHOICES = [
+        (STOCK_DESCONOCIDO, "Desconocido"),
+        (STOCK_BAJO, "Bajo"),
+        (STOCK_MEDIO, "Medio"),
+        (STOCK_ALTO, "Alto"),
+        (STOCK_AGOTADO, "Agotado"),
+    ]
+    VIGENCIA_SIN_CONFIRMAR = "sin_confirmar"
+    VIGENCIA_VIGENTE = "vigente"
+    VIGENCIA_POSIBLEMENTE = "posiblemente_vigente"
+    VIGENCIA_VENCIDA = "vencida"
+    VIGENCIA_AGOTADA = "agotada"
+    VIGENCIA_DESCARTADA = "descartada"
+    VIGENCIA_CHOICES = [
+        (VIGENCIA_SIN_CONFIRMAR, "Sin confirmar"),
+        (VIGENCIA_VIGENTE, "Vigente"),
+        (VIGENCIA_POSIBLEMENTE, "Posiblemente vigente"),
+        (VIGENCIA_VENCIDA, "Vencida"),
+        (VIGENCIA_AGOTADA, "Agotada"),
+        (VIGENCIA_DESCARTADA, "Descartada"),
+    ]
+    CLASIFICACION_ALERTA_FUERTE = "alerta_fuerte"
+    CLASIFICACION_BUENA = "buena_oportunidad"
+    CLASIFICACION_VIGILAR = "vigilar"
+    CLASIFICACION_REVISAR = "revisar"
+    CLASIFICACION_DESCARTAR = "descartar"
+    CLASIFICACION_CHOICES = [
+        (CLASIFICACION_ALERTA_FUERTE, "Alerta fuerte"),
+        (CLASIFICACION_BUENA, "Buena oportunidad"),
+        (CLASIFICACION_VIGILAR, "Vigilar"),
+        (CLASIFICACION_REVISAR, "Revisar"),
+        (CLASIFICACION_DESCARTAR, "Descartar"),
+    ]
+    METODO_DESCUENTO_RELATIVO = "descuento_relativo"
+    METODO_PRECIO_UMBRAL = "precio_umbral"
+    METODO_MEJOR_HISTORICO = "mejor_precio_historico"
+    METODO_EVALUACION_MANUAL = "evaluacion_manual"
+
+    lote = models.ForeignKey(LoteCapturaLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_precio")
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_locales")
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_locales")
+    categoria = models.ForeignKey(CategoriaInteres, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_locales")
+    nombre_original = models.CharField(max_length=255)
+    marca = models.CharField(max_length=100, blank=True, null=True)
+    segunda_marca = models.BooleanField(default=False)
+    comercio = models.ForeignKey(ComercioLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_precio")
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_locales")
+    sucursal = models.CharField(max_length=150, blank=True, null=True)
+    zona = models.CharField(max_length=150, default="Salta Capital")
+    fecha_observacion = models.DateTimeField(default=timezone.now)
+    precio_total_encontrado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    moneda = models.CharField(max_length=10, default="ARS")
+    tipo_presentacion = models.CharField(max_length=30, choices=TIPO_PRESENTACION_CHOICES, default=TIPO_UNIDAD)
+    cantidad_envases = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    contenido_por_envase = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    unidad_medida = models.CharField(max_length=20, default="unidad")
+    unidades_totales = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    contenido_total_normalizado = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    precio_por_unidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_litro = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_metro = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_traslado_envio = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_final_puesto_salta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    stock_estimado = models.CharField(max_length=20, choices=STOCK_CHOICES, default=STOCK_DESCONOCIDO)
+    limite_por_cliente = models.CharField(max_length=100, blank=True, null=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    vencimiento_proximo = models.BooleanField(default=False)
+    requiere_revisar_vencimiento = models.BooleanField(default=False)
+    requiere_visita = models.BooleanField(default=True)
+    captura_manual = models.BooleanField(default=True)
+    estado_vigencia = models.CharField(max_length=30, choices=VIGENCIA_CHOICES, default=VIGENCIA_SIN_CONFIRMAR)
+    fecha_estimada_fin = models.DateTimeField(null=True, blank=True)
+    ultima_verificacion = models.DateTimeField(null=True, blank=True)
+    observaciones = models.TextField(blank=True, null=True)
+    sirve_para = models.TextField(blank=True, null=True)
+    marca_importa = models.BooleanField(default=False)
+    segunda_marca_aceptada = models.BooleanField(default=True)
+    calidad_minima_observacion = models.TextField(blank=True, null=True)
+    cantidad_deseada = models.CharField(max_length=100, blank=True, null=True)
+    cantidad_minima_compra = models.CharField(max_length=100, blank=True, null=True)
+    cantidad_maxima_permitida = models.CharField(max_length=100, blank=True, null=True)
+    riesgo_vencimiento = models.CharField(max_length=150, blank=True, null=True)
+    dificultad_traslado = models.CharField(max_length=150, blank=True, null=True)
+    clasificacion_automatica = models.CharField(max_length=30, choices=CLASIFICACION_CHOICES, default=CLASIFICACION_REVISAR)
+    clasificacion_manual = models.CharField(max_length=30, choices=CLASIFICACION_CHOICES, blank=True, null=True)
+    clasificacion_final = models.CharField(max_length=30, choices=CLASIFICACION_CHOICES, default=CLASIFICACION_REVISAR)
+    metodo_evaluacion = models.CharField(max_length=120, blank=True, null=True)
+    motivo_clasificacion = models.TextField(blank=True, null=True)
+    umbral_aplicado = models.ForeignKey(UmbralPrecioLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="observaciones_precio")
+    unidad_umbral_aplicada = models.CharField(max_length=20, blank=True, null=True)
+    precio_normalizado_usado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    diferencia_umbral = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    porcentaje_vs_umbral = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    estado_publicacion = models.CharField(max_length=30, choices=LoteCapturaLocal.ESTADO_CHOICES, default=LoteCapturaLocal.ESTADO_BORRADOR)
+    raw_data = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "observacion de precio local"
+        verbose_name_plural = "observaciones de precio local"
+        ordering = ["clasificacion_final", "-fecha_observacion", "nombre_original"]
+        indexes = [
+            models.Index(fields=["estado_publicacion", "clasificacion_final"]),
+            models.Index(fields=["zona", "fecha_observacion"]),
+            models.Index(fields=["nombre_original", "comercio"]),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre_original} - {self.zona}"
+
+
+class ObjetivoVigilanciaLocal(models.Model):
+    ESTADO_ACTIVO = "activo"
+    ESTADO_CON_PRECIO = "con_precio"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_CHOICES = [
+        (ESTADO_ACTIVO, "Activo"),
+        (ESTADO_CON_PRECIO, "Con precio observado"),
+        (ESTADO_DESCARTADO, "Descartado"),
+    ]
+
+    lote = models.ForeignKey(LoteCapturaLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos")
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos_locales")
+    categoria = models.ForeignKey(CategoriaInteres, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos_locales")
+    nombre_objetivo = models.CharField(max_length=255)
+    comercio = models.ForeignKey(ComercioLocal, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos")
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="objetivos_locales")
+    zona = models.CharField(max_length=150, default="Salta Capital")
+    unidad_deseada = models.CharField(max_length=80, blank=True, null=True)
+    sirve_para = models.TextField(blank=True, null=True)
+    motivo = models.TextField(blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_ACTIVO)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "objetivo de vigilancia local"
+        verbose_name_plural = "objetivos de vigilancia local"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return self.nombre_objetivo
+
+
+class EvidenciaLocal(models.Model):
+    TIPO_FOTO_GONDOLA = "foto_gondola"
+    TIPO_FOTO_CARTEL = "foto_cartel"
+    TIPO_FOTO_TICKET = "foto_ticket"
+    TIPO_FOLLETO = "folleto"
+    TIPO_PDF = "pdf"
+    TIPO_CATALOGO = "catalogo"
+    TIPO_URL = "url"
+    TIPO_TEXTO = "texto_manual"
+    TIPO_NINGUNA = "ninguna"
+    TIPO_CHOICES = [
+        (TIPO_FOTO_GONDOLA, "Foto de gondola"),
+        (TIPO_FOTO_CARTEL, "Foto de cartel"),
+        (TIPO_FOTO_TICKET, "Foto de ticket"),
+        (TIPO_FOLLETO, "Folleto"),
+        (TIPO_PDF, "PDF"),
+        (TIPO_CATALOGO, "Catalogo"),
+        (TIPO_URL, "URL"),
+        (TIPO_TEXTO, "Texto manual"),
+        (TIPO_NINGUNA, "Ninguna"),
+    ]
+    NIVEL_VERIFICADA = "verificada"
+    NIVEL_PARCIAL = "evidencia_parcial"
+    NIVEL_MANUAL = "informada_manualmente"
+    NIVEL_PENDIENTE = "pendiente"
+    NIVEL_RECHAZADA = "rechazada"
+    NIVEL_CHOICES = [
+        (NIVEL_VERIFICADA, "Verificada"),
+        (NIVEL_PARCIAL, "Evidencia parcial"),
+        (NIVEL_MANUAL, "Informada manualmente"),
+        (NIVEL_PENDIENTE, "Pendiente"),
+        (NIVEL_RECHAZADA, "Rechazada"),
+    ]
+
+    observacion = models.ForeignKey(ObservacionPrecioLocal, on_delete=models.CASCADE, related_name="evidencias")
+    tipo = models.CharField(max_length=30, choices=TIPO_CHOICES, default=TIPO_TEXTO)
+    archivo = models.FileField(upload_to="evidencias_locales/%Y/%m/", blank=True, null=True)
+    url = models.URLField(blank=True, null=True)
+    fecha = models.DateTimeField(default=timezone.now)
+    observacion_texto = models.TextField(blank=True, null=True)
+    nivel_verificacion = models.CharField(max_length=30, choices=NIVEL_CHOICES, default=NIVEL_PENDIENTE)
+    privada = models.BooleanField(default=False)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "evidencia local"
+        verbose_name_plural = "evidencias locales"
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.observacion}"
+
+
+class CorreccionClasificacionLocal(models.Model):
+    observacion = models.ForeignKey(ObservacionPrecioLocal, on_delete=models.CASCADE, related_name="correcciones")
+    clasificacion_anterior = models.CharField(max_length=30, choices=ObservacionPrecioLocal.CLASIFICACION_CHOICES)
+    clasificacion_nueva = models.CharField(max_length=30, choices=ObservacionPrecioLocal.CLASIFICACION_CHOICES)
+    motivo = models.TextField()
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "correccion de clasificacion local"
+        verbose_name_plural = "correcciones de clasificacion local"
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"{self.observacion} {self.clasificacion_anterior} -> {self.clasificacion_nueva}"
 
 
 class CompraProducto(models.Model):

@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     AuditoriaFuenteWeb,
     CandidatoCompra,
+    ComercioLocal,
     CompraProducto,
     CategoriaInteres,
     CategoriaFuente,
@@ -17,6 +18,7 @@ from .models import (
     DetalleLoteCaptura,
     DetalleEjecucionConector,
     EjecucionConector,
+    EvidenciaLocal,
     EvaluacionOportunidadMultifuente,
     FuenteProducto,
     FuenteWeb,
@@ -25,8 +27,11 @@ from .models import (
     ItemRanking,
     LoteRanking,
     LoteCaptura,
+    LoteCapturaLocal,
     MercadoLibreToken,
     Oportunidad,
+    ObjetivoVigilanciaLocal,
+    ObservacionPrecioLocal,
     OportunidadRadar,
     OperacionCuraduria,
     PoliticaExtraccionFuente,
@@ -45,6 +50,7 @@ from .models import (
     SesionLaboratorioMapeo,
     SenalDemandaProducto,
     SugerenciaMatchingProducto,
+    UmbralPrecioLocal,
     VentaProducto,
 )
 
@@ -65,6 +71,51 @@ class DetalleLoteCapturaAdmin(admin.ModelAdmin):
     list_display = ("lote", "estado", "producto_fuente", "precio_fuente", "fecha")
     list_filter = ("estado",)
     search_fields = ("mensaje", "datos_originales")
+
+
+@admin.register(ComercioLocal)
+class ComercioLocalAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tipo_fuente", "zona", "ciudad", "modalidad", "requiere_visita", "estado_verificacion", "activo")
+    list_filter = ("tipo_fuente", "ciudad", "zona", "modalidad", "estado_verificacion", "activo")
+    search_fields = ("nombre", "sucursal", "zona", "direccion_referencia", "contacto_publico")
+
+
+@admin.register(LoteCapturaLocal)
+class LoteCapturaLocalAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "zona", "comercio", "metodo_captura", "estado", "cantidad_filas", "fecha_observacion")
+    list_filter = ("metodo_captura", "estado", "zona")
+    search_fields = ("nombre", "zona", "texto_original", "observaciones", "hash_importacion")
+    readonly_fields = ("fecha_carga", "fecha_actualizacion", "hash_importacion", "posible_duplicado")
+
+
+@admin.register(UmbralPrecioLocal)
+class UmbralPrecioLocalAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "categoria", "zona", "unidad_normalizada", "precio_maximo_fuerte", "precio_maximo_bueno", "activo", "fecha_desde", "fecha_hasta")
+    list_filter = ("activo", "unidad_normalizada", "zona", "tipo_fuente", "marca_importa", "segunda_marca_aceptada")
+    search_fields = ("nombre", "grupo_comparable", "marca", "origen_justificacion", "observaciones")
+
+
+@admin.register(ObservacionPrecioLocal)
+class ObservacionPrecioLocalAdmin(admin.ModelAdmin):
+    list_display = ("nombre_original", "comercio", "zona", "precio_total_encontrado", "precio_por_kg", "precio_por_litro", "precio_por_metro", "clasificacion_final", "estado_publicacion", "fecha_observacion")
+    list_filter = ("clasificacion_final", "estado_publicacion", "estado_vigencia", "stock_estimado", "zona", "segunda_marca")
+    search_fields = ("nombre_original", "marca", "sirve_para", "motivo_clasificacion", "observaciones")
+    autocomplete_fields = ("producto_fuente", "producto_canonico", "categoria", "comercio", "umbral_aplicado")
+    readonly_fields = ("fecha_creacion", "fecha_actualizacion")
+
+
+@admin.register(ObjetivoVigilanciaLocal)
+class ObjetivoVigilanciaLocalAdmin(admin.ModelAdmin):
+    list_display = ("nombre_objetivo", "comercio", "zona", "unidad_deseada", "estado", "fecha_creacion")
+    list_filter = ("estado", "zona")
+    search_fields = ("nombre_objetivo", "sirve_para", "motivo")
+
+
+@admin.register(EvidenciaLocal)
+class EvidenciaLocalAdmin(admin.ModelAdmin):
+    list_display = ("observacion", "tipo", "nivel_verificacion", "privada", "fecha")
+    list_filter = ("tipo", "nivel_verificacion", "privada")
+    search_fields = ("observacion__nombre_original", "observacion_texto", "url")
 
 
 @admin.register(LoteRanking)

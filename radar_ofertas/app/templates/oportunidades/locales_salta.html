@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Oportunidades locales Salta{% endblock %}
+{% block proceso %}Proceso: Oportunidades locales Salta{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1>Oportunidades locales Salta</h1>
+    <p class="text-secondary mb-0">Precios observados en comercios fisicos, umbrales y objetivos de vigilancia.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-primary" href="{% url 'oportunidades:local_registrar_precio' %}">Registrar precio local</a>
+    <a class="btn btn-outline-primary" href="{% url 'oportunidades:local_importar' %}">Importar tabla</a>
+  </div>
+</div>
+
+<form class="row g-2 bg-white border rounded p-3 mb-3">
+  <div class="col-md-3"><input class="form-control" name="zona" value="{{ request.GET.zona }}" placeholder="Zona"></div>
+  <div class="col-md-3"><input class="form-control" name="uso" value="{{ request.GET.uso }}" placeholder="Sirve para"></div>
+  <div class="col-md-3">
+    <select class="form-select" name="estado">
+      <option value="">Estado</option>
+      {% for value,label in clasificaciones %}<option value="{{ value }}" {% if request.GET.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2"><button class="btn btn-outline-primary w-100">Filtrar</button></div>
+</form>
+
+<div class="row g-3">
+  {% for item in oportunidades %}
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <h5 class="card-title mb-1">{{ item.nombre_original }}</h5>
+            <span class="badge text-bg-{% if item.clasificacion_final == 'alerta_fuerte' %}danger{% elif item.clasificacion_final == 'buena_oportunidad' %}success{% elif item.clasificacion_final == 'vigilar' %}info{% else %}warning{% endif %}">{{ item.get_clasificacion_final_display }}</span>
+          </div>
+          <p class="mb-1">Precio observado: ${{ item.precio_total_encontrado|default:"-" }}</p>
+          <p class="small mb-1">
+            Unidad: ${{ item.precio_por_unidad }} · Kg: ${{ item.precio_por_kg }} · Litro: ${{ item.precio_por_litro }} · Metro: ${{ item.precio_por_metro }}
+          </p>
+          <p class="mb-1">Lugar: {{ item.comercio|default:item.fuente_web|default:"-" }} · {{ item.zona }}</p>
+          <p class="small text-secondary mb-1">Sirve para: {{ item.sirve_para|default:"-" }}</p>
+          <p class="small mb-1">Observado: {{ item.fecha_observacion }} · Vigencia: {{ item.get_estado_vigencia_display }}</p>
+          {% if item.requiere_visita %}<p class="small text-warning mb-1">Requiere visita o verificacion en el local.</p>{% endif %}
+          {% if item.evidencias.all %}
+            <p class="small mb-1">Evidencia: {{ item.evidencias.first.get_nivel_verificacion_display }}</p>
+          {% else %}
+            <p class="small text-secondary mb-1">Precio informado manualmente, pendiente de verificacion.</p>
+          {% endif %}
+          <p class="small mb-2">{{ item.motivo_clasificacion }}</p>
+          <a class="small" href="{% url 'oportunidades:local_observacion_historico' item.id %}">Historico</a>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="col-12"><div class="alert alert-secondary">No hay oportunidades locales publicadas o visibles con estos filtros.</div></div>
+  {% endfor %}
+</div>
+
+<h2 class="h4 mt-4">Objetivos de vigilancia</h2>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Producto</th><th>Comercio</th><th>Zona</th><th>Unidad deseada</th><th>Sirve para</th></tr></thead>
+    <tbody>
+    {% for objetivo in objetivos %}
+      <tr><td>{{ objetivo.nombre_objetivo }}</td><td>{{ objetivo.comercio|default:"-" }}</td><td>{{ objetivo.zona }}</td><td>{{ objetivo.unidad_deseada|default:"-" }}</td><td>{{ objetivo.sirve_para|default:"-" }}</td></tr>
+    {% empty %}
+      <tr><td colspan="5" class="text-center text-secondary py-3">Sin objetivos activos.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

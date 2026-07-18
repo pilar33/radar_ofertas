@@ -9,12 +9,20 @@ from oportunidades.models import CategoriaInteres, FuenteWeb, ItemRanking, LoteR
 from oportunidades.services.categorias_service import asegurar_categorias_supermercado
 from oportunidades.services.normalizacion_supermercado_service import calcular_presentacion, calcular_promocion, convertir_a_base, es_oportunidad_bebida
 from oportunidades.services.ranking_import_service import confirmar_importacion_ranking, limpiar_markdown, parsear_tabla_ranking, previsualizar_ranking
+from oportunidades.services.ranking_import_service import reparar_precios_normalizados_lote
 
 
 TABLA = """| Ranking | Producto | Categoria | Tienda donde aparece fuerte | Senal de venta | URL |
 |---:|---|---|---|---|---|
 | 1 | **Taladro atornillador percutor Lusqtoff 18V** | Herramientas electricas | Mercado Libre | Figura como 1 mas vendido. | [ver](https://www.mercadolibre.com.ar/mas-vendidos/MLA5228) |
 | 2 | Set herramientas Black+Decker 125 piezas | Kit de herramientas | Mercado Libre | Aparece destacado. | https://listado.mercadolibre.com.ar/kit-herramientas |
+"""
+
+TABLA_BEBIDAS_PRECIO_NORMALIZADO = """| Ranking | Producto                         | Tienda                 | Precio normalizado | Estado                   |
+| ------: | -------------------------------- | ---------------------- | -----------------: | ------------------------ |
+|       1 | Pepsi Black 2 L llevando 2 / 2x1 | Chango Mas / MasOnline |        $1.137,25/L | ALERTAR                  |
+|       2 | Pepsi Cola 2 L                   | Chango Mas / MasOnline |        $1.705,88/L | ALERTAR                  |
+|       3 | Coca-Cola 2,25 L llevando 2      | Vea                    |        $1.882,33/L | ALERTAR                  |
 """
 
 
@@ -55,6 +63,50 @@ class RankingImportTests(TestCase):
         rows, errores = parsear_tabla_ranking(csv, "csv")
         self.assertEqual(rows[0]["producto"], "Coca 2.25 x6")
         self.assertFalse(errores)
+
+    def test_importacion_markdown_toma_precio_normalizado_por_litro(self):
+        rows, errores = parsear_tabla_ranking(TABLA_BEBIDAS_PRECIO_NORMALIZADO, "markdown")
+        self.assertEqual(rows[0]["precio_normalizado"], "$1.137,25/L")
+        self.assertEqual(rows[0]["estado"], "ALERTAR")
+        self.assertFalse(errores)
+
+    def test_confirmar_guarda_precio_normalizado_por_litro(self):
+        categoria = CategoriaInteres.objects.get(slug="gaseosas")
+        preview = previsualizar_ranking(TABLA_BEBIDAS_PRECIO_NORMALIZADO, date(2026, 7, 18), alcance="supermercado")
+        datos = {
+            "nombre": "Bebidas con senales de alerta",
+            "tipo_ranking": LoteRanking.TIPO_SUPERMERCADO_REVENTA,
+            "alcance": "supermercado",
+            "categoria_id": categoria.id,
+            "fecha_referencia": date(2026, 7, 18),
+            "origen": "Radar ChatGPT - carga manual",
+            "metodologia": "Tabla pegada",
+            "estado": LoteRanking.ESTADO_BORRADOR,
+            "hash_importacion": preview["hash"],
+        }
+        lote = confirmar_importacion_ranking(datos, preview["filas"], TABLA_BEBIDAS_PRECIO_NORMALIZADO)
+        item = lote.items.order_by("posicion").first()
+        self.assertEqual(item.precio_por_litro, Decimal("1137.25"))
+        self.assertEqual(item.texto_senal, "ALERTAR")
+
+    def test_repara_lote_con_precio_normalizado_desde_texto_original(self):
+        categoria = CategoriaInteres.objects.get(slug="gaseosas")
+        lote = LoteRanking.objects.create(
+            nombre="Bebidas mal importadas",
+            tipo_ranking=LoteRanking.TIPO_SUPERMERCADO_REVENTA,
+            alcance="supermercado",
+            categoria=categoria,
+            fecha_referencia=date(2026, 7, 18),
+            origen="Radar ChatGPT - carga manual",
+            estado=LoteRanking.ESTADO_BORRADOR,
+            hash_importacion="demo-precio-normalizado",
+            texto_original=TABLA_BEBIDAS_PRECIO_NORMALIZADO,
+        )
+        ItemRanking.objects.create(lote=lote, posicion=1, nombre_original="Pepsi Black 2 L llevando 2 / 2x1", categoria=categoria, tienda="Chango Mas / MasOnline")
+        resumen = reparar_precios_normalizados_lote(lote)
+        item = lote.items.get(posicion=1)
+        self.assertEqual(resumen["actualizados"], 1)
+        self.assertEqual(item.precio_por_litro, Decimal("1137.25"))
 
     def test_limpia_negritas_markdown(self):
         self.assertEqual(limpiar_markdown("**Producto**"), "Producto")

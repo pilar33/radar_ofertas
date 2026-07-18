@@ -11,7 +11,11 @@ from django.db import transaction
 
 from oportunidades.models import CategoriaInteres, FuenteWeb, ItemRanking, LoteRanking, ProductoFuente
 from oportunidades.services.categorias_service import clasificar_categoria_producto
-from oportunidades.services.normalizacion_supermercado_service import calcular_presentacion, inferir_presentacion_desde_texto
+from oportunidades.services.normalizacion_supermercado_service import (
+    calcular_presentacion,
+    inferir_presentacion_desde_texto,
+    parsear_precio_normalizado,
+)
 
 
 COLUMNAS = {
@@ -20,10 +24,12 @@ COLUMNAS = {
     "categoria": {"categoria", "rubro"},
     "tienda": {"tienda donde aparece fuerte", "tienda", "fuente", "comercio"},
     "senal": {"senal de venta", "senal", "motivo", "observacion"},
+    "estado": {"estado", "alerta", "decision", "resultado"},
     "url": {"url", "evidencia", "enlace", "link"},
     "marca": {"marca"},
     "subcategoria": {"subcategoria"},
     "precio": {"precio", "precio total", "precio_final_total"},
+    "precio_normalizado": {"precio normalizado", "precio_normalizado", "precio por litro", "precio litro", "precio por kg", "precio por unidad"},
 }
 
 
@@ -108,7 +114,7 @@ def parsear_tabla_ranking(texto, formato="auto"):
 
 def validar_columnas(mapa):
     presentes = set(mapa.values())
-    faltantes = [campo for campo in ["posicion", "producto", "categoria", "tienda", "senal", "url"] if campo not in presentes]
+    faltantes = [campo for campo in ["posicion", "producto", "tienda"] if campo not in presentes]
     return [f"Falta columna requerida: {campo}." for campo in faltantes]
 
 
@@ -185,6 +191,26 @@ def _tipo_senal(texto):
     return ItemRanking.SENAL_RADAR_CHATGPT
 
 
+def _texto_senal_desde_row(row):
+    return row.get("senal") or row.get("estado") or row.get("precio_normalizado") or ""
+
+
+def _calculos_desde_fila(fila):
+    presentacion = fila.get("presentacion") or {}
+    raw = fila.get("raw", {})
+    calculos = calcular_presentacion(
+        tipo_presentacion=presentacion.get("tipo_presentacion", "individual"),
+        unidades_por_presentacion=presentacion.get("unidades_por_presentacion", 1),
+        contenido_neto_por_unidad=presentacion.get("contenido_neto_por_unidad", 0),
+        unidad_medida_original=presentacion.get("unidad_medida_original", "unidad"),
+        precio_final_total=raw.get("precio") or 0,
+    )
+    normalizado = parsear_precio_normalizado(raw.get("precio_normalizado"))
+    for campo, valor in normalizado.items():
+        calculos[campo] = valor
+    return calculos
+
+
 def previsualizar_ranking(texto, fecha_referencia=None, origen="Radar ChatGPT - carga manual", alcance="", formato="auto"):
     fecha_referencia = fecha_referencia or date.today()
     rows, errores_columnas = parsear_tabla_ranking(texto, formato)
@@ -221,8 +247,8 @@ def previsualizar_ranking(texto, fecha_referencia=None, origen="Radar ChatGPT - 
                 "subcategoria": row.get("subcategoria") or row.get("categoria"),
                 "tienda": row.get("tienda"),
                 "fuente_web_id": fuente.id if fuente else None,
-                "senal": row.get("senal"),
-                "tipo_senal": _tipo_senal(row.get("senal")),
+                "senal": _texto_senal_desde_row(row),
+                "tipo_senal": _tipo_senal(_texto_senal_desde_row(row)),
                 "url": row.get("url"),
                 "tipo_evidencia": evidencia,
                 "evidencia_es_ficha_exacta": ficha_exacta,
@@ -329,14 +355,7 @@ def confirmar_importacion_ranking(datos_lote, filas_preview, texto_original, usu
         fuente = FuenteWeb.objects.filter(pk=fila.get("fuente_web_id")).first()
         producto_fuente = ProductoFuente.objects.filter(pk=fila.get("producto_fuente_id")).first()
         producto_canonico = producto_fuente.producto_canonico if producto_fuente else None
-        presentacion = fila.get("presentacion") or {}
-        calculos = calcular_presentacion(
-            tipo_presentacion=presentacion.get("tipo_presentacion", "individual"),
-            unidades_por_presentacion=presentacion.get("unidades_por_presentacion", 1),
-            contenido_neto_por_unidad=presentacion.get("contenido_neto_por_unidad", 0),
-            unidad_medida_original=presentacion.get("unidad_medida_original", "unidad"),
-            precio_final_total=fila.get("raw", {}).get("precio") or 0,
-        )
+        calculos = _calculos_desde_fila(fila)
         ItemRanking.objects.create(
             lote=lote,
             posicion=fila["posicion"],
@@ -375,3 +394,49 @@ def historico_item(item):
         if _clave_item(candidato) == clave:
             historicos.append(candidato)
     return sorted(historicos, key=lambda x: (x.lote.fecha_referencia, x.posicion))
+
+
+def reparar_precios_normalizados_lote(lote):
+    if not lote.texto_original:
+        return {"actualizados": 0, "mensaje": "El lote no tiene texto_original para recalcular."}
+    preview = previsualizar_ranking(
+        lote.texto_original,
+        fecha_referencia=lote.fecha_referencia,
+        origen=lote.origen,
+        alcance=lote.alcance or "",
+    )
+    filas_por_posicion = {fila["posicion"]: fila for fila in preview["filas"]}
+    actualizados = 0
+    campos_calculo = [
+        "tipo_presentacion",
+        "unidades_por_presentacion",
+        "contenido_neto_por_unidad",
+        "unidad_medida_original",
+        "presentaciones_incluidas",
+        "unidades_totales",
+        "contenido_total",
+        "precio_final_total",
+        "costo_envio_traslado",
+        "costo_final_puesto_salta",
+        "precio_por_unidad",
+        "precio_por_litro",
+        "precio_por_kg",
+        "precio_por_100",
+        "tipo_promocion",
+        "cantidad_total_recibida",
+        "cantidad_pagada",
+        "precio_total_efectivo",
+    ]
+    for item in lote.items.all():
+        fila = filas_por_posicion.get(item.posicion)
+        if not fila:
+            continue
+        calculos = _calculos_desde_fila(fila)
+        for campo in campos_calculo:
+            setattr(item, campo, calculos[campo])
+        if not item.texto_senal and fila.get("senal"):
+            item.texto_senal = fila["senal"]
+        item.raw_data = json.dumps(fila.get("raw", {}), ensure_ascii=True)
+        item.save(update_fields=[*campos_calculo, "texto_senal", "raw_data", "fecha_actualizacion"])
+        actualizados += 1
+    return {"actualizados": actualizados, "mensaje": "Precios normalizados recalculados."}

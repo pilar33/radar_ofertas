@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from decimal import Decimal, ROUND_HALF_UP
+from numbers import Number
 
 
 Q2 = Decimal("0.01")
@@ -10,11 +11,48 @@ Q3 = Decimal("0.001")
 def D(valor, default="0"):
     if valor is None or valor == "":
         return Decimal(default)
-    return Decimal(str(valor)).quantize(Q3)
+    if isinstance(valor, Decimal):
+        return valor.quantize(Q3)
+    if isinstance(valor, Number):
+        return Decimal(str(valor)).quantize(Q3)
+    texto = str(valor).strip()
+    texto = texto.replace("$", "").replace("ARS", "").replace(" ", "")
+    texto = re.sub(r"[^0-9,.\-]", "", texto)
+    if not texto or texto in {"-", ",", "."}:
+        return Decimal(default)
+    if "," in texto and "." in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "").replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+    elif "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif "." in texto:
+        partes = texto.split(".")
+        if len(partes) > 2 or (len(partes[-1]) == 3 and all(len(parte) <= 3 for parte in partes[1:])):
+            texto = texto.replace(".", "")
+    return Decimal(texto).quantize(Q3)
 
 
 def money(valor):
     return D(valor).quantize(Q2, rounding=ROUND_HALF_UP)
+
+
+def parsear_precio_normalizado(texto):
+    texto_original = str(texto or "").strip()
+    if not texto_original:
+        return {}
+    valor = money(texto_original)
+    texto_norm = _normalizar_texto(texto_original)
+    if "/l" in texto_norm or " litro" in texto_norm or " por litro" in texto_norm:
+        return {"precio_por_litro": valor}
+    if "/kg" in texto_norm or " kilo" in texto_norm or " kilogramo" in texto_norm or " por kg" in texto_norm:
+        return {"precio_por_kg": valor}
+    if "/unidad" in texto_norm or " unidad" in texto_norm or " por unidad" in texto_norm or "/u" in texto_norm:
+        return {"precio_por_unidad": valor}
+    if "/100" in texto_norm:
+        return {"precio_por_100": valor}
+    return {"precio_por_unidad": valor}
 
 
 def _normalizar_texto(texto):

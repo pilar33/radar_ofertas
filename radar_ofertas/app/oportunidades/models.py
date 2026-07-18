@@ -1,6 +1,7 @@
 from decimal import Decimal
 from urllib.parse import urlparse
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
@@ -788,6 +789,264 @@ class PrecioFuente(models.Model):
 
     def __str__(self):
         return f"{self.producto_fuente} - {self.moneda} {self.precio}"
+
+
+class LoteRanking(models.Model):
+    TIPO_ALTA_VENTA = "alta_venta"
+    TIPO_OBRA_HOGAR = "obra_hogar"
+    TIPO_SUPERMERCADO_CONSUMO = "supermercado_consumo"
+    TIPO_SUPERMERCADO_REVENTA = "supermercado_reventa"
+    TIPO_CHOICES = [
+        (TIPO_ALTA_VENTA, "Productos con senales de alta venta"),
+        (TIPO_OBRA_HOGAR, "Ofertas de obra/hogar"),
+        (TIPO_SUPERMERCADO_CONSUMO, "Supermercado/consumo"),
+        (TIPO_SUPERMERCADO_REVENTA, "Supermercado/reventa"),
+    ]
+
+    ESTADO_BORRADOR = "borrador"
+    ESTADO_VALIDADO = "validado"
+    ESTADO_PUBLICADO = "publicado"
+    ESTADO_DESCARTADO = "descartado"
+    ESTADO_CHOICES = [
+        (ESTADO_BORRADOR, "Borrador"),
+        (ESTADO_VALIDADO, "Validado"),
+        (ESTADO_PUBLICADO, "Publicado"),
+        (ESTADO_DESCARTADO, "Descartado"),
+    ]
+
+    nombre = models.CharField(max_length=180)
+    tipo_ranking = models.CharField(max_length=40, choices=TIPO_CHOICES, default=TIPO_ALTA_VENTA)
+    alcance = models.CharField(max_length=150, blank=True, null=True)
+    categoria = models.ForeignKey(CategoriaInteres, on_delete=models.SET_NULL, null=True, blank=True, related_name="lotes_ranking")
+    fecha_referencia = models.DateField()
+    fecha_importacion = models.DateTimeField(auto_now_add=True)
+    origen = models.CharField(max_length=180, default="Radar ChatGPT - carga manual")
+    metodologia = models.TextField(blank=True, null=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    cantidad_filas = models.PositiveIntegerField(default=0)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=ESTADO_BORRADOR)
+    hash_importacion = models.CharField(max_length=64, db_index=True)
+    texto_original = models.TextField(blank=True, null=True)
+    posible_duplicado = models.BooleanField(default=False)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "lote de ranking"
+        verbose_name_plural = "lotes de ranking"
+        ordering = ["-fecha_referencia", "-fecha_importacion"]
+        indexes = [
+            models.Index(fields=["tipo_ranking", "alcance", "fecha_referencia"]),
+            models.Index(fields=["estado", "fecha_referencia"]),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} ({self.fecha_referencia})"
+
+
+class ItemRanking(models.Model):
+    SENAL_ETIQUETA_MAS_VENDIDO = "etiqueta_mas_vendido"
+    SENAL_RANKING_OFICIAL = "ranking_oficial"
+    SENAL_BLOQUE_DESTACADO = "bloque_destacado"
+    SENAL_BUSQUEDA_DESTACADA = "busqueda_destacada"
+    SENAL_ALTA_RECURRENCIA = "alta_recurrencia"
+    SENAL_RADAR_CHATGPT = "radar_chatgpt"
+    SENAL_CARGA_MANUAL = "carga_manual"
+    SENAL_OTRA = "otra"
+    SENAL_CHOICES = [
+        (SENAL_ETIQUETA_MAS_VENDIDO, "Etiqueta mas vendido"),
+        (SENAL_RANKING_OFICIAL, "Ranking oficial"),
+        (SENAL_BLOQUE_DESTACADO, "Bloque destacado"),
+        (SENAL_BUSQUEDA_DESTACADA, "Busqueda destacada"),
+        (SENAL_ALTA_RECURRENCIA, "Alta recurrencia"),
+        (SENAL_RADAR_CHATGPT, "Radar ChatGPT"),
+        (SENAL_CARGA_MANUAL, "Carga manual"),
+        (SENAL_OTRA, "Otra"),
+    ]
+
+    EVIDENCIA_FICHA = "ficha_producto"
+    EVIDENCIA_LISTADO = "listado_productos"
+    EVIDENCIA_CATEGORIA = "pagina_categoria"
+    EVIDENCIA_RANKING_TIENDA = "ranking_tienda"
+    EVIDENCIA_FOLLETO = "folleto"
+    EVIDENCIA_CATALOGO = "catalogo"
+    EVIDENCIA_PDF = "pdf"
+    EVIDENCIA_OTRA = "otra"
+    EVIDENCIA_CHOICES = [
+        (EVIDENCIA_FICHA, "Ficha de producto"),
+        (EVIDENCIA_LISTADO, "Listado de productos"),
+        (EVIDENCIA_CATEGORIA, "Pagina de categoria"),
+        (EVIDENCIA_RANKING_TIENDA, "Ranking de tienda"),
+        (EVIDENCIA_FOLLETO, "Folleto"),
+        (EVIDENCIA_CATALOGO, "Catalogo"),
+        (EVIDENCIA_PDF, "PDF"),
+        (EVIDENCIA_OTRA, "Otra"),
+    ]
+
+    VERIFICACION_PENDIENTE = "pendiente"
+    VERIFICACION_VERIFICADO = "verificado"
+    VERIFICACION_INSUFICIENTE = "evidencia_insuficiente"
+    VERIFICACION_DESCARTADO = "descartado"
+    VERIFICACION_CHOICES = [
+        (VERIFICACION_PENDIENTE, "Pendiente"),
+        (VERIFICACION_VERIFICADO, "Verificado"),
+        (VERIFICACION_INSUFICIENTE, "Evidencia insuficiente"),
+        (VERIFICACION_DESCARTADO, "Descartado"),
+    ]
+
+    TENDENCIA_NUEVO = "nuevo"
+    TENDENCIA_SUBIO = "subio"
+    TENDENCIA_BAJO = "bajo"
+    TENDENCIA_MANTUVO = "se_mantuvo"
+    TENDENCIA_SIN_COMPARACION = "sin_comparacion"
+    TENDENCIA_CHOICES = [
+        (TENDENCIA_NUEVO, "Nuevo"),
+        (TENDENCIA_SUBIO, "Subio"),
+        (TENDENCIA_BAJO, "Bajo"),
+        (TENDENCIA_MANTUVO, "Se mantuvo"),
+        (TENDENCIA_SIN_COMPARACION, "Sin comparacion"),
+    ]
+
+    PRESENTACION_INDIVIDUAL = "individual"
+    PRESENTACION_PACK = "pack"
+    PRESENTACION_FARDO = "fardo"
+    PRESENTACION_BULTO = "bulto"
+    PRESENTACION_PROMOCION = "promocion"
+    PRESENTACION_CHOICES = [
+        (PRESENTACION_INDIVIDUAL, "Individual"),
+        (PRESENTACION_PACK, "Pack"),
+        (PRESENTACION_FARDO, "Fardo"),
+        (PRESENTACION_BULTO, "Bulto"),
+        (PRESENTACION_PROMOCION, "Promocion"),
+    ]
+
+    UNIDAD_ML = "ml"
+    UNIDAD_LITRO = "litro"
+    UNIDAD_G = "g"
+    UNIDAD_KG = "kg"
+    UNIDAD_UNIDAD = "unidad"
+    UNIDAD_CHOICES = [
+        (UNIDAD_ML, "ml"),
+        (UNIDAD_LITRO, "litro"),
+        (UNIDAD_G, "g"),
+        (UNIDAD_KG, "kg"),
+        (UNIDAD_UNIDAD, "unidad"),
+    ]
+
+    PROMO_NINGUNA = "ninguna"
+    PROMO_2X1 = "2x1"
+    PROMO_3X2 = "3x2"
+    PROMO_SEGUNDA_DESCUENTO = "segunda_descuento"
+    PROMO_DESCUENTO_DIRECTO = "descuento_directo"
+    PROMO_DESCUENTO_BANCARIO = "descuento_bancario"
+    PROMO_TRANSFERENCIA = "transferencia"
+    PROMO_TARJETA = "tarjeta"
+    PROMO_PERSONALIZADA = "personalizada"
+    PROMO_CHOICES = [
+        (PROMO_NINGUNA, "Sin promocion"),
+        (PROMO_2X1, "2x1"),
+        (PROMO_3X2, "3x2"),
+        (PROMO_SEGUNDA_DESCUENTO, "Segunda unidad con descuento"),
+        (PROMO_DESCUENTO_DIRECTO, "Descuento directo"),
+        (PROMO_DESCUENTO_BANCARIO, "Descuento bancario"),
+        (PROMO_TRANSFERENCIA, "Transferencia"),
+        (PROMO_TARJETA, "Tarjeta"),
+        (PROMO_PERSONALIZADA, "Personalizada"),
+    ]
+
+    ROTACION_ALTA = "alta"
+    ROTACION_MEDIA = "media"
+    ROTACION_BAJA = "baja"
+    ROTACION_SIN_DETERMINAR = "sin_determinar"
+    ROTACION_CHOICES = [
+        (ROTACION_ALTA, "Alta"),
+        (ROTACION_MEDIA, "Media"),
+        (ROTACION_BAJA, "Baja"),
+        (ROTACION_SIN_DETERMINAR, "Sin determinar"),
+    ]
+
+    CONVENIENCIA_CONSUMO = "consumo_propio"
+    CONVENIENCIA_REVENTA = "reventa"
+    CONVENIENCIA_AMBAS = "ambas"
+    CONVENIENCIA_SIN_DETERMINAR = "sin_determinar"
+    CONVENIENCIA_CHOICES = [
+        (CONVENIENCIA_CONSUMO, "Conveniente para consumo propio"),
+        (CONVENIENCIA_REVENTA, "Posible oportunidad de reventa"),
+        (CONVENIENCIA_AMBAS, "Consumo y reventa"),
+        (CONVENIENCIA_SIN_DETERMINAR, "Sin determinar"),
+    ]
+
+    lote = models.ForeignKey(LoteRanking, on_delete=models.CASCADE, related_name="items")
+    posicion = models.PositiveIntegerField()
+    nombre_original = models.CharField(max_length=255)
+    producto_fuente = models.ForeignKey(ProductoFuente, on_delete=models.SET_NULL, null=True, blank=True, related_name="items_ranking")
+    producto_canonico = models.ForeignKey(ProductoCanonico, on_delete=models.SET_NULL, null=True, blank=True, related_name="items_ranking")
+    categoria = models.ForeignKey(CategoriaInteres, on_delete=models.SET_NULL, null=True, blank=True, related_name="items_ranking")
+    subcategoria = models.CharField(max_length=150, blank=True, null=True)
+    marca = models.CharField(max_length=100, blank=True, null=True)
+    tienda = models.CharField(max_length=150, blank=True, null=True)
+    fuente_web = models.ForeignKey(FuenteWeb, on_delete=models.SET_NULL, null=True, blank=True, related_name="items_ranking")
+    texto_senal = models.TextField(blank=True, null=True)
+    tipo_senal = models.CharField(max_length=40, choices=SENAL_CHOICES, default=SENAL_CARGA_MANUAL)
+    url_evidencia = models.URLField(blank=True, null=True)
+    tipo_evidencia = models.CharField(max_length=40, choices=EVIDENCIA_CHOICES, default=EVIDENCIA_OTRA)
+    fecha_observacion = models.DateField(null=True, blank=True)
+    estado_verificacion = models.CharField(max_length=40, choices=VERIFICACION_CHOICES, default=VERIFICACION_PENDIENTE)
+    observaciones = models.TextField(blank=True, null=True)
+    posicion_anterior = models.PositiveIntegerField(null=True, blank=True)
+    variacion_posiciones = models.IntegerField(default=0)
+    tendencia = models.CharField(max_length=40, choices=TENDENCIA_CHOICES, default=TENDENCIA_SIN_COMPARACION)
+    apariciones_ultimos_lotes = models.PositiveIntegerField(default=1)
+    primera_fecha_observada = models.DateField(null=True, blank=True)
+    ultima_fecha_observada = models.DateField(null=True, blank=True)
+    evidencia_es_ficha_exacta = models.BooleanField(default=False)
+    coincidencia_confianza = models.PositiveIntegerField(default=0)
+    coincidencia_mensaje = models.CharField(max_length=255, blank=True, null=True)
+
+    tipo_presentacion = models.CharField(max_length=20, choices=PRESENTACION_CHOICES, default=PRESENTACION_INDIVIDUAL)
+    unidades_por_presentacion = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    contenido_neto_por_unidad = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    unidad_medida_original = models.CharField(max_length=20, choices=UNIDAD_CHOICES, default=UNIDAD_UNIDAD)
+    presentaciones_incluidas = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unidades_totales = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    contenido_total = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    precio_final_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_envio_traslado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_final_puesto_salta = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_unidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_litro = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_100 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tipo_promocion = models.CharField(max_length=40, choices=PROMO_CHOICES, default=PROMO_NINGUNA)
+    cantidad_total_recibida = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cantidad_pagada = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    precio_total_efectivo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    precio_reventa_referencia = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    costo_efectivo_por_unidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margen_bruto_estimado_unidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    margen_porcentual_estimado = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    cantidad_minima_bulto = models.CharField(max_length=100, blank=True, null=True)
+    limite_por_cliente = models.CharField(max_length=100, blank=True, null=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    rotacion = models.CharField(max_length=30, choices=ROTACION_CHOICES, default=ROTACION_SIN_DETERMINAR)
+    conveniencia = models.CharField(max_length=30, choices=CONVENIENCIA_CHOICES, default=CONVENIENCIA_SIN_DETERMINAR)
+
+    raw_data = models.TextField(blank=True, null=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "item de ranking"
+        verbose_name_plural = "items de ranking"
+        ordering = ["lote", "posicion", "id"]
+        indexes = [
+            models.Index(fields=["lote", "posicion"]),
+            models.Index(fields=["tienda", "categoria"]),
+            models.Index(fields=["tendencia"]),
+        ]
+
+    def __str__(self):
+        return f"#{self.posicion} {self.nombre_original}"
 
 
 class ComparacionPrecio(models.Model):

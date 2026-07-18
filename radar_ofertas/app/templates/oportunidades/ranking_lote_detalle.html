@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Detalle ranking{% endblock %}
+{% block proceso %}Proceso: Rankings / Detalle de lote{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1>{{ lote.nombre }}</h1>
+    <p class="text-secondary mb-0">{{ lote.get_tipo_ranking_display }} · {{ lote.alcance|default:"sin alcance" }} · {{ lote.fecha_referencia }}</p>
+    <p class="small text-secondary mb-0">Origen: {{ lote.origen }} · Estado: {{ lote.get_estado_display }}</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'oportunidades:ranking_importar' %}">Importar otro</a>
+</div>
+<form class="row g-2 bg-white border rounded p-3 mb-3">
+  <div class="col-md-4"><input class="form-control" name="tienda" value="{{ request.GET.tienda }}" placeholder="Tienda"></div>
+  <div class="col-md-4"><select class="form-select" name="verificacion"><option value="">Verificacion</option><option value="pendiente">Pendiente</option><option value="verificado">Verificado</option><option value="evidencia_insuficiente">Evidencia insuficiente</option><option value="descartado">Descartado</option></select></div>
+  <div class="col-md-2"><button class="btn btn-outline-primary w-100">Filtrar</button></div>
+</form>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Pos.</th><th>Producto</th><th>Categoria</th><th>Tienda</th><th>Senal observada</th><th>Tendencia</th><th>Normalizado</th><th>Evidencia</th><th>Oferta</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td><strong>{{ item.posicion }}</strong>{% if item.posicion_anterior %}<br><span class="small text-secondary">Antes {{ item.posicion_anterior }}</span>{% endif %}</td>
+        <td>{{ item.nombre_original }}<br><span class="small text-secondary">{{ item.coincidencia_mensaje }}</span></td>
+        <td>{{ item.categoria|default:"-" }}{% if item.subcategoria %}<br><span class="small text-secondary">{{ item.subcategoria }}</span>{% endif %}</td>
+        <td>{{ item.tienda|default:"-" }}</td>
+        <td class="small">{{ item.texto_senal }}</td>
+        <td><span class="badge text-bg-info">{{ item.get_tendencia_display }}</span>{% if item.variacion_posiciones %}<br><span class="small">{{ item.variacion_posiciones }}</span>{% endif %}</td>
+        <td class="small">
+          Unidad: ${{ item.precio_por_unidad }}<br>
+          Litro: ${{ item.precio_por_litro }}<br>
+          Kg: ${{ item.precio_por_kg }}
+        </td>
+        <td class="small">{% if item.url_evidencia %}<a href="{{ item.url_evidencia }}" target="_blank" rel="noopener">Abrir</a>{% else %}-{% endif %}<br>{{ item.get_tipo_evidencia_display }}</td>
+        <td>{% if item.producto_fuente_id %}<a class="btn btn-sm btn-outline-success" href="{% url 'oportunidades:detalle_curaduria_producto' item.producto_fuente_id %}">Ver producto</a>{% else %}<span class="text-secondary small">Sin producto exacto</span>{% endif %}<br><a class="small" href="{% url 'oportunidades:ranking_item_historico' item.id %}">Historico</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="9" class="text-center text-secondary py-4">Sin items.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

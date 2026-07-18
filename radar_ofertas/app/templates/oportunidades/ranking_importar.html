@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Importar ranking{% endblock %}
+{% block proceso %}Proceso: Rankings / Importacion manual{% endblock %}
+{% block content %}
+<h1>Importar ranking desde tabla</h1>
+<p class="text-secondary">Pegá una tabla Markdown o CSV. Primero se previsualiza; nada se guarda hasta confirmar.</p>
+<form method="post" class="bg-white border rounded p-3 mb-3">
+  {% csrf_token %}
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label">Nombre</label>{{ form.nombre }}</div>
+    <div class="col-md-3"><label class="form-label">Tipo</label>{{ form.tipo_ranking }}</div>
+    <div class="col-md-2"><label class="form-label">Alcance</label>{{ form.alcance }}</div>
+    <div class="col-md-3"><label class="form-label">Categoria</label>{{ form.categoria }}</div>
+    <div class="col-md-2"><label class="form-label">Fecha referencia</label>{{ form.fecha_referencia }}</div>
+    <div class="col-md-3"><label class="form-label">Origen</label>{{ form.origen }}</div>
+    <div class="col-md-2"><label class="form-label">Formato</label>{{ form.formato }}</div>
+    <div class="col-md-2"><label class="form-label">Estado inicial</label>{{ form.estado }}</div>
+    <div class="col-md-3 d-flex align-items-end"><label class="form-check">{{ form.permitir_duplicado }} <span class="form-check-label">Permitir duplicado</span></label></div>
+    <div class="col-12"><label class="form-label">Metodologia</label>{{ form.metodologia }}</div>
+    <div class="col-12"><label class="form-label">Tabla pegada</label>{{ form.texto }}</div>
+  </div>
+  <div class="mt-3 d-flex gap-2">
+    <button class="btn btn-primary" name="accion" value="preview">Previsualizar</button>
+    {% if preview %}<button class="btn btn-success" name="accion" value="confirmar">Confirmar y crear lote</button>{% endif %}
+    <a class="btn btn-outline-secondary" href="{% url 'oportunidades:rankings_lista' %}">Volver</a>
+  </div>
+</form>
+{% if preview %}
+<div class="alert alert-info">Filas detectadas: {{ preview.total }}. Revisá errores y coincidencias antes de confirmar.</div>
+{% if preview.errores %}
+<div class="alert alert-warning"><strong>Advertencias:</strong><ul class="mb-0">{% for error in preview.errores %}<li>{{ error }}</li>{% endfor %}</ul></div>
+{% endif %}
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>#</th><th>Producto</th><th>Categoria normalizada</th><th>Tienda</th><th>Senal observada</th><th>Evidencia</th><th>Coincidencia</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for fila in preview.filas %}
+      <tr class="{% if not fila.valida %}table-warning{% endif %}">
+        <td>{{ fila.posicion }}</td>
+        <td>{{ fila.producto }}</td>
+        <td>{{ fila.categoria_nombre }}<br><span class="small text-secondary">{{ fila.subcategoria }}</span></td>
+        <td>{{ fila.tienda|default:"-" }}</td>
+        <td class="small">{{ fila.senal }}</td>
+        <td class="small">{% if fila.url %}<a href="{{ fila.url }}" target="_blank" rel="noopener">Abrir</a>{% else %}-{% endif %}<br>{{ fila.tipo_evidencia }}</td>
+        <td class="small">{{ fila.coincidencia_confianza }}% - {{ fila.coincidencia_mensaje }}</td>
+        <td>{% if fila.valida %}<span class="badge text-bg-success">Valida</span>{% else %}<span class="badge text-bg-warning">Revisar</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

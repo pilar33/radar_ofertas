@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Historico ranking{% endblock %}
+{% block proceso %}Proceso: Rankings / Historico{% endblock %}
+{% block content %}
+<h1>Historico de senal</h1>
+<p class="text-secondary">{{ item.nombre_original }}</p>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Fecha</th><th>Lote</th><th>Posicion</th><th>Tendencia</th><th>Tienda</th><th>Senal</th></tr></thead>
+    <tbody>
+    {% for fila in historico %}
+      <tr>
+        <td>{{ fila.lote.fecha_referencia }}</td>
+        <td><a href="{% url 'oportunidades:ranking_lote_detalle' fila.lote_id %}">{{ fila.lote.nombre }}</a></td>
+        <td>{{ fila.posicion }}</td>
+        <td>{{ fila.get_tendencia_display }}</td>
+        <td>{{ fila.tienda|default:"-" }}</td>
+        <td class="small">{{ fila.texto_senal }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6">Sin historico.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

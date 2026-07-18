@@ -82,6 +82,28 @@ CATEGORIAS_BASE = [
 ]
 
 
+CATEGORIA_SUPERMERCADO = CategoriaBase(
+    "Supermercado, bebidas y mercaderia revendible",
+    "supermercado-bebidas-mercaderia-revendible",
+    35,
+    ("supermercado", "bebidas", "mercaderia revendible", "fardo", "pack"),
+)
+
+
+SUBCATEGORIAS_SUPERMERCADO = [
+    CategoriaBase("Gaseosas", "gaseosas", 351, ("gaseosa", "coca", "cola", "cunnington", "sprite", "fanta")),
+    CategoriaBase("Aguas y aguas saborizadas", "aguas-aguas-saborizadas", 352, ("agua", "agua saborizada")),
+    CategoriaBase("Jugos", "jugos", 353, ("jugo", "nectar")),
+    CategoriaBase("Cervezas", "cervezas", 354, ("cerveza", "lata", "porron")),
+    CategoriaBase("Energizantes", "energizantes", 355, ("energizante", "speed", "red bull", "monster")),
+    CategoriaBase("Almacen revendible", "almacen-revendible", 356, ("almacen", "arroz", "fideo", "aceite", "yerba", "azucar")),
+    CategoriaBase("Limpieza", "limpieza", 357, ("limpieza", "detergente", "lavandina", "jabon")),
+    CategoriaBase("Higiene personal", "higiene-personal", 358, ("higiene", "shampoo", "desodorante", "pasta dental")),
+    CategoriaBase("Papel y panales", "papel-panales", 359, ("papel", "panal", "panales", "rollo")),
+    CategoriaBase("Otros productos de supermercado", "otros-productos-supermercado", 360, ("otros supermercado",)),
+]
+
+
 def _texto_clasificacion(*partes):
     texto = " ".join(str(parte or "") for parte in partes).lower()
     texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
@@ -126,6 +148,56 @@ def asegurar_categorias_base():
     return {"creadas": creadas, "actualizadas": actualizadas}
 
 
+def asegurar_categorias_supermercado():
+    resumen = asegurar_categorias_base()
+    padre = CategoriaInteres.objects.filter(slug=CATEGORIA_SUPERMERCADO.slug).first()
+    if not padre:
+        padre = CategoriaInteres.objects.filter(nombre__iexact=CATEGORIA_SUPERMERCADO.nombre).first()
+    defaults_padre = {
+        "slug": CATEGORIA_SUPERMERCADO.slug,
+        "palabra_clave": "supermercado",
+        "descripcion": "Categoria para bebidas, consumo masivo y mercaderia revendible.",
+        "activa": True,
+        "prioridad": CATEGORIA_SUPERMERCADO.prioridad,
+        "palabras_clave": ", ".join(CATEGORIA_SUPERMERCADO.palabras_clave),
+        "marcas_clave": "",
+    }
+    if padre:
+        for campo, valor in defaults_padre.items():
+            if not getattr(padre, campo):
+                setattr(padre, campo, valor)
+        padre.save()
+        resumen["actualizadas"] += 1
+    else:
+        padre = CategoriaInteres.objects.create(nombre=CATEGORIA_SUPERMERCADO.nombre, **defaults_padre)
+        resumen["creadas"] += 1
+
+    for base in SUBCATEGORIAS_SUPERMERCADO:
+        categoria = CategoriaInteres.objects.filter(slug=base.slug).first()
+        if not categoria:
+            categoria = CategoriaInteres.objects.filter(nombre__iexact=base.nombre).first()
+        defaults = {
+            "slug": base.slug,
+            "palabra_clave": base.palabras_clave[0],
+            "descripcion": base.descripcion,
+            "activa": True,
+            "prioridad": base.prioridad,
+            "categoria_padre": padre,
+            "palabras_clave": ", ".join(base.palabras_clave),
+            "marcas_clave": ", ".join(base.marcas_clave),
+        }
+        if categoria:
+            for campo, valor in defaults.items():
+                if campo == "categoria_padre" or not getattr(categoria, campo):
+                    setattr(categoria, campo, valor)
+            categoria.save()
+            resumen["actualizadas"] += 1
+        else:
+            CategoriaInteres.objects.create(nombre=base.nombre, **defaults)
+            resumen["creadas"] += 1
+    return resumen
+
+
 def obtener_categoria_otros():
     asegurar_categorias_base()
     return CategoriaInteres.objects.filter(slug="otros").first()
@@ -157,6 +229,12 @@ def clasificar_categoria_producto(
     asegurar_categorias_base()
     categorias_por_slug = {categoria.slug: categoria for categoria in CategoriaInteres.objects.filter(activa=True)}
     reglas = [
+        ("gaseosas", ("gaseosa", "coca cola", "coca", "cunnington", "sprite", "fanta", "cola")),
+        ("aguas-aguas-saborizadas", ("agua", "agua saborizada")),
+        ("jugos", ("jugo", "nectar")),
+        ("cervezas", ("cerveza", "lata cerveza", "porron")),
+        ("energizantes", ("energizante", "speed", "red bull", "monster")),
+        ("almacen-revendible", ("arroz", "fideo", "aceite", "yerba", "azucar", "almacen")),
         ("calzado", ("zapatilla", "botin", "bota", "borcego", "calzado", "sandalia")),
         ("ropa-de-trabajo", ("pampero", "ombu", "grafa", "ropa de trabajo", "camisa de trabajo", "pantalon cargo", "campera de trabajo")),
         ("herramientas", ("taladro", "amoladora", "atornillador", "sierra", "herramienta", "llave", "pinza")),

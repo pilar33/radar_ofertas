@@ -22,6 +22,8 @@ from .models import (
     FuenteWeb,
     ImportacionProductos,
     ImportacionRadarTexto,
+    ItemRanking,
+    LoteRanking,
     LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
@@ -63,6 +65,35 @@ class DetalleLoteCapturaAdmin(admin.ModelAdmin):
     list_display = ("lote", "estado", "producto_fuente", "precio_fuente", "fecha")
     list_filter = ("estado",)
     search_fields = ("mensaje", "datos_originales")
+
+
+@admin.register(LoteRanking)
+class LoteRankingAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "tipo_ranking", "alcance", "categoria", "fecha_referencia", "estado", "cantidad_filas", "origen")
+    list_filter = ("tipo_ranking", "estado", "categoria", "fecha_referencia")
+    search_fields = ("nombre", "alcance", "origen", "metodologia", "hash_importacion")
+    readonly_fields = ("fecha_importacion", "fecha_actualizacion", "hash_importacion", "posible_duplicado")
+
+
+@admin.register(ItemRanking)
+class ItemRankingAdmin(admin.ModelAdmin):
+    list_display = (
+        "lote",
+        "posicion",
+        "nombre_original",
+        "categoria",
+        "tienda",
+        "tipo_senal",
+        "estado_verificacion",
+        "posicion_anterior",
+        "tendencia",
+        "precio_por_unidad",
+        "precio_por_litro",
+    )
+    list_filter = ("lote__tipo_ranking", "categoria", "tienda", "tipo_senal", "estado_verificacion", "tendencia", "tipo_presentacion")
+    search_fields = ("nombre_original", "tienda", "texto_senal", "url_evidencia", "marca", "subcategoria")
+    autocomplete_fields = ("producto_fuente", "producto_canonico", "categoria", "fuente_web")
+    readonly_fields = ("fecha_creacion", "fecha_actualizacion")
 
 
 @admin.register(FuenteProducto)

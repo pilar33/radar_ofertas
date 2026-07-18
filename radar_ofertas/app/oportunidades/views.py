@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -33,6 +33,7 @@ from .forms import (
     PublicacionReventaForm,
     ProductoFuenteCuraduriaForm,
     RadarTextoImportForm,
+    RankingImportForm,
     RevisionManualFuenteForm,
     SenalDemandaManualForm,
     VentaProductoForm,
@@ -51,6 +52,8 @@ from .models import (
     FuenteWeb,
     ImportacionProductos,
     ImportacionRadarTexto,
+    ItemRanking,
+    LoteRanking,
     LoteCaptura,
     MercadoLibreToken,
     Oportunidad,
@@ -82,6 +85,8 @@ from .serializers import (
     FuenteWebSerializer,
     ImportacionProductosCreateSerializer,
     ImportacionProductosSerializer,
+    ItemRankingSerializer,
+    LoteRankingSerializer,
     MeliSincronizarSerializer,
     OportunidadDetalleSerializer,
     OportunidadEstadoSerializer,
@@ -113,6 +118,11 @@ from .services.importacion_service import (
     crear_producto_desde_carga_url,
     detectar_tipo_archivo,
     procesar_importacion,
+)
+from .services.ranking_import_service import (
+    confirmar_importacion_ranking,
+    historico_item,
+    previsualizar_ranking,
 )
 from .services.laboratorio_mapeo_service import (
     analizar_url_laboratorio,
@@ -2561,6 +2571,138 @@ def recalcular_oportunidad(request, pk):
     return redirect("oportunidades:detalle", pk=oportunidad.pk)
 
 
+def rankings_lista(request):
+    lotes = LoteRanking.objects.select_related("categoria").prefetch_related("items")
+    if request.GET.get("tipo"):
+        lotes = lotes.filter(tipo_ranking=request.GET["tipo"])
+    if request.GET.get("estado"):
+        lotes = lotes.filter(estado=request.GET["estado"])
+    if request.GET.get("categoria"):
+        categoria = request.GET["categoria"]
+        if categoria.isdigit():
+            lotes = lotes.filter(categoria_id=categoria)
+        else:
+            lotes = lotes.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__icontains=categoria))
+    if request.GET.get("alcance"):
+        lotes = lotes.filter(alcance__icontains=request.GET["alcance"])
+    return render(
+        request,
+        "oportunidades/rankings_lista.html",
+        {
+            "lotes": lotes[:100],
+            "tipos": LoteRanking.TIPO_CHOICES,
+            "estados": LoteRanking.ESTADO_CHOICES,
+            "categorias": CategoriaInteres.objects.filter(activa=True).order_by("prioridad", "nombre"),
+        },
+    )
+
+
+def rankings_supermercado(request):
+    lotes = LoteRanking.objects.select_related("categoria").filter(
+        tipo_ranking__in=[LoteRanking.TIPO_SUPERMERCADO_CONSUMO, LoteRanking.TIPO_SUPERMERCADO_REVENTA]
+    )
+    if request.GET.get("estado"):
+        lotes = lotes.filter(estado=request.GET["estado"])
+    if request.GET.get("categoria"):
+        categoria = request.GET["categoria"]
+        if categoria.isdigit():
+            lotes = lotes.filter(categoria_id=categoria)
+        else:
+            lotes = lotes.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__icontains=categoria))
+    return render(
+        request,
+        "oportunidades/rankings_lista.html",
+        {
+            "lotes": lotes[:100],
+            "tipos": LoteRanking.TIPO_CHOICES,
+            "estados": LoteRanking.ESTADO_CHOICES,
+            "categorias": CategoriaInteres.objects.filter(activa=True).order_by("prioridad", "nombre"),
+            "titulo_rankings": "Supermercado y mercaderia revendible",
+        },
+    )
+
+
+def ranking_lote_detalle(request, pk):
+    lote = get_object_or_404(LoteRanking.objects.select_related("categoria"), pk=pk)
+    items = lote.items.select_related("categoria", "producto_fuente", "producto_canonico", "fuente_web")
+    if request.GET.get("tienda"):
+        items = items.filter(tienda__icontains=request.GET["tienda"])
+    if request.GET.get("verificacion"):
+        items = items.filter(estado_verificacion=request.GET["verificacion"])
+    return render(request, "oportunidades/ranking_lote_detalle.html", {"lote": lote, "items": items})
+
+
+def ranking_item_historico(request, pk):
+    item = get_object_or_404(ItemRanking.objects.select_related("lote", "categoria"), pk=pk)
+    return render(request, "oportunidades/ranking_item_historico.html", {"item": item, "historico": historico_item(item)})
+
+
+def ranking_importar(request):
+    preview = None
+    if request.method == "POST" and not request.user.is_staff:
+        return HttpResponse("Importacion de rankings requiere usuario administrador.", status=403)
+    if request.method == "POST":
+        accion = request.POST.get("accion") or "preview"
+        form = RankingImportForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            if accion == "preview":
+                preview = previsualizar_ranking(
+                    data["texto"],
+                    fecha_referencia=data["fecha_referencia"],
+                    origen=data["origen"],
+                    alcance=data.get("alcance") or "",
+                    formato=data["formato"],
+                )
+                datos_lote = {
+                    "nombre": data["nombre"],
+                    "tipo_ranking": data["tipo_ranking"],
+                    "alcance": data.get("alcance") or "",
+                    "categoria_id": data["categoria"].id if data.get("categoria") else None,
+                    "fecha_referencia": data["fecha_referencia"].isoformat(),
+                    "origen": data["origen"],
+                    "metodologia": data.get("metodologia") or "",
+                    "estado": data["estado"],
+                    "hash_importacion": preview["hash"],
+                    "permitir_duplicado": data.get("permitir_duplicado", False),
+                }
+                request.session["ranking_import_preview"] = {
+                    "datos_lote": datos_lote,
+                    "filas": preview["filas"],
+                    "texto_original": data["texto"],
+                }
+                if preview["duplicado"]:
+                    messages.warning(request, f"Posible duplicado: ya existe el lote #{preview['duplicado'].pk}.")
+            elif accion == "confirmar":
+                payload = request.session.get("ranking_import_preview")
+                if not payload:
+                    messages.error(request, "Primero generá una vista previa.")
+                    return redirect("oportunidades:ranking_importar")
+                datos_lote = payload["datos_lote"]
+                datos_lote["fecha_referencia"] = date.fromisoformat(datos_lote["fecha_referencia"])
+                try:
+                    lote = confirmar_importacion_ranking(
+                        datos_lote,
+                        payload["filas"],
+                        payload["texto_original"],
+                        usuario=request.user,
+                        permitir_duplicado=bool(datos_lote.get("permitir_duplicado")),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    preview = {"filas": payload["filas"], "errores": [str(exc)], "total": len(payload["filas"]), "duplicado": True}
+                else:
+                    request.session.pop("ranking_import_preview", None)
+                    messages.success(request, f"Lote de ranking creado como {lote.get_estado_display().lower()}.")
+                    return redirect("oportunidades:ranking_lote_detalle", pk=lote.pk)
+    else:
+        form = RankingImportForm(initial={"fecha_referencia": timezone.localdate(), "estado": LoteRanking.ESTADO_BORRADOR})
+    if preview is None and request.session.get("ranking_import_preview"):
+        payload = request.session["ranking_import_preview"]
+        preview = {"filas": payload["filas"], "errores": [], "total": len(payload["filas"]), "duplicado": False}
+    return render(request, "oportunidades/ranking_importar.html", {"form": form, "preview": preview})
+
+
 @require_POST
 def generar_contenido_oportunidad(request, pk):
     oportunidad = get_object_or_404(
@@ -2728,6 +2870,85 @@ class ProductoFuenteListAPIView(generics.ListAPIView):
         if categoria_original:
             queryset = queryset.filter(categoria_original__icontains=categoria_original)
         return queryset.distinct()
+
+
+class LoteRankingListAPIView(generics.ListAPIView):
+    serializer_class = LoteRankingSerializer
+
+    def get_queryset(self):
+        queryset = LoteRanking.objects.select_related("categoria").filter(estado=LoteRanking.ESTADO_PUBLICADO)
+        if self.request.query_params.get("incluir_borradores") == "1" and self.request.user.is_staff:
+            queryset = LoteRanking.objects.select_related("categoria").all()
+        tipo = self.request.query_params.get("tipo")
+        categoria = self.request.query_params.get("categoria")
+        alcance = self.request.query_params.get("alcance")
+        fecha = self.request.query_params.get("fecha")
+        if tipo:
+            queryset = queryset.filter(tipo_ranking=tipo)
+        if alcance:
+            queryset = queryset.filter(alcance__icontains=alcance)
+        if fecha:
+            queryset = queryset.filter(fecha_referencia=fecha)
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(categoria_id=categoria)
+            else:
+                queryset = queryset.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__icontains=categoria))
+        return queryset
+
+
+class ItemRankingListAPIView(generics.ListAPIView):
+    serializer_class = ItemRankingSerializer
+
+    def get_queryset(self):
+        queryset = ItemRanking.objects.select_related("lote", "categoria", "producto_fuente", "producto_canonico", "fuente_web")
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(lote__estado=LoteRanking.ESTADO_PUBLICADO)
+        lote_id = self.kwargs.get("lote_id") or self.request.query_params.get("lote")
+        if lote_id:
+            queryset = queryset.filter(lote_id=lote_id)
+        tipo = self.request.query_params.get("tipo")
+        categoria = self.request.query_params.get("categoria")
+        tienda = self.request.query_params.get("tienda")
+        subcategoria = self.request.query_params.get("subcategoria")
+        fecha = self.request.query_params.get("fecha")
+        if tipo:
+            queryset = queryset.filter(lote__tipo_ranking=tipo)
+        if tienda:
+            queryset = queryset.filter(tienda__icontains=tienda)
+        if subcategoria:
+            queryset = queryset.filter(subcategoria__icontains=subcategoria)
+        if fecha:
+            queryset = queryset.filter(lote__fecha_referencia=fecha)
+        if categoria:
+            if str(categoria).isdigit():
+                queryset = queryset.filter(categoria_id=categoria)
+            else:
+                queryset = queryset.filter(Q(categoria__slug__iexact=categoria) | Q(categoria__nombre__icontains=categoria))
+        return queryset.order_by("lote", "posicion")
+
+
+class RankingActualAPIView(generics.ListAPIView):
+    serializer_class = ItemRankingSerializer
+
+    def get_queryset(self):
+        tipo = self.request.query_params.get("tipo") or LoteRanking.TIPO_ALTA_VENTA
+        alcance = self.request.query_params.get("alcance") or ""
+        lote = (
+            LoteRanking.objects.filter(tipo_ranking=tipo, estado=LoteRanking.ESTADO_PUBLICADO, alcance__icontains=alcance)
+            .order_by("-fecha_referencia", "-fecha_importacion")
+            .first()
+        )
+        if not lote:
+            return ItemRanking.objects.none()
+        return lote.items.select_related("lote", "categoria", "producto_fuente", "producto_canonico", "fuente_web").order_by("posicion")
+
+
+class ItemRankingHistoricoAPIView(APIView):
+    def get(self, request, pk):
+        item = get_object_or_404(ItemRanking.objects.select_related("lote", "categoria"), pk=pk)
+        serializer = ItemRankingSerializer(historico_item(item), many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ConectorFuenteListAPIView(generics.ListAPIView):

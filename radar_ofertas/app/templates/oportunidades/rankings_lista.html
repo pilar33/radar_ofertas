@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Rankings{% endblock %}
+{% block proceso %}Proceso: Analisis comercial / Rankings de senales{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1>{{ titulo_rankings|default:"Rankings de productos con senales de alta venta" }}</h1>
+    <p class="text-secondary mb-0">No son ventas garantizadas: son senales observadas, con fuente y fecha.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'oportunidades:ranking_importar' %}">Importar ranking</a>
+</div>
+<form class="row g-2 bg-white border rounded p-3 mb-3">
+  <div class="col-md-3"><select class="form-select" name="tipo"><option value="">Tipo</option>{% for value,label in tipos %}<option value="{{ value }}" {% if request.GET.tipo == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select class="form-select" name="estado"><option value="">Estado</option>{% for value,label in estados %}<option value="{{ value }}" {% if request.GET.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select class="form-select" name="categoria"><option value="">Categoria</option>{% for categoria in categorias %}<option value="{{ categoria.slug }}" {% if request.GET.categoria == categoria.slug %}selected{% endif %}>{{ categoria.nombre }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><input class="form-control" name="alcance" value="{{ request.GET.alcance }}" placeholder="Alcance"></div>
+  <div class="col-md-1"><button class="btn btn-outline-primary w-100">Filtrar</button></div>
+</form>
+<div class="table-responsive bg-white border rounded">
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Alcance</th><th>Categoria</th><th>Estado</th><th>Filas</th><th>Origen</th></tr></thead>
+    <tbody>
+    {% for lote in lotes %}
+      <tr>
+        <td>{{ lote.fecha_referencia }}</td>
+        <td><a href="{% url 'oportunidades:ranking_lote_detalle' lote.id %}">{{ lote.nombre }}</a></td>
+        <td>{{ lote.get_tipo_ranking_display }}</td>
+        <td>{{ lote.alcance|default:"-" }}</td>
+        <td>{{ lote.categoria|default:"-" }}</td>
+        <td><span class="badge text-bg-secondary">{{ lote.get_estado_display }}</span></td>
+        <td>{{ lote.cantidad_filas }}</td>
+        <td class="small">{{ lote.origen }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="text-center text-secondary py-4">Sin lotes de ranking.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

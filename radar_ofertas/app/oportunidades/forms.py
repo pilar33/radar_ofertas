@@ -229,6 +229,75 @@ class ProductoFuenteCuraduriaForm(forms.ModelForm):
         }
 
 
+class RankingImportForm(forms.Form):
+    FORMATO_AUTO = "auto"
+    FORMATO_MARKDOWN = "markdown"
+    FORMATO_CSV = "csv"
+    FORMATO_CHOICES = [
+        (FORMATO_AUTO, "Detectar automaticamente"),
+        (FORMATO_MARKDOWN, "Tabla Markdown"),
+        (FORMATO_CSV, "CSV"),
+    ]
+
+    nombre = forms.CharField(
+        max_length=180,
+        initial="Herramientas con senales de alta venta",
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    tipo_ranking = forms.ChoiceField(
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    alcance = forms.CharField(
+        required=False,
+        initial="herramientas",
+        max_length=150,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    categoria = forms.ModelChoiceField(
+        required=False,
+        queryset=CategoriaInteres.objects.filter(activa=True),
+        empty_label="Sin categoria principal",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    fecha_referencia = forms.DateField(
+        widget=forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+    )
+    origen = forms.CharField(
+        max_length=180,
+        initial="Radar ChatGPT - carga manual",
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    metodologia = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+    )
+    formato = forms.ChoiceField(
+        choices=FORMATO_CHOICES,
+        initial=FORMATO_AUTO,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    estado = forms.ChoiceField(
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    texto = forms.CharField(
+        widget=forms.Textarea(attrs={"class": "form-control font-monospace", "rows": 12}),
+    )
+    permitir_duplicado = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import LoteRanking
+
+        self.fields["tipo_ranking"].choices = LoteRanking.TIPO_CHOICES
+        self.fields["estado"].choices = LoteRanking.ESTADO_CHOICES
+
+
 class PrecioFuenteCuraduriaForm(forms.ModelForm):
     class Meta:
         model = PrecioFuente

@@ -17,6 +17,8 @@ from .models import (
     FuenteProducto,
     FuenteWeb,
     ImportacionProductos,
+    ItemRanking,
+    LoteRanking,
     Oportunidad,
     PoliticaExtraccionFuente,
     PrecioProducto,
@@ -218,6 +220,24 @@ class ProductoFuenteSerializer(serializers.ModelSerializer):
         elif obj.categoria_fuente_id:
             categoria = obj.categoria_fuente.categoria_normalizada
         return CategoriaInteresSerializer(categoria).data if categoria else None
+
+
+class LoteRankingSerializer(serializers.ModelSerializer):
+    categoria = CategoriaInteresSerializer(read_only=True)
+
+    class Meta:
+        model = LoteRanking
+        fields = "__all__"
+
+
+class ItemRankingSerializer(serializers.ModelSerializer):
+    lote = LoteRankingSerializer(read_only=True)
+    categoria = CategoriaInteresSerializer(read_only=True)
+    producto_fuente = ProductoFuenteSerializer(read_only=True)
+
+    class Meta:
+        model = ItemRanking
+        fields = "__all__"
 
 
 class PrecioFuenteSerializer(serializers.ModelSerializer):

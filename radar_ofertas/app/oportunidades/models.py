@@ -1015,6 +1015,7 @@ class ItemRanking(models.Model):
     precio_por_unidad = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     precio_por_litro = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     precio_por_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_por_metro = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     precio_por_100 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tipo_promocion = models.CharField(max_length=40, choices=PROMO_CHOICES, default=PROMO_NINGUNA)
     cantidad_total_recibida = models.DecimalField(max_digits=10, decimal_places=2, default=0)

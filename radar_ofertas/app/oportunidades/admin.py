@@ -89,6 +89,8 @@ class ItemRankingAdmin(admin.ModelAdmin):
         "tendencia",
         "precio_por_unidad",
         "precio_por_litro",
+        "precio_por_kg",
+        "precio_por_metro",
     )
     list_filter = ("lote__tipo_ranking", "categoria", "tienda", "tipo_senal", "estado_verificacion", "tendencia", "tipo_presentacion")
     search_fields = ("nombre_original", "tienda", "texto_senal", "url_evidencia", "marca", "subcategoria")

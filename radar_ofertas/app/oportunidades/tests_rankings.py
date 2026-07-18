@@ -25,6 +25,13 @@ TABLA_BEBIDAS_PRECIO_NORMALIZADO = """| Ranking | Producto                      
 |       3 | Coca-Cola 2,25 L llevando 2      | Vea                    |        $1.882,33/L | ALERTAR                  |
 """
 
+TABLA_MERCADERIA_NORMALIZACION = """| Ranking | Producto                                      | Tienda                 | Normalización | Estado                   |
+| ------: | --------------------------------------------- | ---------------------- | ------------: | ------------------------ |
+|       1 | Fideos Frescos DIA 500 g                      | DIA Online             |     $2.400/kg | ALERTAR_CONSUMO          |
+|       2 | Cerveza Quilmes Bajocero 473 ml               | MasOnline / Chango Mas |   $1.026,85/L | ALERTAR_CONSUMO_+18      |
+|       3 | Papel higiénico Family Care 4x30 m llevando 2 | Vea                    |       $8,12/m | ALERTAR_SI_HAY_COBERTURA |
+"""
+
 
 class RankingImportTests(TestCase):
     def setUp(self):
@@ -70,6 +77,13 @@ class RankingImportTests(TestCase):
         self.assertEqual(rows[0]["estado"], "ALERTAR")
         self.assertFalse(errores)
 
+    def test_importacion_markdown_toma_columna_normalizacion(self):
+        rows, errores = parsear_tabla_ranking(TABLA_MERCADERIA_NORMALIZACION, "markdown")
+        self.assertEqual(rows[0]["precio_normalizado"], "$2.400/kg")
+        self.assertEqual(rows[1]["precio_normalizado"], "$1.026,85/L")
+        self.assertEqual(rows[2]["precio_normalizado"], "$8,12/m")
+        self.assertFalse(errores)
+
     def test_confirmar_guarda_precio_normalizado_por_litro(self):
         categoria = CategoriaInteres.objects.get(slug="gaseosas")
         preview = previsualizar_ranking(TABLA_BEBIDAS_PRECIO_NORMALIZADO, date(2026, 7, 18), alcance="supermercado")
@@ -89,6 +103,29 @@ class RankingImportTests(TestCase):
         self.assertEqual(item.precio_por_litro, Decimal("1137.25"))
         self.assertEqual(item.texto_senal, "ALERTAR")
 
+    def test_confirmar_guarda_normalizacion_por_kg_litro_y_metro(self):
+        categoria = CategoriaInteres.objects.get(slug="supermercado-bebidas-mercaderia-revendible")
+        preview = previsualizar_ranking(TABLA_MERCADERIA_NORMALIZACION, date(2026, 7, 18), alcance="supermercado")
+        datos = {
+            "nombre": "Mercaderia con senales de alerta",
+            "tipo_ranking": LoteRanking.TIPO_SUPERMERCADO_REVENTA,
+            "alcance": "supermercado",
+            "categoria_id": categoria.id,
+            "fecha_referencia": date(2026, 7, 18),
+            "origen": "Radar ChatGPT - carga manual",
+            "metodologia": "Tabla pegada",
+            "estado": LoteRanking.ESTADO_BORRADOR,
+            "hash_importacion": preview["hash"],
+        }
+        lote = confirmar_importacion_ranking(datos, preview["filas"], TABLA_MERCADERIA_NORMALIZACION)
+
+        fideos = lote.items.get(posicion=1)
+        cerveza = lote.items.get(posicion=2)
+        papel = lote.items.get(posicion=3)
+        self.assertEqual(fideos.precio_por_kg, Decimal("2400.00"))
+        self.assertEqual(cerveza.precio_por_litro, Decimal("1026.85"))
+        self.assertEqual(papel.precio_por_metro, Decimal("8.12"))
+
     def test_repara_lote_con_precio_normalizado_desde_texto_original(self):
         categoria = CategoriaInteres.objects.get(slug="gaseosas")
         lote = LoteRanking.objects.create(
@@ -107,6 +144,26 @@ class RankingImportTests(TestCase):
         item = lote.items.get(posicion=1)
         self.assertEqual(resumen["actualizados"], 1)
         self.assertEqual(item.precio_por_litro, Decimal("1137.25"))
+
+    def test_repara_lote_con_columna_normalizacion_desde_texto_original(self):
+        categoria = CategoriaInteres.objects.get(slug="supermercado-bebidas-mercaderia-revendible")
+        lote = LoteRanking.objects.create(
+            nombre="Mercaderia mal importada",
+            tipo_ranking=LoteRanking.TIPO_SUPERMERCADO_REVENTA,
+            alcance="supermercado",
+            categoria=categoria,
+            fecha_referencia=date(2026, 7, 18),
+            origen="Radar ChatGPT - carga manual",
+            estado=LoteRanking.ESTADO_BORRADOR,
+            hash_importacion="demo-normalizacion",
+            texto_original=TABLA_MERCADERIA_NORMALIZACION,
+        )
+        ItemRanking.objects.create(lote=lote, posicion=1, nombre_original="Fideos Frescos DIA 500 g", categoria=categoria, tienda="DIA Online")
+        ItemRanking.objects.create(lote=lote, posicion=3, nombre_original="Papel higienico Family Care 4x30 m llevando 2", categoria=categoria, tienda="Vea")
+        resumen = reparar_precios_normalizados_lote(lote)
+        self.assertEqual(resumen["actualizados"], 2)
+        self.assertEqual(lote.items.get(posicion=1).precio_por_kg, Decimal("2400.00"))
+        self.assertEqual(lote.items.get(posicion=3).precio_por_metro, Decimal("8.12"))
 
     def test_limpia_negritas_markdown(self):
         self.assertEqual(limpiar_markdown("**Producto**"), "Producto")

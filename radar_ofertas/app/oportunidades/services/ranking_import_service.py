@@ -29,7 +29,17 @@ COLUMNAS = {
     "marca": {"marca"},
     "subcategoria": {"subcategoria"},
     "precio": {"precio", "precio total", "precio_final_total"},
-    "precio_normalizado": {"precio normalizado", "precio_normalizado", "precio por litro", "precio litro", "precio por kg", "precio por unidad"},
+    "precio_normalizado": {
+        "precio normalizado",
+        "precio_normalizado",
+        "normalizacion",
+        "normalizado",
+        "precio por litro",
+        "precio litro",
+        "precio por kg",
+        "precio por metro",
+        "precio por unidad",
+    },
 }
 
 
@@ -421,6 +431,7 @@ def reparar_precios_normalizados_lote(lote):
         "precio_por_unidad",
         "precio_por_litro",
         "precio_por_kg",
+        "precio_por_metro",
         "precio_por_100",
         "tipo_promocion",
         "cantidad_total_recibida",

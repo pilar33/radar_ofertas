@@ -48,6 +48,8 @@ def parsear_precio_normalizado(texto):
         return {"precio_por_litro": valor}
     if "/kg" in texto_norm or " kilo" in texto_norm or " kilogramo" in texto_norm or " por kg" in texto_norm:
         return {"precio_por_kg": valor}
+    if "/m" in texto_norm or " metro" in texto_norm or " metros" in texto_norm or " por metro" in texto_norm:
+        return {"precio_por_metro": valor}
     if "/unidad" in texto_norm or " unidad" in texto_norm or " por unidad" in texto_norm or "/u" in texto_norm:
         return {"precio_por_unidad": valor}
     if "/100" in texto_norm:
@@ -127,6 +129,7 @@ def calcular_presentacion(
     precio_por_unidad = money(costo_final / unidades_totales) if unidades_totales else Decimal("0.00")
     precio_por_litro = Decimal("0.00")
     precio_por_kg = Decimal("0.00")
+    precio_por_metro = Decimal("0.00")
     precio_por_100 = Decimal("0.00")
     if unidad_base == "litro" and contenido_total:
         precio_por_litro = money(costo_final / contenido_total)
@@ -149,6 +152,7 @@ def calcular_presentacion(
         "precio_por_unidad": precio_por_unidad,
         "precio_por_litro": precio_por_litro,
         "precio_por_kg": precio_por_kg,
+        "precio_por_metro": precio_por_metro,
         "precio_por_100": precio_por_100,
         "tipo_promocion": tipo_promocion or "ninguna",
         **promo,

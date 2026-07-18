@@ -30,7 +30,8 @@
         <td class="small">
           Unidad: ${{ item.precio_por_unidad }}<br>
           Litro: ${{ item.precio_por_litro }}<br>
-          Kg: ${{ item.precio_por_kg }}
+          Kg: ${{ item.precio_por_kg }}<br>
+          Metro: ${{ item.precio_por_metro }}
         </td>
         <td class="small">{% if item.url_evidencia %}<a href="{{ item.url_evidencia }}" target="_blank" rel="noopener">Abrir</a>{% else %}-{% endif %}<br>{{ item.get_tipo_evidencia_display }}</td>
         <td>{% if item.producto_fuente_id %}<a class="btn btn-sm btn-outline-success" href="{% url 'oportunidades:detalle_curaduria_producto' item.producto_fuente_id %}">Ver producto</a>{% else %}<span class="text-secondary small">Sin producto exacto</span>{% endif %}<br><a class="small" href="{% url 'oportunidades:ranking_item_historico' item.id %}">Historico</a></td>
